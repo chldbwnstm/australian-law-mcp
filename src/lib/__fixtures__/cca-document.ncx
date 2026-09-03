@@ -1,0 +1,1776 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!-- TRIMMED FIXTURE. Source: https://www.legislation.gov.au/C2004A00109/latest/latest/text/latest/epub/OEBPS/document.ncx fetched 2026-09-03 (2,603 navPoints). Pruned to 294 navPoints keeping the two s 18 entries (body 'Meetings of Commission' in volume 1 and Schedule 2 'Misleading or deceptive conduct' in volume 4) plus their ancestor chains. Element/attribute markup and label text are byte-identical to upstream. -->
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1" xml:lang="en-US">
+  <head>
+    <meta name="dtb:uid" content="eceae830-79a5-4932-a990-1fc4fc9a26b1" />
+  </head>
+  <docTitle>
+    <text>Title</text>
+  </docTitle>
+  <navMap>
+    <navPoint id="8ceba8a8-cd2c-48ee-973a-82554289a964" playOrder="1">
+      <navLabel>
+        <text>Volume 1</text>
+      </navLabel>
+      <content src="document_1/document_1.html" />
+      <navPoint id="42107db5-007b-4163-a5fa-eac296de456b" playOrder="2">
+        <navLabel>
+          <text>Chapter 1—Preliminary</text>
+        </navLabel>
+        <content src="document_1/document_1.html#_Toc235540914" />
+        <navPoint id="d71180db-b982-4313-830d-a55ed69b43e6" playOrder="3">
+          <navLabel>
+            <text>Part I—Preliminary</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc235540915" />
+          </navPoint>
+        <navPoint id="a43896f2-5092-4ec5-b61b-2a9b962fe45c" playOrder="28">
+          <navLabel>
+            <text>Part II—The Australian Competition and Consumer Commission</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc235540940" />
+          <navPoint id="7c5d7dbc-9b70-4de5-bbca-4ae5769b1fae" playOrder="42">
+            <navLabel>
+              <text>17A  Disclosure of certain interests by members of the Commission when taking part in determinations of matters</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235540954" />
+          </navPoint>
+          <navPoint id="7c515b88-0e2a-4c10-8373-0b8d3f54aeb0" playOrder="43">
+            <navLabel>
+              <text>18  Meetings of Commission</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235540955" />
+          </navPoint>
+          </navPoint>
+        <navPoint id="ee2db6c2-6fca-408d-ab21-5ae2d4140a51" playOrder="52">
+          <navLabel>
+            <text>Part IIA—The National Competition Council</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc235540964" />
+          </navPoint>
+        <navPoint id="4c0a080f-8dca-4181-8224-d32362f55b7e" playOrder="71">
+          <navLabel>
+            <text>Part III—The Australian Competition Tribunal</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc235540983" />
+          </navPoint>
+        <navPoint id="e117dce9-e5be-4ce7-9de5-2d5338ff38c5" playOrder="91">
+          <navLabel>
+            <text>Part IIIAA—The Australian Energy Regulator (AER)</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc235541003" />
+          <navPoint id="753070ab-f538-44ce-9a0d-841e34bcd086" playOrder="92">
+            <navLabel>
+              <text>Division 1—Preliminary</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541004" />
+            </navPoint>
+          <navPoint id="48f4f814-91bd-412b-a01a-1307a3e03237" playOrder="96">
+            <navLabel>
+              <text>Division 2—Establishment of the AER</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541008" />
+            </navPoint>
+          <navPoint id="f10f90c5-8e1e-4de4-af0e-8c697d980637" playOrder="100">
+            <navLabel>
+              <text>Division 3—Functions and powers of the AER</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541012" />
+            </navPoint>
+          <navPoint id="d9f81063-4065-490c-9096-c31b4d5e77e1" playOrder="107">
+            <navLabel>
+              <text>Division 4—Administrative provisions relating to the AER</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541019" />
+            </navPoint>
+        </navPoint>
+      </navPoint>
+      <navPoint id="9d568e41-c009-426f-a3f6-1ae0196567bf" playOrder="146">
+        <navLabel>
+          <text>Chapter 2—Access to services</text>
+        </navLabel>
+        <content src="document_1/document_1.html#_Toc235541058" />
+        <navPoint id="1e35bada-93ee-4710-8d3d-fb24960b6abb" playOrder="147">
+          <navLabel>
+            <text>Part IIIA—Access to services</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc235541059" />
+          <navPoint id="6be0b1e8-4226-4851-8069-e697eee6c265" playOrder="148">
+            <navLabel>
+              <text>Division 1—Preliminary</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541060" />
+            </navPoint>
+          <navPoint id="88e03ad1-e0a0-42d7-aee4-e54e3e018f40" playOrder="156">
+            <navLabel>
+              <text>Division 2—Declared services</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541068" />
+            </navPoint>
+          <navPoint id="4965cbd2-1ddc-4c52-939e-1ac180a4a9ce" playOrder="173">
+            <navLabel>
+              <text>Division 2AA—Services that are ineligible to be declared</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541085" />
+            </navPoint>
+          <navPoint id="ca415499-6c5f-4b96-be20-2c2d43fbfd29" playOrder="192">
+            <navLabel>
+              <text>Division 2A—Effective access regimes</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541104" />
+            </navPoint>
+          <navPoint id="8dbac6d8-682c-4e69-a99d-538af6c0ed19" playOrder="215">
+            <navLabel>
+              <text>Division 2B—Competitive tender processes for government owned facilities</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541127" />
+            </navPoint>
+          <navPoint id="20b697a0-ab2b-4108-9e33-1f53eb7c4b77" playOrder="225">
+            <navLabel>
+              <text>Division 2C—Register of decisions and declarations</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541137" />
+            </navPoint>
+          <navPoint id="682759be-1f34-4fc2-be01-88a90040cab7" playOrder="227">
+            <navLabel>
+              <text>Division 3—Access to declared services</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541139" />
+            </navPoint>
+          <navPoint id="38178896-a0ed-432a-918f-d52fb7ecc645" playOrder="272">
+            <navLabel>
+              <text>Division 4—Registered contracts for access to declared services</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541184" />
+            </navPoint>
+          <navPoint id="8249f693-f79c-4a44-b45f-0b3d53da0625" playOrder="277">
+            <navLabel>
+              <text>Division 5—Hindering access to declared services</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541189" />
+            </navPoint>
+          <navPoint id="b552f248-6225-460d-adf3-4e319518f19b" playOrder="279">
+            <navLabel>
+              <text>Division 6—Access undertakings and access codes for services</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541191" />
+            </navPoint>
+          <navPoint id="11a04d8a-f278-4e8a-be77-4a1476674c1b" playOrder="299">
+            <navLabel>
+              <text>Division 6A—Pricing principles for access disputes and access undertakings or codes</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541211" />
+            </navPoint>
+          <navPoint id="5ae4b666-91e7-47de-95b1-1b161a70d047" playOrder="301">
+            <navLabel>
+              <text>Division 6B—Overlap among determinations, registered contracts, access undertakings and Tribunal review</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541213" />
+            </navPoint>
+          <navPoint id="fa39de95-a530-4876-9fc3-09eb2440e74e" playOrder="306">
+            <navLabel>
+              <text>Division 7—Enforcement and remedies</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541218" />
+            </navPoint>
+          <navPoint id="95aeccdc-1d2c-4e2a-a066-26ced48efbdd" playOrder="315">
+            <navLabel>
+              <text>Division 8—Miscellaneous</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541227" />
+            </navPoint>
+        </navPoint>
+      </navPoint>
+      <navPoint id="720d6218-bfae-45de-abb0-3b88c7abce6c" playOrder="330">
+        <navLabel>
+          <text>Chapter 3—Restrictive trade practices</text>
+        </navLabel>
+        <content src="document_1/document_1.html#_Toc235541242" />
+        <navPoint id="ea0737db-f917-4599-9b6c-b5040169c83b" playOrder="331">
+          <navLabel>
+            <text>Part IV—Restrictive trade practices</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc235541243" />
+          <navPoint id="a412181e-292d-497d-bbfe-1539ea72be1c" playOrder="332">
+            <navLabel>
+              <text>Division 1—Cartel conduct</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541244" />
+            </navPoint>
+          <navPoint id="250475bb-e61b-49f5-b1f3-2192cdf7914b" playOrder="360">
+            <navLabel>
+              <text>Division 1A—Acquisitions</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541272" />
+            </navPoint>
+          <navPoint id="4e7805f3-846c-49c3-a0a2-d0586a80c7a2" playOrder="372">
+            <navLabel>
+              <text>Division 2—Other provisions</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541284" />
+            </navPoint>
+        </navPoint>
+        <navPoint id="7adcd450-4196-4367-b841-71ca85693638" playOrder="392">
+          <navLabel>
+            <text>Part IVA—Notification of acquisitions</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc235541304" />
+          <navPoint id="e7dfd681-e2dc-4ff4-8957-15ea5d2e9310" playOrder="393">
+            <navLabel>
+              <text>Division 1—Preliminary</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541305" />
+            </navPoint>
+          <navPoint id="386a4d40-b5d9-4883-86ab-db242e83bf86" playOrder="413">
+            <navLabel>
+              <text>Division 2—Acquisitions that are required to be notified</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541325" />
+            </navPoint>
+          <navPoint id="61388e01-9890-4a4f-9316-0f2b191b3bd3" playOrder="427">
+            <navLabel>
+              <text>Division 3—Notification of acquisitions</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541339" />
+            </navPoint>
+          <navPoint id="d7fcfec6-f9ba-4d94-b81c-7803af51c173" playOrder="439">
+            <navLabel>
+              <text>Division 4—Commission consideration of acquisitions: substantial lessening of competition</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541351" />
+            </navPoint>
+          <navPoint id="f5b3cb1c-596c-450f-bad7-5cb0513ecb01" playOrder="454">
+            <navLabel>
+              <text>Division 5—Commission consideration of acquisitions: public benefit</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541366" />
+            </navPoint>
+          <navPoint id="f6029909-c4e9-4bb8-8e17-9de9dab2fdac" playOrder="474">
+            <navLabel>
+              <text>Division 6—Miscellaneous</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541386" />
+            </navPoint>
+        </navPoint>
+      </navPoint>
+      <navPoint id="70b1a2f9-42da-4886-a8bc-f3f14b52f9bd" playOrder="500">
+        <navLabel>
+          <text>Chapter 4—Provisions relating to particular industries, payment surcharges etc.</text>
+        </navLabel>
+        <content src="document_1/document_1.html#_Toc235541412" />
+        <navPoint id="940bcd26-6288-43b2-8349-13a4eb823260" playOrder="501">
+          <navLabel>
+            <text>Part IVB—Industry codes</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc235541413" />
+          <navPoint id="966b9c57-d49c-4891-b5e1-9cdee30d7bc3" playOrder="502">
+            <navLabel>
+              <text>Division 1—Preliminary</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541414" />
+            </navPoint>
+          <navPoint id="f0852fa4-4309-46e1-b35f-eb9ffc8cba80" playOrder="505">
+            <navLabel>
+              <text>Division 2—Contravention of industry codes</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541417" />
+            </navPoint>
+          <navPoint id="ab442685-5b24-4bd0-a60e-48de6110358a" playOrder="507">
+            <navLabel>
+              <text>Division 2A—Infringement notices</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541419" />
+            </navPoint>
+          <navPoint id="c9cbd1c4-d0a3-4584-aafb-4772cf420ee1" playOrder="516">
+            <navLabel>
+              <text>Division 3—Public warning notices</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541428" />
+            </navPoint>
+          <navPoint id="0aeae594-e7d5-4f29-92ea-dde7834a5662" playOrder="518">
+            <navLabel>
+              <text>Division 4—Orders to redress loss or damage suffered by non-parties etc.</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541430" />
+            </navPoint>
+          <navPoint id="af72c98f-1249-4239-8ffb-93dcbd6258eb" playOrder="521">
+            <navLabel>
+              <text>Division 5—Investigation power</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541433" />
+            </navPoint>
+          <navPoint id="943ddea1-0667-47e2-8084-af5c886b9423" playOrder="526">
+            <navLabel>
+              <text>Division 6—Miscellaneous</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541438" />
+            </navPoint>
+        </navPoint>
+        <navPoint id="aa8be393-61e4-4c77-8bb7-afa442a5d199" playOrder="531">
+          <navLabel>
+            <text>Part IVBA—News media and digital platforms mandatory bargaining code</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc235541443" />
+          <navPoint id="37ee3ec7-3409-4c90-a884-99dbeea98375" playOrder="532">
+            <navLabel>
+              <text>Division 1—Basic concepts</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541444" />
+            </navPoint>
+          <navPoint id="45ec1e7c-3bd4-456c-966c-2c529ce9ca08" playOrder="537">
+            <navLabel>
+              <text>Division 2—Designated digital platform corporation and designated digital platform services</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541449" />
+            </navPoint>
+          <navPoint id="b4c71e6b-72e0-4ea9-94ed-c969f6a1bdfa" playOrder="539">
+            <navLabel>
+              <text>Division 3—Registered news businesses and registered news business corporations</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541451" />
+            </navPoint>
+          <navPoint id="ff25b56c-f17b-4d40-9db3-812d1ea30a08" playOrder="551">
+            <navLabel>
+              <text>Division 4—General requirements</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541463" />
+            </navPoint>
+          <navPoint id="dd3854dc-66ab-46e2-937a-6748950869a5" playOrder="567">
+            <navLabel>
+              <text>Division 5—Non-differentiation</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541479" />
+            </navPoint>
+          <navPoint id="f4b3fa23-97e7-4926-ab23-c9df6db72013" playOrder="569">
+            <navLabel>
+              <text>Division 6—Bargaining</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541481" />
+            </navPoint>
+          <navPoint id="9696844a-2f6e-4ac0-b29c-dd124e19e716" playOrder="584">
+            <navLabel>
+              <text>Division 7—Arbitration about remuneration issue</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541496" />
+            </navPoint>
+          <navPoint id="ef20f4d5-1566-48ed-9a01-e3237cf9b07f" playOrder="611">
+            <navLabel>
+              <text>Division 8—Enforcement etc.</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541523" />
+            </navPoint>
+          <navPoint id="24f89002-7b69-4b31-846d-53d30cca014e" playOrder="615">
+            <navLabel>
+              <text>Division 9—Agreements between digital platform corporations and registered news business corporations</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541527" />
+            </navPoint>
+          <navPoint id="859b69ff-280b-4741-8342-7585e1df3e4c" playOrder="621">
+            <navLabel>
+              <text>Division 10—Powers and functions of the ACMA in relation to this Part</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541533" />
+            </navPoint>
+          <navPoint id="23910a53-4045-4580-94d7-3b52c8d34265" playOrder="624">
+            <navLabel>
+              <text>Division 11—Miscellaneous</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541536" />
+            </navPoint>
+        </navPoint>
+        <navPoint id="cebeed97-35da-4d59-95ed-f16159e02d9a" playOrder="629">
+          <navLabel>
+            <text>Part IVBB—Gas market</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc235541541" />
+          <navPoint id="288c3091-8bd1-40c5-9e89-f02dae4af207" playOrder="630">
+            <navLabel>
+              <text>Division 1—Preliminary</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541542" />
+            </navPoint>
+          <navPoint id="d034ea7c-bcbc-4b32-b19f-daa8b7351122" playOrder="646">
+            <navLabel>
+              <text>Division 2—Gas market instruments</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541558" />
+            </navPoint>
+          <navPoint id="53c1f7fb-5530-4571-b1c4-6e7e34041364" playOrder="675">
+            <navLabel>
+              <text>Division 3—Compliance with gas market instruments</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541587" />
+            </navPoint>
+          <navPoint id="902398bb-cadd-44f1-a2ac-66f3fbd01bc5" playOrder="691">
+            <navLabel>
+              <text>Division 4—Investigation powers</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541603" />
+            </navPoint>
+          <navPoint id="1ddc87ec-d7c1-4a7e-bcbf-c5ab9d6cdfe6" playOrder="697">
+            <navLabel>
+              <text>Division 5—Other matters</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235541609" />
+            </navPoint>
+        </navPoint>
+      </navPoint>
+    </navPoint>
+    <navPoint id="ac568d90-ad8a-4f9c-9b99-2ecc1a6a1b5a" playOrder="703">
+      <navLabel>
+        <text>Volume 2</text>
+      </navLabel>
+      <content src="document_2/document_2.html" />
+      <navPoint id="7f9811a4-b36f-4ed1-8974-394474aacd84" playOrder="704">
+        <navLabel>
+          <text>Chapter 4—Provisions relating to particular industries, payment surcharges etc.</text>
+        </navLabel>
+        <content src="document_2/document_2.html#_Toc235541615" />
+        <navPoint id="6358bd07-6596-48cc-beb4-5968f550c430" playOrder="705">
+          <navLabel>
+            <text>Part IVC—Payment surcharges</text>
+          </navLabel>
+          <content src="document_2/document_2.html#_Toc235541616" />
+          <navPoint id="e342877c-850d-4544-8275-77d9c8c3e161" playOrder="706">
+            <navLabel>
+              <text>Division 1—Preliminary</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235541617" />
+            </navPoint>
+          <navPoint id="2ee45849-0d7d-4b89-8f87-d898d8ddf243" playOrder="709">
+            <navLabel>
+              <text>Division 2—Limit on payment surcharges</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235541620" />
+            </navPoint>
+          <navPoint id="bc10f6d4-e142-4bc3-82b0-3640c25744a4" playOrder="711">
+            <navLabel>
+              <text>Division 3—Information about payment surcharges</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235541622" />
+            </navPoint>
+          <navPoint id="82734cfc-ce00-4122-84fe-5061ef2817d7" playOrder="715">
+            <navLabel>
+              <text>Division 4—Infringement notices</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235541626" />
+            </navPoint>
+        </navPoint>
+        <navPoint id="1b75105a-7efb-4078-ab17-20e21386e0a0" playOrder="724">
+          <navLabel>
+            <text>Part IVD—Consumer data right</text>
+          </navLabel>
+          <content src="document_2/document_2.html#_Toc235541635" />
+          <navPoint id="63bdfaf7-0f25-469c-a015-da5572040ab4" playOrder="725">
+            <navLabel>
+              <text>Division 1—Preliminary</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235541636" />
+            </navPoint>
+          <navPoint id="2342f98f-9bcb-42fe-9912-ed792ca32eb0" playOrder="758">
+            <navLabel>
+              <text>Division 2—Consumer data right</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235541669" />
+            </navPoint>
+          <navPoint id="f3b96364-598b-41bd-a799-5c6c200a5668" playOrder="802">
+            <navLabel>
+              <text>Division 3—Accreditation etc.</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235541713" />
+            </navPoint>
+          <navPoint id="61799e1e-d890-4545-9671-1b4899a4dfac" playOrder="819">
+            <navLabel>
+              <text>Division 4—External dispute resolution</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235541730" />
+            </navPoint>
+          <navPoint id="ce26f419-8b69-44b8-894d-f82548855229" playOrder="821">
+            <navLabel>
+              <text>Division 5—Privacy safeguards</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235541732" />
+            </navPoint>
+          <navPoint id="2caa0baf-5575-4c7c-b420-375abca3d3e8" playOrder="855">
+            <navLabel>
+              <text>Division 6—Data standards etc.</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235541766" />
+            </navPoint>
+          <navPoint id="21ae00b5-e968-4d60-94fa-efbee639edb1" playOrder="879">
+            <navLabel>
+              <text>Division 7—Other matters</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235541790" />
+            </navPoint>
+        </navPoint>
+        <navPoint id="f4463a94-3ba8-486d-8d73-22dfb194aaba" playOrder="890">
+          <navLabel>
+            <text>Part IVE—Motor vehicle service and repair information sharing scheme</text>
+          </navLabel>
+          <content src="document_2/document_2.html#_Toc235541801" />
+          <navPoint id="15744c56-6dd6-447c-8149-b3f3bd5a27bb" playOrder="891">
+            <navLabel>
+              <text>Division 1—Objects of Part and simplified outline</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235541802" />
+            </navPoint>
+          <navPoint id="82f468cc-5739-4ceb-ab42-348b3fc34706" playOrder="894">
+            <navLabel>
+              <text>Division 2—Key concepts</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235541805" />
+            </navPoint>
+          <navPoint id="5f95a46a-f74b-497e-8723-b3b13ae1afe4" playOrder="902">
+            <navLabel>
+              <text>Division 3—Supply of scheme information</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235541813" />
+            </navPoint>
+          <navPoint id="2f305254-adde-4bf0-999e-f854a30dfb98" playOrder="907">
+            <navLabel>
+              <text>Division 4—Information management</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235541818" />
+            </navPoint>
+          <navPoint id="acda7b92-4a0c-4a29-9817-db197be30868" playOrder="913">
+            <navLabel>
+              <text>Division 5—Dispute resolution</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235541824" />
+            </navPoint>
+          <navPoint id="8cca0708-bc09-4ccc-9f4d-d26491bdb09f" playOrder="922">
+            <navLabel>
+              <text>Division 6—Motor vehicle service and repair information scheme adviser</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235541833" />
+            </navPoint>
+          <navPoint id="f93f67af-eaa2-4a95-8ab6-3ca1b63fd0f4" playOrder="925">
+            <navLabel>
+              <text>Division 7—Miscellaneous</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235541836" />
+            </navPoint>
+        </navPoint>
+        <navPoint id="18e374a1-7134-456d-8036-a35702f870be" playOrder="931">
+          <navLabel>
+            <text>Part IVF—Scams Prevention Framework</text>
+          </navLabel>
+          <content src="document_2/document_2.html#_Toc235541842" />
+          <navPoint id="c8800e5a-f287-48df-9bc6-ed0e14419387" playOrder="932">
+            <navLabel>
+              <text>Division 1—Preliminary</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235541843" />
+            </navPoint>
+          <navPoint id="54560e82-9c71-4479-a18e-499203ab50df" playOrder="949">
+            <navLabel>
+              <text>Division 2—Overarching principles of the Scams Prevention Framework</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235541860" />
+            </navPoint>
+          <navPoint id="8d4408a6-17a2-4fb9-aa30-a966a088661c" playOrder="992">
+            <navLabel>
+              <text>Division 3—Sector-specific codes for the Scams Prevention Framework</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235541903" />
+            </navPoint>
+          <navPoint id="40fd16bb-e9e5-445e-9b2f-2c96f5f1854c" playOrder="997">
+            <navLabel>
+              <text>Division 4—External dispute resolution for the Scams Prevention Framework</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235541908" />
+            </navPoint>
+          <navPoint id="b6560d09-730b-4892-8132-cd2a6c1eb7f6" playOrder="1003">
+            <navLabel>
+              <text>Division 5—Regulating the Scams Prevention Framework</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235541914" />
+            </navPoint>
+          <navPoint id="fb3bbc97-6d64-42e5-b5b6-083e6a9a259b" playOrder="1018">
+            <navLabel>
+              <text>Division 6—Enforcing the Scams Prevention Framework</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235541929" />
+            </navPoint>
+          <navPoint id="25ae58a0-7136-4ea0-8d97-76ce7d6913d7" playOrder="1074">
+            <navLabel>
+              <text>Division 7—Other provisions</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235541985" />
+            </navPoint>
+        </navPoint>
+        <navPoint id="67159fb0-b30f-4dd7-a114-bdd587d60c35" playOrder="1081">
+          <navLabel>
+            <text>Part V—Carbon tax price reduction obligation</text>
+          </navLabel>
+          <content src="document_2/document_2.html#_Toc235541992" />
+          <navPoint id="8125724e-4fae-4937-a8c4-b3d472c4f12f" playOrder="1082">
+            <navLabel>
+              <text>Division 1—Preliminary</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235541993" />
+            </navPoint>
+          <navPoint id="060a4004-d7e2-4e1b-b66d-42d015281619" playOrder="1087">
+            <navLabel>
+              <text>Division 2—Carbon tax price reduction obligation</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235541998" />
+            </navPoint>
+          <navPoint id="b20bc2ef-02d2-4023-ba0a-474f15da196d" playOrder="1093">
+            <navLabel>
+              <text>Division 2A—Carbon tax removal substantiation notices</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235542004" />
+            </navPoint>
+          <navPoint id="4c4ec474-5de5-4446-b190-afa464c09c2a" playOrder="1097">
+            <navLabel>
+              <text>Division 2B—Carbon tax removal substantiation statements</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235542008" />
+            </navPoint>
+          <navPoint id="4fae3770-de0e-4166-a4e8-b7e2876dad39" playOrder="1099">
+            <navLabel>
+              <text>Division 2C—Statements for customers</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235542010" />
+            </navPoint>
+          <navPoint id="af94ff17-8908-4b15-99e5-f75a180b34c9" playOrder="1101">
+            <navLabel>
+              <text>Division 3—Price monitoring in relation to the carbon tax repeal etc.</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235542012" />
+            </navPoint>
+          <navPoint id="b9770147-938c-4e6a-9fda-2eee1ff3cea8" playOrder="1105">
+            <navLabel>
+              <text>Division 4—False or misleading representations about the effect of the carbon tax repeal etc. on prices</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235542016" />
+            </navPoint>
+          <navPoint id="2b536892-09c3-4f73-a75e-3a213cafe1c4" playOrder="1107">
+            <navLabel>
+              <text>Division 5—Infringement notices</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235542018" />
+            </navPoint>
+        </navPoint>
+      </navPoint>
+      <navPoint id="f4ca45b7-e491-405b-b742-a1f35a2507cb" playOrder="1114">
+        <navLabel>
+          <text>Chapter 5—Enforcement and remedies</text>
+        </navLabel>
+        <content src="document_2/document_2.html#_Toc235542025" />
+        <navPoint id="6f67c7db-7adc-4483-bb28-29297a90f8d7" playOrder="1115">
+          <navLabel>
+            <text>Part VI—Enforcement and remedies</text>
+          </navLabel>
+          <content src="document_2/document_2.html#_Toc235542026" />
+          <navPoint id="8944ce8b-348b-441b-afe3-08e08af01d93" playOrder="1116">
+            <navLabel>
+              <text>Division 1—Preliminary</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235542027" />
+            </navPoint>
+          <navPoint id="5dc5f409-eff9-4e8a-a927-bd150404de5c" playOrder="1118">
+            <navLabel>
+              <text>Division 2—Pecuniary penalties</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235542029" />
+            </navPoint>
+          <navPoint id="8b6346b5-e641-4970-9135-572f752e895b" playOrder="1126">
+            <navLabel>
+              <text>Division 3—Orders relating to acquisitions</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235542037" />
+            </navPoint>
+          <navPoint id="23d75b5e-f30d-45fb-977b-16e268eb3ce9" playOrder="1128">
+            <navLabel>
+              <text>Division 4—Offences</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235542039" />
+            </navPoint>
+          <navPoint id="2656bf5b-bf0b-4adb-af96-9a0c3e01cabb" playOrder="1131">
+            <navLabel>
+              <text>Division 5—Other provisions</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235542042" />
+            </navPoint>
+        </navPoint>
+        <navPoint id="f2d32761-1a3f-4c6a-accf-11a1de30cae1" playOrder="1158">
+          <navLabel>
+            <text>Part VIA—Proportionate liability for misleading and deceptive conduct</text>
+          </navLabel>
+          <content src="document_2/document_2.html#_Toc235542069" />
+          </navPoint>
+        <navPoint id="f46910a5-dcf9-45b4-b824-3e2b0193ee36" playOrder="1167">
+          <navLabel>
+            <text>Part VIB—Claims for damages or compensation for death or personal injury</text>
+          </navLabel>
+          <content src="document_2/document_2.html#_Toc235542078" />
+          <navPoint id="b684f078-2335-46fa-9074-000783701f97" playOrder="1168">
+            <navLabel>
+              <text>Division 1—Introduction</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235542079" />
+            </navPoint>
+          <navPoint id="9b36b84f-c4d3-460b-9dfb-47eefefe8c5d" playOrder="1171">
+            <navLabel>
+              <text>Division 2—Limitation periods</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235542082" />
+            </navPoint>
+          <navPoint id="016b7fb5-0712-4366-b989-857717f2d465" playOrder="1177">
+            <navLabel>
+              <text>Division 3—Limits on personal injury damages for non-economic loss</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235542088" />
+            </navPoint>
+          <navPoint id="faee8a74-5912-42e9-88b8-88ece3995b7b" playOrder="1186">
+            <navLabel>
+              <text>Division 4—Limits on personal injury damages for loss of earning capacity</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235542097" />
+            </navPoint>
+          <navPoint id="cfba3fa2-e9c0-43de-95d3-ab004e09846f" playOrder="1189">
+            <navLabel>
+              <text>Division 5—Limits on personal injury damages for gratuitous attendant care services</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235542100" />
+            </navPoint>
+          <navPoint id="4e36831a-6ca3-4768-9f6f-3a0c6e86962e" playOrder="1192">
+            <navLabel>
+              <text>Division 6—Other limits on personal injury damages</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235542103" />
+            </navPoint>
+          <navPoint id="aa03e1ef-c3ad-408d-b53b-0b5f82230dfb" playOrder="1197">
+            <navLabel>
+              <text>Division 7—Structured settlements</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235542108" />
+            </navPoint>
+        </navPoint>
+      </navPoint>
+      <navPoint id="31e8aa5d-8a79-4d16-96c0-4083d88731ab" playOrder="1199">
+        <navLabel>
+          <text>Chapter 6—Other provisions</text>
+        </navLabel>
+        <content src="document_2/document_2.html#_Toc235542110" />
+        <navPoint id="f87b8829-1ffb-45da-b18e-c1beaa75a8d8" playOrder="1200">
+          <navLabel>
+            <text>Part VII—Authorisations and notifications</text>
+          </navLabel>
+          <content src="document_2/document_2.html#_Toc235542111" />
+          <navPoint id="0c96cdeb-4a48-4b79-944b-95cc9998e5d3" playOrder="1201">
+            <navLabel>
+              <text>Division 1—Authorisations</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235542112" />
+            </navPoint>
+          <navPoint id="6dc97244-19d1-439d-83a4-5328dc560e73" playOrder="1213">
+            <navLabel>
+              <text>Division 1A—Authorisations in exceptional circumstances and emergencies</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235542124" />
+            </navPoint>
+          <navPoint id="687afd85-5ba4-4e6b-9be8-acb500497ded" playOrder="1222">
+            <navLabel>
+              <text>Division 2—Notifications</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235542133" />
+            </navPoint>
+          <navPoint id="b039eadd-0e51-4a34-aa80-63061e01cd88" playOrder="1240">
+            <navLabel>
+              <text>Division 3—Class exemptions</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235542151" />
+            </navPoint>
+          <navPoint id="0f70bae2-422c-4783-ae16-0ec46edc6312" playOrder="1245">
+            <navLabel>
+              <text>Division 4—Declaration of exceptional circumstances</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235542156" />
+            </navPoint>
+        </navPoint>
+        <navPoint id="b61438ea-5090-4a83-9455-53ec50688bc3" playOrder="1248">
+          <navLabel>
+            <text>Part VIIA—Prices surveillance</text>
+          </navLabel>
+          <content src="document_2/document_2.html#_Toc235542159" />
+          <navPoint id="37d59272-646a-4f14-9053-77921d6e3d91" playOrder="1249">
+            <navLabel>
+              <text>Division 1—Preliminary</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235542160" />
+            </navPoint>
+          <navPoint id="c9cc4d94-3bd9-4781-aeee-ede6a9200018" playOrder="1256">
+            <navLabel>
+              <text>Division 2—Commission’s functions under this Part</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235542167" />
+            </navPoint>
+          <navPoint id="3d9ceb45-d8d6-411d-8d03-a10365b3b2b1" playOrder="1258">
+            <navLabel>
+              <text>Division 3—Price inquiries</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235542169" />
+            </navPoint>
+          <navPoint id="e2a16f29-7687-4ef9-8fac-4214aa40f3cd" playOrder="1276">
+            <navLabel>
+              <text>Division 4—Price notifications</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235542187" />
+            </navPoint>
+          <navPoint id="6744b5ad-7c9d-46db-9a5f-ec16800d5711" playOrder="1284">
+            <navLabel>
+              <text>Division 5—Price monitoring</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235542195" />
+            </navPoint>
+          <navPoint id="522dbbf4-153f-4b4a-ab29-dd262b237ee0" playOrder="1288">
+            <navLabel>
+              <text>Division 6—Other provisions</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235542199" />
+            </navPoint>
+        </navPoint>
+        <navPoint id="2ae8be6d-3a95-4b5c-a3ff-5167f3a03b1f" playOrder="1300">
+          <navLabel>
+            <text>Part VIII—Resale price maintenance</text>
+          </navLabel>
+          <content src="document_2/document_2.html#_Toc235542211" />
+          </navPoint>
+        <navPoint id="a8d2da0e-a542-405a-9ce1-490e4111a40e" playOrder="1307">
+          <navLabel>
+            <text>Part IX—Review by Tribunal of decisions of Commission</text>
+          </navLabel>
+          <content src="document_2/document_2.html#_Toc235542218" />
+          <navPoint id="102a9990-b859-4e6a-9c16-ada5a7d9a93f" playOrder="1308">
+            <navLabel>
+              <text>Division 1A—Applications for review of certain decisions of the Commission</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235542219" />
+            </navPoint>
+          <navPoint id="6067df07-0356-475a-9726-f448b1cee13f" playOrder="1311">
+            <navLabel>
+              <text>Division 1B—Applications for review of acquisition determinations</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235542222" />
+            </navPoint>
+          <navPoint id="cf5e98fa-9f80-48e7-9257-28da0284f681" playOrder="1330">
+            <navLabel>
+              <text>Division 1—Applications for review of determinations by the Commission under Part VII</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235542241" />
+            </navPoint>
+          <navPoint id="ef886022-e584-422e-a845-9741819ddd79" playOrder="1335">
+            <navLabel>
+              <text>Division 2—Procedure and Evidence</text>
+            </navLabel>
+            <content src="document_2/document_2.html#_Toc235542246" />
+            </navPoint>
+        </navPoint>
+      </navPoint>
+    </navPoint>
+    <navPoint id="ffab7c7b-6296-4196-ac2b-eb25d017f2a9" playOrder="1348">
+      <navLabel>
+        <text>Volume 3</text>
+      </navLabel>
+      <content src="document_3/document_3.html" />
+      <navPoint id="34e7937d-d95d-4d26-bd27-de49b7b19015" playOrder="1349">
+        <navLabel>
+          <text>Chapter 6—Other provisions</text>
+        </navLabel>
+        <content src="document_3/document_3.html#_Toc235542259" />
+        <navPoint id="c445df43-b3d3-4ac5-83e0-6364485c062f" playOrder="1350">
+          <navLabel>
+            <text>Part X—International liner cargo shipping</text>
+          </navLabel>
+          <content src="document_3/document_3.html#_Toc235542260" />
+          <navPoint id="aee61a02-b894-4f86-a6ff-694ccdda9c80" playOrder="1351">
+            <navLabel>
+              <text>Division 1—Preliminary</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542261" />
+            </navPoint>
+          <navPoint id="3cc3de8b-462d-4ec3-b569-ebcbd5e96d18" playOrder="1357">
+            <navLabel>
+              <text>Division 2—Additional restrictive trade practice provisions applying to ocean carriers</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542267" />
+            </navPoint>
+          <navPoint id="ef5dffc9-f58e-42a9-8126-edfca298ab51" playOrder="1359">
+            <navLabel>
+              <text>Division 3—Minimum standards for conference agreements</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542269" />
+            </navPoint>
+          <navPoint id="37ec81c2-e083-4daa-aa48-f67b06357dbf" playOrder="1364">
+            <navLabel>
+              <text>Division 4—Registers and files and public inspection of them</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542274" />
+            </navPoint>
+          <navPoint id="32fdf846-2a48-4530-a766-4cb0d165b283" playOrder="1369">
+            <navLabel>
+              <text>Division 5—Exemptions from certain restrictive trade practice prohibitions</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542279" />
+            </navPoint>
+          <navPoint id="b53d1171-ab3e-40d1-97e9-b2da6c799e24" playOrder="1385">
+            <navLabel>
+              <text>Division 6—Registration of conference agreements</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542295" />
+            </navPoint>
+          <navPoint id="02c800c4-ed3a-4998-b6ba-ae6acaa676ab" playOrder="1407">
+            <navLabel>
+              <text>Division 7—Obligations of ocean carriers in relation to registered conference agreements</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542317" />
+            </navPoint>
+          <navPoint id="7a5a4fb1-92c4-42e9-97b8-ef4759a64d00" playOrder="1411">
+            <navLabel>
+              <text>Division 8—Powers of Minister in relation to registered conference agreements</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542321" />
+            </navPoint>
+          <navPoint id="bc2215ce-fcc2-4bd8-b9e0-12bb6088fd4c" playOrder="1419">
+            <navLabel>
+              <text>Division 9—Obligations of non-conference ocean carriers with substantial market power</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542329" />
+            </navPoint>
+          <navPoint id="9b8c0645-fae1-4ce3-ac87-b4764bc8cfdd" playOrder="1424">
+            <navLabel>
+              <text>Division 10—Powers of Minister in relation to non-conference ocean carriers with substantial market power</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542334" />
+            </navPoint>
+          <navPoint id="947eb82c-5f86-4bdf-98f3-7e77afcb6503" playOrder="1432">
+            <navLabel>
+              <text>Division 11—Unfair pricing practices</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542342" />
+            </navPoint>
+          <navPoint id="7a0fc80c-ffd3-4aeb-b8ab-3f0bc0a5f944" playOrder="1440">
+            <navLabel>
+              <text>Division 12—Registration of ocean carrier agents</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542350" />
+            </navPoint>
+          <navPoint id="73a00c6d-4ae9-4320-b7c7-f602ee0173d9" playOrder="1446">
+            <navLabel>
+              <text>Division 12A—Exemption orders for inwards conference agreements etc.</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542356" />
+            </navPoint>
+          <navPoint id="b4d97708-5af3-4fd1-b39d-4d5830684d0b" playOrder="1451">
+            <navLabel>
+              <text>Division 13—General provisions relating to registers and conference agreement files</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542361" />
+            </navPoint>
+          <navPoint id="6e78b17c-55f2-4f2c-aad5-95c4ae45b888" playOrder="1456">
+            <navLabel>
+              <text>Division 14—Administration</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542366" />
+            </navPoint>
+          <navPoint id="5297f33a-8eb5-4e6b-bd5a-6dc92f97dc99" playOrder="1463">
+            <navLabel>
+              <text>Division 14A—Review of decisions of Commission</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542373" />
+            </navPoint>
+          <navPoint id="3d0d303c-799e-4b06-8178-d2697dda8af8" playOrder="1467">
+            <navLabel>
+              <text>Division 14B—Review of decisions of Minister</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542377" />
+            </navPoint>
+          <navPoint id="d504d0a3-5ca1-4561-bf54-e931473b3aa5" playOrder="1472">
+            <navLabel>
+              <text>Division 15—Miscellaneous</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542382" />
+            </navPoint>
+        </navPoint>
+        <navPoint id="b2d3f90d-53cc-4e25-bd1e-ec25e7ccae91" playOrder="1482">
+          <navLabel>
+            <text>Part XI—Application of the Australian Consumer Law as a law of the Commonwealth</text>
+          </navLabel>
+          <content src="document_3/document_3.html#_Toc235542392" />
+          <navPoint id="2af99760-23bd-4dc3-8ea1-59933ed57965" playOrder="1483">
+            <navLabel>
+              <text>Division 1—Preliminary</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542393" />
+            </navPoint>
+          <navPoint id="926453fe-ca40-498e-8d2e-67c0609de703" playOrder="1486">
+            <navLabel>
+              <text>Division 2—Application of the Australian Consumer Law as a law of the Commonwealth</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542396" />
+            </navPoint>
+          <navPoint id="6c3ca5f5-54c6-4003-8ee8-792557405299" playOrder="1497">
+            <navLabel>
+              <text>Division 3—Conferences for proposed bans and recall notices</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542407" />
+            </navPoint>
+          <navPoint id="731a68de-c94d-4101-b26b-4d905d1084f4" playOrder="1513">
+            <navLabel>
+              <text>Division 4—Enforcement</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542423" />
+            </navPoint>
+          <navPoint id="1d9ab9de-6ef1-4bd0-81af-37ade8dff99d" playOrder="1528">
+            <navLabel>
+              <text>Division 5—Infringement notices</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542438" />
+            </navPoint>
+          <navPoint id="43ff7298-8f92-4041-9879-39d3001f2555" playOrder="1537">
+            <navLabel>
+              <text>Division 6—Search, seizure and entry</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542447" />
+            </navPoint>
+          <navPoint id="c3c290b6-cd5f-43ef-b6e9-47351c52e428" playOrder="1573">
+            <navLabel>
+              <text>Division 7—Remedies</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542483" />
+            </navPoint>
+          <navPoint id="38517801-57e5-4c28-b013-aeb1160d2cf0" playOrder="1583">
+            <navLabel>
+              <text>Division 8—Jurisdictional matters</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542493" />
+            </navPoint>
+          <navPoint id="fdd44843-b6f9-4020-92c1-11bf9ff359ef" playOrder="1590">
+            <navLabel>
+              <text>Division 9—Miscellaneous</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542500" />
+            </navPoint>
+        </navPoint>
+        <navPoint id="0df80e4f-d180-4924-962b-6e73c3e9a317" playOrder="1600">
+          <navLabel>
+            <text>Part XIAA—Application of the Australian Consumer Law as a law of a State or Territory</text>
+          </navLabel>
+          <content src="document_3/document_3.html#_Toc235542510" />
+          </navPoint>
+        <navPoint id="c12cc0ee-1519-4ce3-8efa-2c19dc6ea55a" playOrder="1612">
+          <navLabel>
+            <text>Part XIA—The Competition Code</text>
+          </navLabel>
+          <content src="document_3/document_3.html#_Toc235542522" />
+          </navPoint>
+      </navPoint>
+      <navPoint id="fa03fa1b-5c75-4061-b9f8-1e7ca2159071" playOrder="1627">
+        <navLabel>
+          <text>Chapter 7—Further provisions relating to particular industries etc.</text>
+        </navLabel>
+        <content src="document_3/document_3.html#_Toc235542537" />
+        <navPoint id="a7188e9e-e0e4-4a95-8a48-138fdc6f67ec" playOrder="1628">
+          <navLabel>
+            <text>Part XIB—The Telecommunications Industry: Anti-competitive conduct and record-keeping rules</text>
+          </navLabel>
+          <content src="document_3/document_3.html#_Toc235542538" />
+          <navPoint id="cc9311f6-c804-4f60-92ae-ad442b602597" playOrder="1629">
+            <navLabel>
+              <text>Division 1—Introduction</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542539" />
+            </navPoint>
+          <navPoint id="e53d95f2-5471-4b81-8662-21906eab0f17" playOrder="1639">
+            <navLabel>
+              <text>Division 2—Anti-competitive conduct</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542549" />
+            </navPoint>
+          <navPoint id="584443a5-7725-423c-b46f-f143a28a5355" playOrder="1642">
+            <navLabel>
+              <text>Division 3—Competition notices and exemption orders</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542552" />
+            </navPoint>
+          <navPoint id="912c7356-9c19-452d-ace1-dd29e8ebb891" playOrder="1675">
+            <navLabel>
+              <text>Division 6—Record-keeping rules and disclosure directions</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542585" />
+            </navPoint>
+          <navPoint id="ff496a8e-c2fc-4eeb-8ba6-42aa91f2c79a" playOrder="1689">
+            <navLabel>
+              <text>Division 7—Enforcement of the competition rule, record-keeping rules and disclosure directions</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542599" />
+            </navPoint>
+          <navPoint id="08b58297-93e0-4749-bd98-598ea2c89661" playOrder="1700">
+            <navLabel>
+              <text>Division 8—Disclosure of documents by Commission</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542610" />
+            </navPoint>
+          <navPoint id="d4c68f70-4959-484c-b091-30b5c893a606" playOrder="1702">
+            <navLabel>
+              <text>Division 9—Treatment of partnerships</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542612" />
+            </navPoint>
+          <navPoint id="ea34839b-9feb-49f7-b27c-2fac34bb8656" playOrder="1704">
+            <navLabel>
+              <text>Division 10—Review of decisions</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542614" />
+            </navPoint>
+          <navPoint id="0a64c908-178d-47e4-b42a-ca7ed485e8de" playOrder="1708">
+            <navLabel>
+              <text>Division 11—Reviews of competitive safeguards within the telecommunications industry</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542618" />
+            </navPoint>
+          <navPoint id="c94f48c4-a386-43c0-a443-057d7a2d41d2" playOrder="1710">
+            <navLabel>
+              <text>Division 12—Monitoring of telecommunications charges paid by consumers</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542620" />
+            </navPoint>
+          <navPoint id="21aa47df-8f0c-4fca-ba3b-2e55ad698274" playOrder="1712">
+            <navLabel>
+              <text>Division 12A—Reports about competition in the telecommunications industry</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542622" />
+            </navPoint>
+          <navPoint id="5a337490-9dae-4b8a-8199-8d3351191b64" playOrder="1716">
+            <navLabel>
+              <text>Division 15—Voluntary undertakings originally given by Telstra</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542626" />
+            </navPoint>
+          <navPoint id="721ad5a6-598c-4b75-ba95-d19f5d5c32bb" playOrder="1719">
+            <navLabel>
+              <text>Division 16—NBN corporations</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542629" />
+            </navPoint>
+        </navPoint>
+        <navPoint id="c0121f60-2aee-4530-aaed-a100a37a3329" playOrder="1722">
+          <navLabel>
+            <text>Part XIC—Telecommunications access regime</text>
+          </navLabel>
+          <content src="document_3/document_3.html#_Toc235542632" />
+          <navPoint id="5ccfa477-2088-4892-a2ff-949207550448" playOrder="1723">
+            <navLabel>
+              <text>Division 1—Introduction</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542633" />
+            </navPoint>
+          <navPoint id="ed8fcb19-bcdd-4cce-a6be-6705eab53a52" playOrder="1735">
+            <navLabel>
+              <text>Division 2—Declared services</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542645" />
+            </navPoint>
+          <navPoint id="1ab11582-abd1-44e2-8364-f47759e88f5c" playOrder="1743">
+            <navLabel>
+              <text>Division 3—Standard access obligations</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542653" />
+            </navPoint>
+          <navPoint id="e567c68a-91ab-433e-9e5d-4e47ab737993" playOrder="1765">
+            <navLabel>
+              <text>Division 4—Access determinations</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542675" />
+            </navPoint>
+          <navPoint id="63ec080c-7666-4d53-82b0-b7db0421ddb1" playOrder="1797">
+            <navLabel>
+              <text>Division 4A—Binding rules of conduct</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542707" />
+            </navPoint>
+          <navPoint id="f15891a7-ccdd-4ffc-a01f-ae28f2154e7b" playOrder="1821">
+            <navLabel>
+              <text>Division 4B—Access agreements</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542731" />
+            </navPoint>
+          <navPoint id="8b273641-0abe-401f-8518-8af9ef6cec11" playOrder="1833">
+            <navLabel>
+              <text>Division 5—Access undertakings</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542743" />
+            </navPoint>
+          <navPoint id="a812b947-d0f7-4e40-aa88-9aa1f762869c" playOrder="1856">
+            <navLabel>
+              <text>Division 6—Ministerial pricing determinations</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542766" />
+            </navPoint>
+          <navPoint id="cb43fc4a-be71-4fe2-9950-9b312f3abce2" playOrder="1860">
+            <navLabel>
+              <text>Division 6A—Supply of services by NBN corporations</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542770" />
+            </navPoint>
+          <navPoint id="c64a3933-fe0b-4696-bfed-a2bef7d5cfba" playOrder="1868">
+            <navLabel>
+              <text>Division 6B—Explanatory material relating to anti-discrimination provisions</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542778" />
+            </navPoint>
+          <navPoint id="44f4b491-3726-443b-b9c2-c2feab3a1d8d" playOrder="1870">
+            <navLabel>
+              <text>Division 7—Relationship between this Part and Part IIIA</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542780" />
+            </navPoint>
+          <navPoint id="30a72f6b-fb4c-43ff-8a68-c7a370532b8f" playOrder="1872">
+            <navLabel>
+              <text>Division 10—Hindering the fulfilment of a standard access obligation etc.</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542782" />
+            </navPoint>
+          <navPoint id="16ed09d7-6d4f-4af4-afdc-6e2f6e447dc4" playOrder="1880">
+            <navLabel>
+              <text>Division 10A—Procedural Rules</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542790" />
+            </navPoint>
+          <navPoint id="85833530-566f-4b9c-a0c9-8ac76a6384e0" playOrder="1883">
+            <navLabel>
+              <text>Division 11—Miscellaneous</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542793" />
+            </navPoint>
+        </navPoint>
+        <navPoint id="e1e6f93e-80e7-4652-b078-746b3bb0488d" playOrder="1892">
+          <navLabel>
+            <text>Part XICA—The Electricity Industry</text>
+          </navLabel>
+          <content src="document_3/document_3.html#_Toc235542802" />
+          <navPoint id="8b7ec2ee-b12c-4bfe-bb9a-795e8c6d757b" playOrder="1893">
+            <navLabel>
+              <text>Division 1—Preliminary</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542803" />
+            </navPoint>
+          <navPoint id="30d38cbe-9b40-4ac9-aa5a-0d3ae38ad8a9" playOrder="1898">
+            <navLabel>
+              <text>Division 2—Prohibited conduct</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542808" />
+            </navPoint>
+          <navPoint id="2f923856-7c7e-46c1-bc1a-0fcceae55f9a" playOrder="1905">
+            <navLabel>
+              <text>Division 3—Commission responses</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542815" />
+            </navPoint>
+          <navPoint id="80dcd8b3-76ed-4573-a26f-98c08f41f4e8" playOrder="1911">
+            <navLabel>
+              <text>Division 4—Procedure before contracting order or divestiture order</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542821" />
+            </navPoint>
+          <navPoint id="a5ad120d-82f8-44b1-8967-73b0f86001c5" playOrder="1921">
+            <navLabel>
+              <text>Division 5—Contracting orders</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542831" />
+            </navPoint>
+          <navPoint id="6e7131f2-6aa4-4157-abed-6d125d404a85" playOrder="1928">
+            <navLabel>
+              <text>Division 6—Electricity divestiture orders</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542838" />
+            </navPoint>
+          <navPoint id="60611bb9-75e3-4662-9747-7358a408622e" playOrder="1932">
+            <navLabel>
+              <text>Division 7—Miscellaneous</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542842" />
+            </navPoint>
+        </navPoint>
+        <navPoint id="52e8563f-3f62-4275-a333-3ff7de130465" playOrder="1935">
+          <navLabel>
+            <text>Part XICB—Access to CS services</text>
+          </navLabel>
+          <content src="document_3/document_3.html#_Toc235542845" />
+          <navPoint id="6472efc0-38a5-4f5b-b911-09d9f03bdc88" playOrder="1936">
+            <navLabel>
+              <text>Division 1—Preliminary</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542846" />
+            </navPoint>
+          <navPoint id="899c7888-1266-4cb4-903c-b7013363cfd0" playOrder="1942">
+            <navLabel>
+              <text>Division 2—Declaration of CS services</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542852" />
+            </navPoint>
+          <navPoint id="82ef544f-980d-47c4-bd0a-9b60d5a6b143" playOrder="1945">
+            <navLabel>
+              <text>Division 3—Negotiation of access</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542855" />
+            </navPoint>
+          <navPoint id="93a1f759-9b34-4638-ac85-6c422226cad1" playOrder="1951">
+            <navLabel>
+              <text>Division 4—Notification of access disputes</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542861" />
+            </navPoint>
+          <navPoint id="0dc83b90-4b82-4488-9005-2a1d6beb71e6" playOrder="1954">
+            <navLabel>
+              <text>Division 5—Arbitration of access disputes</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542864" />
+            </navPoint>
+          <navPoint id="ae259c1f-0314-4b51-bc28-10bec6cd6a54" playOrder="1962">
+            <navLabel>
+              <text>Division 6—Procedure in arbitration</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542872" />
+            </navPoint>
+          <navPoint id="c4d7a5ee-7e33-440f-beb5-c3eba7b00a8b" playOrder="1966">
+            <navLabel>
+              <text>Division 7—Effect of determinations</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542876" />
+            </navPoint>
+          <navPoint id="26fd232b-f52e-45b3-9fd3-0876625f0b35" playOrder="1969">
+            <navLabel>
+              <text>Division 8—Variation and revocation of determinations</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542879" />
+            </navPoint>
+          <navPoint id="252201e2-4f69-4e90-bc13-ea5f5d9dc4f8" playOrder="1971">
+            <navLabel>
+              <text>Division 9—Enforcement and remedies</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542881" />
+            </navPoint>
+          <navPoint id="01c2670e-dccb-48df-adcd-e784dc5f80fb" playOrder="1974">
+            <navLabel>
+              <text>Division 10—Miscellaneous</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542884" />
+            </navPoint>
+        </navPoint>
+      </navPoint>
+      <navPoint id="51b4f108-e455-4a24-98a3-f387a68941dc" playOrder="1977">
+        <navLabel>
+          <text>Chapter 8—Miscellaneous</text>
+        </navLabel>
+        <content src="document_3/document_3.html#_Toc235542887" />
+        <navPoint id="5f560eeb-ca3e-42e7-a2a9-835f2bb005c4" playOrder="1978">
+          <navLabel>
+            <text>Part XID—Search and seizure</text>
+          </navLabel>
+          <content src="document_3/document_3.html#_Toc235542888" />
+          <navPoint id="83240c94-585c-4534-a608-13e752f21f20" playOrder="1979">
+            <navLabel>
+              <text>Division 1—Preliminary</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542889" />
+            </navPoint>
+          <navPoint id="35bc122a-195f-4b72-bc75-092f60d84fab" playOrder="1982">
+            <navLabel>
+              <text>Division 2—Appointment of inspectors and identity cards</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542892" />
+            </navPoint>
+          <navPoint id="692128b2-8d0e-4dbc-8abf-fca769bb1437" playOrder="1985">
+            <navLabel>
+              <text>Division 3—Entry to premises with consent</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542895" />
+            </navPoint>
+          <navPoint id="9c06ef49-5336-48d8-8ced-fca5ab90cac4" playOrder="1989">
+            <navLabel>
+              <text>Division 4—Entry to premises under a search warrant</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542899" />
+            </navPoint>
+          <navPoint id="171f12a9-5367-439d-9449-186a4e4b238c" playOrder="2018">
+            <navLabel>
+              <text>Division 5—General provisions relating to electronic equipment</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542928" />
+            </navPoint>
+        </navPoint>
+        <navPoint id="5b6ef2bb-a731-40c9-99b5-5ba25616dbb0" playOrder="2021">
+          <navLabel>
+            <text>Part XIE—Designated complaints</text>
+          </navLabel>
+          <content src="document_3/document_3.html#_Toc235542931" />
+          <navPoint id="0b481796-02ec-4437-b5b5-846ffafbed85" playOrder="2022">
+            <navLabel>
+              <text>Division 1—Preliminary</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542932" />
+            </navPoint>
+          <navPoint id="4329fa57-f8d4-4c90-9a37-19b9baef515b" playOrder="2025">
+            <navLabel>
+              <text>Division 2—Commission handling of designated complaints</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542935" />
+            </navPoint>
+          <navPoint id="67573b4a-229c-429e-b472-4f449d7e4788" playOrder="2034">
+            <navLabel>
+              <text>Division 3—Designated complainants</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542944" />
+            </navPoint>
+          <navPoint id="4466539f-96d0-4ff6-b9c8-88ec032fcd6d" playOrder="2044">
+            <navLabel>
+              <text>Division 4—Miscellaneous</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542954" />
+            </navPoint>
+        </navPoint>
+        <navPoint id="37dc2145-39c2-4e81-a7dc-e98067b3bb7c" playOrder="2047">
+          <navLabel>
+            <text>Part XII—Miscellaneous</text>
+          </navLabel>
+          <content src="document_3/document_3.html#_Toc235542957" />
+          </navPoint>
+        <navPoint id="67eefa9a-7395-4efe-a5d4-d4626cc1ec6c" playOrder="2080">
+          <navLabel>
+            <text>Part XIII—Application and transitional provisions relating to the competition provisions</text>
+          </navLabel>
+          <content src="document_3/document_3.html#_Toc235542990" />
+          <navPoint id="104b03df-4df7-4aa0-91fb-d6395c1caa98" playOrder="2081">
+            <navLabel>
+              <text>Division 1—Cartel conduct</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542991" />
+            </navPoint>
+          <navPoint id="eb1f656a-4be0-4615-b274-0e21f717af9d" playOrder="2087">
+            <navLabel>
+              <text>Division 2—Application of amendments made by the Competition and Consumer Legislation Amendment Act 2011</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542997" />
+            </navPoint>
+          <navPoint id="ccf4dfff-bb38-4b5f-ae1a-ec6911e2a889" playOrder="2089">
+            <navLabel>
+              <text>Division 3—Application of amendments made by the Competition and Consumer Amendment (Competition Policy Review) Act 2017</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235542999" />
+            </navPoint>
+          <navPoint id="24aec1ac-df18-4165-8dec-e738f5fa39ca" playOrder="2096">
+            <navLabel>
+              <text>Division 4—Application of amendment made by the Treasury Laws Amendment (2018 Measures No. 5) Act 2019</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235543006" />
+            </navPoint>
+          <navPoint id="9cbcc16e-aaf0-457d-9283-ed4ded7a529e" playOrder="2098">
+            <navLabel>
+              <text>Division 5—Application of amendments made by the Treasury Laws Amendment (More Competition, Better Prices) Act 2022</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235543008" />
+            </navPoint>
+          <navPoint id="cb43ddb0-4c04-452b-b4c8-b536a80101f5" playOrder="2100">
+            <navLabel>
+              <text>Division 6—Application of amendments made by the Treasury Laws Amendment (Mergers and Acquisitions Reform) Act 2024</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235543010" />
+            </navPoint>
+          <navPoint id="ab1afdfe-37d6-4df0-93c1-c43ca92e5419" playOrder="2106">
+            <navLabel>
+              <text>Division 7—Application of amendments made by the Treasury Laws Amendment (Doubling Penalties for ACCC Enforcement) Act 2026</text>
+            </navLabel>
+            <content src="document_3/document_3.html#_Toc235543016" />
+            </navPoint>
+        </navPoint>
+      </navPoint>
+    </navPoint>
+    <navPoint id="519150e4-71a1-49bb-9769-7d23003020f0" playOrder="2108">
+      <navLabel>
+        <text>Volume 4</text>
+      </navLabel>
+      <content src="document_4/document_4.html" />
+      <navPoint id="93c080b7-991f-4780-8d07-3f91263dd17d" playOrder="2109">
+        <navLabel>
+          <text>Schedule 1—The Schedule version of Part IV</text>
+        </navLabel>
+        <content src="document_4/document_4.html#_Toc235543018" />
+        <navPoint id="4da6ccc6-87c3-4552-8c68-1f4691b2dea7" playOrder="2110">
+          <navLabel>
+            <text>Part 1—Schedule version of Part IV</text>
+          </navLabel>
+          <content src="document_4/document_4.html#_Toc235543019" />
+          <navPoint id="c0767c4c-379b-42f2-a3e2-e832e47f84ab" playOrder="2111">
+            <navLabel>
+              <text>Division 1—Cartel conduct</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543020" />
+            </navPoint>
+          <navPoint id="c8bb7a7a-b746-4112-a4dc-115de5302110" playOrder="2139">
+            <navLabel>
+              <text>Division 1A—Acquisitions</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543048" />
+            </navPoint>
+          <navPoint id="68448256-0b34-4cc1-9c90-e7cfb5ad2e84" playOrder="2151">
+            <navLabel>
+              <text>Division 2—Other provisions</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543060" />
+            </navPoint>
+        </navPoint>
+      </navPoint>
+      <navPoint id="4c159e56-ce48-4157-be78-e6d487c219e4" playOrder="2166">
+        <navLabel>
+          <text>Schedule 2—The Australian Consumer Law</text>
+        </navLabel>
+        <content src="document_4/document_4.html#_Toc235543075" />
+        <navPoint id="671f2bd7-bbf4-4bdb-8a49-8fd3db3399f1" playOrder="2167">
+          <navLabel>
+            <text>Chapter 1—Introduction</text>
+          </navLabel>
+          <content src="document_4/document_4.html#_Toc235543076" />
+          <navPoint id="2a692e91-ac96-4125-818e-74fb00c90e0c" playOrder="2168">
+            <navLabel>
+              <text>1  Application of this Schedule</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543077" />
+          </navPoint>
+          <navPoint id="29a8c999-abd1-4b3a-8e18-671a06769e15" playOrder="2169">
+            <navLabel>
+              <text>2  Definitions</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543078" />
+          </navPoint>
+          </navPoint>
+        <navPoint id="873a1048-ee1e-4360-ad79-53041feb0f48" playOrder="2185">
+          <navLabel>
+            <text>Chapter 2—General protections</text>
+          </navLabel>
+          <content src="document_4/document_4.html#_Toc235543094" />
+          <navPoint id="5a9f299b-242b-4c1d-880e-356bec5ce114" playOrder="2186">
+            <navLabel>
+              <text>Part 2-1—Misleading or deceptive conduct</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543095" />
+            <navPoint id="24021121-bd5e-4e7a-879e-d87a1639398b" playOrder="2187">
+              <navLabel>
+                <text>18  Misleading or deceptive conduct</text>
+              </navLabel>
+              <content src="document_4/document_4.html#_Toc235543096" />
+            </navPoint>
+            <navPoint id="91003114-bca1-485b-9ecd-48e0694c8d8a" playOrder="2188">
+              <navLabel>
+                <text>19  Application of this Part to information providers</text>
+              </navLabel>
+              <content src="document_4/document_4.html#_Toc235543097" />
+            </navPoint>
+          </navPoint>
+          <navPoint id="ffbedf9e-14d5-4951-9c10-10e68873c68c" playOrder="2189">
+            <navLabel>
+              <text>Part 2-2—Unconscionable conduct</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543098" />
+            </navPoint>
+          <navPoint id="437991cf-7d36-49d4-88e2-0f2fc78d945d" playOrder="2194">
+            <navLabel>
+              <text>Part 2-3—Unfair contract terms</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543103" />
+            </navPoint>
+        </navPoint>
+        <navPoint id="0bfb403e-5ec0-4259-a135-bb4a289b740d" playOrder="2202">
+          <navLabel>
+            <text>Chapter 3—Specific protections</text>
+          </navLabel>
+          <content src="document_4/document_4.html#_Toc235543111" />
+          <navPoint id="1d0fc0ea-b2e6-4023-8d31-a87c626255c8" playOrder="2203">
+            <navLabel>
+              <text>Part 3-1—Unfair practices</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543112" />
+            </navPoint>
+          <navPoint id="3c476640-aa7a-47ee-a7a1-cb4bd76944bc" playOrder="2231">
+            <navLabel>
+              <text>Part 3-2—Consumer transactions</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543140" />
+            </navPoint>
+          <navPoint id="49553a4a-c620-4c87-a81a-0f6fc43b0a18" playOrder="2310">
+            <navLabel>
+              <text>Part 3-3—Safety of consumer goods and product related services</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543219" />
+            </navPoint>
+          <navPoint id="9ab47901-7301-4458-81ed-f51005bbe712" playOrder="2354">
+            <navLabel>
+              <text>Part 3-4—Information standards</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543263" />
+            </navPoint>
+          <navPoint id="fb3605f3-6b46-48fb-873f-ae1428fb0910" playOrder="2361">
+            <navLabel>
+              <text>Part 3-5—Liability of manufacturers for goods with safety defects</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543270" />
+            </navPoint>
+        </navPoint>
+        <navPoint id="4a9d8120-d1ed-4a28-9b6d-56c9824e40b2" playOrder="2378">
+          <navLabel>
+            <text>Chapter 4—Offences</text>
+          </navLabel>
+          <content src="document_4/document_4.html#_Toc235543287" />
+          <navPoint id="9467d59c-938c-47ab-bcad-97a274c0bae1" playOrder="2379">
+            <navLabel>
+              <text>Part 4-1—Offences relating to unfair practices</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543288" />
+            </navPoint>
+          <navPoint id="70917b1d-1500-41dc-9ead-e7a524648108" playOrder="2403">
+            <navLabel>
+              <text>Part 4-2—Offences relating to consumer transactions</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543312" />
+            </navPoint>
+          <navPoint id="e1033de8-946b-460f-bc9f-824cd5c46fa9" playOrder="2443">
+            <navLabel>
+              <text>Part 4-3—Offences relating to safety of consumer goods and product related services</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543352" />
+            </navPoint>
+          <navPoint id="ae0dc0a9-cb60-45db-8bd6-36097ed9a452" playOrder="2457">
+            <navLabel>
+              <text>Part 4-4—Offences relating to information standards</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543366" />
+            </navPoint>
+          <navPoint id="90c6b633-a3ea-4db0-a7e6-3855cc0824ed" playOrder="2460">
+            <navLabel>
+              <text>Part 4-5—Offences relating to substantiation notices</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543369" />
+            </navPoint>
+          <navPoint id="066b983e-afde-4b5e-9245-30c00f33e76b" playOrder="2463">
+            <navLabel>
+              <text>Part 4-6—Defences</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543372" />
+            </navPoint>
+          <navPoint id="5b98ee13-afa0-4043-aa4a-c9e575f28df2" playOrder="2469">
+            <navLabel>
+              <text>Part 4-7—Miscellaneous</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543378" />
+            </navPoint>
+        </navPoint>
+        <navPoint id="1dc73861-0caf-4b37-b09f-11986b012847" playOrder="2476">
+          <navLabel>
+            <text>Chapter 5—Enforcement and remedies</text>
+          </navLabel>
+          <content src="document_4/document_4.html#_Toc235543385" />
+          <navPoint id="2f301da1-d3f7-4fc1-a61b-580cf59466ce" playOrder="2477">
+            <navLabel>
+              <text>Part 5-1—Enforcement</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543386" />
+            </navPoint>
+          <navPoint id="4e9f6506-0038-4d2e-8c8f-b917fb6997a8" playOrder="2487">
+            <navLabel>
+              <text>Part 5-2—Remedies</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543396" />
+            </navPoint>
+          <navPoint id="023cd4e8-8077-4294-8e7e-7c961d02bcb6" playOrder="2523">
+            <navLabel>
+              <text>Part 5-3—Country of origin representations</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543432" />
+            </navPoint>
+          <navPoint id="73734cbd-983c-464f-84b0-94ef69d854d6" playOrder="2527">
+            <navLabel>
+              <text>Part 5-4—Remedies relating to guarantees</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543436" />
+            </navPoint>
+          <navPoint id="4b82d65f-6d03-4f54-81c1-cd74aa2e5329" playOrder="2553">
+            <navLabel>
+              <text>Part 5-5—Liability of suppliers and credit providers</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543462" />
+            </navPoint>
+        </navPoint>
+        <navPoint id="fd5814e0-2dbd-48c2-9aff-1ad96cb2979e" playOrder="2566">
+          <navLabel>
+            <text>Chapter 6—Application and transitional provisions</text>
+          </navLabel>
+          <content src="document_4/document_4.html#_Toc235543475" />
+          <navPoint id="50a913c3-efce-4e96-af19-f280eb7ef404" playOrder="2567">
+            <navLabel>
+              <text>Part 1—Application and transitional provisions relating to the Consumer Credit Legislation Amendment (Enhancements) Act 2012</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543476" />
+            </navPoint>
+          <navPoint id="49c300a3-c6af-48ea-8daf-e7746e98fb71" playOrder="2571">
+            <navLabel>
+              <text>Part 1A—Application provision relating to the Treasury Legislation Amendment (Small Business and Unfair Contract Terms) Act 2015</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543480" />
+            </navPoint>
+          <navPoint id="55773a2f-c75b-406d-b80d-5febe5a8d86b" playOrder="2573">
+            <navLabel>
+              <text>Part 2—Application and transitional provisions relating to the Competition and Consumer Amendment (Competition Policy Review) Act 2017</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543482" />
+            </navPoint>
+          <navPoint id="0f6f8d4b-7d9c-4d57-8a24-698fc640a083" playOrder="2576">
+            <navLabel>
+              <text>Part 3—Application provision relating to the Treasury Laws Amendment (2018 Measures No. 3) Act 2018</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543485" />
+            </navPoint>
+          <navPoint id="52ea0e42-ab81-441f-a53e-952a23fd2887" playOrder="2578">
+            <navLabel>
+              <text>Part 4—Application provisions relating to the Treasury Laws Amendment (Australian Consumer Law Review) Act 2018</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543487" />
+            </navPoint>
+          <navPoint id="7b25cf69-be32-4636-b72d-bf9cd865a710" playOrder="2585">
+            <navLabel>
+              <text>Part 5—Application and transitional provisions relating to the Treasury Laws Amendment (Gift Cards) Act 2018</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543494" />
+            </navPoint>
+          <navPoint id="4fa7f7ae-28fc-4176-911a-d67421359526" playOrder="2587">
+            <navLabel>
+              <text>Part 6—Application and transitional provisions relating to the Treasury Laws Amendment (2020 Measures No. 6) Act 2020</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543496" />
+            </navPoint>
+          <navPoint id="68254700-d164-4c18-8122-846d862bfb6b" playOrder="2589">
+            <navLabel>
+              <text>Part 7—Application provision relating to the Treasury Laws Amendment (More Competition, Better Prices) Act 2022</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543498" />
+            </navPoint>
+          <navPoint id="ef01ad47-9e48-4661-bb66-70de5b0918b4" playOrder="2592">
+            <navLabel>
+              <text>Part 8—Application and saving provisions relating to the Treasury Laws Amendment (Fairer for Families and Farmers and Other Measures) Act 2024</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543501" />
+            </navPoint>
+        </navPoint>
+        <navPoint id="043a3efc-74df-4f3b-93b4-afdc789e589b" playOrder="2597">
+          <navLabel>
+            <text>Part 9—Application provision relating to the Treasury Laws Amendment (Doubling Penalties for ACCC Enforcement) Act 2026</text>
+          </navLabel>
+          <content src="document_4/document_4.html#_Toc235543506" />
+          </navPoint>
+      </navPoint>
+      </navPoint>
+  </navMap>
+</ncx>

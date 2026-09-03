@@ -1,0 +1,39 @@
+{
+    "@odata.context": "https://api.prod.legislation.gov.au/v1/$metadata#Titles(id,name,collection,status,isPrincipal,isInForce,year,number,seriesType)",
+    "@odata.count": 42,
+    "value": [
+        {
+            "id": "C2020A00047",
+            "name": "Telecommunications Legislation Amendment (Competition and Consumer) Act 2020",
+            "collection": "Act",
+            "isPrincipal": false,
+            "isInForce": true,
+            "status": "InForce",
+            "year": 2020,
+            "number": 47,
+            "seriesType": "Act"
+        },
+        {
+            "id": "F2016L00776",
+            "name": "Competition and Consumer Act 2010 - Declaration No. 94",
+            "collection": "LegislativeInstrument",
+            "isPrincipal": true,
+            "isInForce": false,
+            "status": "Repealed",
+            "year": null,
+            "number": null,
+            "seriesType": null
+        },
+        {
+            "id": "F2013L01157",
+            "name": "Competition and Consumer Act 2010 - Declaration No 93",
+            "collection": "LegislativeInstrument",
+            "isPrincipal": true,
+            "isInForce": false,
+            "status": "Repealed",
+            "year": null,
+            "number": null,
+            "seriesType": null
+        }
+    ]
+}

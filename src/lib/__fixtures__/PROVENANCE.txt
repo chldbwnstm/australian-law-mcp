@@ -1,0 +1,42 @@
+Offline fixtures for src/lib tests. Nothing in `npm test` touches the network;
+every file below was recorded once by hand with curl and then trimmed.
+
+All captures: 2026-09-03, from the keyless public Federal Register of
+Legislation endpoints documented in docs/research/frl-api-reference.md.
+
+cca-document.ncx
+  GET https://www.legislation.gov.au/C2004A00109/latest/latest/text/latest/epub/OEBPS/document.ncx
+  Full response had 2,603 navPoints (830 KB). Pruned to 294 navPoints: the two
+  competing "s 18" entries (body volume 1 "Meetings of Commission"; Schedule 2
+  "Misleading or deceptive conduct") plus every ancestor of each kept node, so
+  the depth/ordering relationships the slicer relies on survive intact.
+  Element markup, ids, playOrder values and label text are byte-identical.
+
+cca-vol1-slice.html
+  GET .../epub/OEBPS/document_1/document_1.html  (2.3 MB)
+  Trimmed to the paragraph run covering CCA ss 17A-19. Markup untouched.
+
+cca-vol4-slice.html
+  GET .../epub/OEBPS/document_4/document_4.html  (4.3 MB)
+  Trimmed to the paragraph run covering Schedule 2 (ACL) Part 2-1 ss 18-19.
+
+frl-titles-search.json
+  GET /v1/Titles/Search(criteria='text("competition%20and%20consumer%20act",name,contains)')
+      ?$top=3&$select=...&$count=true
+  (the criteria value is URL-encoded once more on the wire, so the search text
+  reaches the server as %2520 — see frl-criteria.ts)
+
+frl-title-cca.json
+  GET /v1/Titles?$filter=id eq 'C2004A00109'&$select=...,nameHistory,statusHistory
+  Shows the TPA -> CCA rename and the duplicated nameHistory row that must be
+  de-duplicated, and hasCommencedUnincorporatedAmendments=true.
+
+frl-versions-find-asat.json
+  GET /v1/Versions/Find(titleId='C2004A00109',asAt=2015-06-30T00:00:00)
+  Trimmed to 1 reason and 2 documents. Kept verbatim otherwise because this response
+  is the one that carries **numeric enum codes** (status: 0, affect: 1,
+  seriesType: 0) and no @odata.context — the shape findVersion normalizes.
+
+frl-versions-find-spec.json
+  GET /v1/versions/find(titleId='C2004A00109',asAtSpecification='latest')
+  The same entity with **string enums** (status: "InForce", affect: "Amend").
