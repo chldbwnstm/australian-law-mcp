@@ -18,7 +18,10 @@ describe("host table", () => {
       "frlApi", "frlDocs", "nswCaselaw", "hcourt", "qldJudgments", "qldLegislation",
       "tasLegislation", "waLegislation", "vicLegislation", "ntLegislation",
       "actLegislation", "ato", "fwc", "oaic", "dfat", "glossary",
-      "mpc", "nacc", "adrp", "aph",
+      // `parlinfo` is the second half of the ARCHITECTURE.md `aph` row
+      // (www.aph.gov.au / parlinfo): a separate origin with its own politeness
+      // clock and its own Referer requirement, so a separate row.
+      "mpc", "nacc", "adrp", "aph", "parlinfo",
       "austlii", "lawcite", "fedcourt", "nswLegislation", "saLegislation",
       "accc", "competitionTribunal", "ombudsman",
     ]

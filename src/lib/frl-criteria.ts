@@ -141,13 +141,41 @@ export function pointintime(when: string): Criteria {
   return `pointintime(${value})`
 }
 
-/** `id("C2004A00109")`. Register IDs are alphanumeric, so no encoding applies. */
-export function id(titleId: string): Criteria {
+/** Register IDs are alphanumeric, so no encoding applies — only a shape check. */
+function assertTitleIdArg(fn: string, titleId: string): string {
   const value = titleId.trim()
   if (!/^[A-Za-z0-9]+$/.test(value)) {
-    throw new Error(`Invalid FRL title id for criteria: ${JSON.stringify(titleId)}`)
+    throw new Error(`Invalid FRL title id for ${fn}: ${JSON.stringify(titleId)}`)
   }
-  return `id("${value}")`
+  return value
+}
+
+/** `id("C2004A00109")`. Register IDs are alphanumeric, so no encoding applies. */
+export function id(titleId: string): Criteria {
+  return `id("${assertTitleIdArg("criteria", titleId)}")`
+}
+
+/**
+ * `authorises("C2004A00109")` — every title made under that Act.
+ *
+ * Undocumented, but real: unknown function names answer HTTP 400
+ * `cannot parse <token>`, so a 200 is proof the parser knows the name.
+ * Probed live 2026-09-04 — `authorises("C2004A00109")` returns the 647 titles
+ * made under the CCA, while `enabledby`, `madeunder`, `enables` and the
+ * American spelling `authorizedby` all 400. Composes inside `and(...)` with
+ * `collection(...)` / `status(...)` like any other fragment.
+ *
+ * Lives here rather than in a tool helper because it is grammar, and a second
+ * copy of a grammar is how one caller keeps quoting an id the other stopped
+ * quoting.
+ */
+export function authorises(titleId: string): Criteria {
+  return `authorises("${assertTitleIdArg("authorises()", titleId)}")`
+}
+
+/** `authorisedby("F1996B01420")` — the Act(s) an instrument was made under. */
+export function authorisedby(titleId: string): Criteria {
+  return `authorisedby("${assertTitleIdArg("authorisedby()", titleId)}")`
 }
 
 /**
@@ -156,10 +184,7 @@ export function id(titleId: string): Criteria {
  * not exposed by the API at all; do not try to synthesise it here.
  */
 export function affectedby(titleId: string, kinds: AffectKind[] = ["amending"]): Criteria {
-  const value = titleId.trim()
-  if (!/^[A-Za-z0-9]+$/.test(value)) {
-    throw new Error(`Invalid FRL title id for affectedby: ${JSON.stringify(titleId)}`)
-  }
+  const value = assertTitleIdArg("affectedby", titleId)
   if (kinds.length === 0) throw new Error("FRL criteria affectedby() needs at least one affect kind")
   kinds.forEach((kind) => assertBareToken("affect kind", kind))
   return `affectedby("${value}",[${kinds.join(",")}])`

@@ -34,6 +34,7 @@ import {
   type Criteria,
   type FrlCollection,
   type FrlStatus,
+  type MatchType,
   type SearchType,
 } from "./frl-criteria.js"
 import { ancestorsOf, parseNcx } from "./ncx-parser.js"
@@ -66,9 +67,15 @@ export interface FetchOpts {
 const FRL_TOP_MAX = 100
 const DEFAULT_SEARCH_TOP = 20
 
+/**
+ * `originatingBillUri` is carried here rather than fetched separately: it is
+ * the only pointer from a title to its parliamentary paper trail (the APH bill
+ * page, and through it the explanatory memorandum), and re-requesting the same
+ * row to add one field costs a whole round trip against the request budget.
+ */
 const TITLE_SELECT =
   "id,name,collection,status,isPrincipal,isInForce,year,number,seriesType," +
-  "nameHistory,statusHistory,hasCommencedUnincorporatedAmendments"
+  "originatingBillUri,nameHistory,statusHistory,hasCommencedUnincorporatedAmendments"
 
 /**
  * Numeric → string enum tables for the `Versions/Find(asAt=…)` quirk. Order is
@@ -200,9 +207,45 @@ export class AuApiClient {
 
   // ── FRL conveniences ─────────────────────────────────────────────────────
 
+  /**
+   * Run a pre-built criteria fragment.
+   *
+   * `searchTitles` covers the four facets its parameters name; anything else —
+   * `authorises(...)`, an `or(...)` of collections, a facet combination the
+   * convenience does not model — used to mean the caller re-derived
+   * `titlesSearchPath` and the `$count`/`$top` clamping for itself, which is
+   * how a second copy of the pagination rules gets written. Hand the fragment
+   * here instead: the DSL still comes from `frl-criteria.ts`, and the wire
+   * details stay in one place.
+   */
+  async criteriaSearch<T = FrlTitle>(
+    criteria: Criteria,
+    opts: { top?: number; skip?: number; select?: string; expand?: string; orderBy?: string } = {},
+  ): Promise<{ count: number; titles: T[] }> {
+    const query: NonNullable<FetchOpts["query"]> = {
+      $count: "true",
+      $top: clampTop(opts.top ?? DEFAULT_SEARCH_TOP),
+    }
+    if (opts.skip !== undefined) query.$skip = opts.skip
+    if (opts.select) query.$select = opts.select
+    if (opts.expand) query.$expand = opts.expand
+    if (opts.orderBy) query.$orderby = opts.orderBy
+
+    const json = (await this.fetchJson("frlApi", titlesSearchPath(criteria), { query })) as ODataList<T>
+    const titles = json.value ?? []
+    return { count: json["@odata.count"] ?? titles.length, titles }
+  }
+
   async searchTitles(p: {
     text?: string
     searchType?: "name" | "nameAndText"
+    /**
+     * How `text()` matches. The DSL default, `contains`, is a **phrase** match:
+     * "CSIRO determination" finds 0 notifiable instruments while `all` finds 2.
+     * Keyword callers should pass `all`; the default stays `contains` so the
+     * frozen behaviour of existing callers does not move underneath them.
+     */
+    matchType?: MatchType
     collection?: string
     status?: string
     pointInTime?: string
@@ -222,7 +265,9 @@ export class AuApiClient {
 
     let path: string
     if (p.text) {
-      const parts: Criteria[] = [criteriaText(p.text, (p.searchType ?? "nameAndText") as SearchType)]
+      const parts: Criteria[] = [
+        criteriaText(p.text, (p.searchType ?? "nameAndText") as SearchType, p.matchType),
+      ]
       if (p.collection) parts.push(criteriaCollection(p.collection as FrlCollection))
       if (p.status) parts.push(criteriaStatus(p.status as FrlStatus))
       if (p.pointInTime) parts.push(pointintime(p.pointInTime))

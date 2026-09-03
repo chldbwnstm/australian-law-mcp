@@ -47,6 +47,7 @@ export type HostKey =
   | "nacc"
   | "adrp"
   | "aph"
+  | "parlinfo"
   // ── blocked (never fetched server-side) ────────────────────────────────
   | "austlii"
   | "lawcite"
@@ -255,6 +256,19 @@ export const UPSTREAM_HOSTS: Readonly<Record<HostKey, HostConfig>> = {
     timeoutMs: 45_000,
     minIntervalMs: SCRAPE_INTERVAL_MS,
     notes: "Act EM index via bId= bill pages; ParlInfo EM HTML is open, ParlInfo PDFs need an APH Referer.",
+  },
+  parlinfo: {
+    key: "parlinfo",
+    base: "https://parlinfo.aph.gov.au",
+    kind: "html",
+    timeoutMs: 45_000,
+    minIntervalMs: SCRAPE_INTERVAL_MS,
+    // Separate row from `aph` on purpose: it is a different origin with its own
+    // politeness clock, and the PDF path needs an APH Referer that the www host
+    // does not. One row for both would silently share the interval budget of a
+    // site that is scraped far more often (docs/research/grok-followup.md §1.2).
+    headers: { referer: "https://www.aph.gov.au/" },
+    notes: "ParlInfo document store — explanatory-memorandum HTML is open; the PDF variants need the APH Referer sent here.",
   },
 
   // ── Blocked ─────────────────────────────────────────────────────────────

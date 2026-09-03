@@ -45,7 +45,8 @@ budget (48 attempts / 2 MiB / 8 MiB).
 | `mpc` | www.mpc.gov.au | HTML | case-studies index `/resources/case-studies-merits-review-outcomes` (facets `f[0]=...`) |
 | `nacc` | www.nacc.gov.au | HTML + PDF | `/investigation-reports-and-case-studies` single-page index, per-operation anchors + PDFs |
 | `adrp` | www.industry.gov.au | HTML | Anti-Dumping Review Panel current/past review indexes (long official paths; `/reviews` guesses 404) |
-| `aph` | www.aph.gov.au / parlinfo | HTML | Act EMs reachable as HTML; PDFs need Referer (see grok-followup.md §1.2) |
+| `aph` | www.aph.gov.au | HTML | Act EMs reachable as HTML via `bId=` bill pages |
+| `parlinfo` | parlinfo.aph.gov.au | HTML | EM full text; PDFs need an APH Referer (see grok-followup.md §1.2) |
 
 **Blocked set (never fetched server-side; emit deep links + `[UPSTREAM_BLOCKED]`):**
 AustLII (all), LawCite, judgments.fedcourt.gov.au, legislation.nsw.gov.au,

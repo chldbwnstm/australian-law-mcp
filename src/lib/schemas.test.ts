@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest"
-import { MAX_RESPONSE_SIZE, truncateResponse, truncateSections } from "./schemas.js"
+import {
+  ISO_DATE_PATTERN,
+  MAX_RESPONSE_SIZE,
+  isRealIsoDay,
+  isoDateSchema,
+  truncateResponse,
+  truncateSections,
+} from "./schemas.js"
 
 // Mimics a full judgment response: long prose whose sentences span several lines.
 const SENTENCE =
@@ -66,5 +73,41 @@ describe("truncateResponse sentence-boundary guard", () => {
     const body = bodyOf(truncateResponse(noBoundary, 1000))
     // With no boundary to retreat to, keep the hard cut — zero gratuitous loss
     expect(body.length).toBeGreaterThan(1000 - 60)
+  })
+})
+
+/**
+ * The ISO date helper. Australian upstreams all speak `YYYY-MM-DD` — the FRL
+ * document URL grammar and the OData datetime literal both want zero-padded
+ * parts — and every tool that takes a point in time was inlining its own
+ * regex. Inlined a dozen times, one of them eventually gets written
+ * `\d{4}-\d{1,2}-\d{1,2}` and starts accepting `2020-1-1`, which the server
+ * answers with an empty result rather than an error.
+ */
+describe("isoDateSchema", () => {
+  it("takes the zero-padded form and nothing else", () => {
+    expect(isoDateSchema("d").safeParse("2024-07-01").success).toBe(true)
+    expect(isoDateSchema("d").safeParse("2024-7-1").success).toBe(false)
+    expect(isoDateSchema("d").safeParse("01/07/2024").success).toBe(false)
+    expect(isoDateSchema("d").safeParse("20240701").success).toBe(false)
+  })
+
+  it("rejects a date that matches the shape but is not a day", () => {
+    // A non-day reaches the server as an empty result, which reads as
+    // "no such compilation" rather than "you asked for the 30th of February".
+    expect(isoDateSchema("d").safeParse("2023-02-30").success).toBe(false)
+    expect(isoDateSchema("d").safeParse("2023-13-01").success).toBe(false)
+    expect(isRealIsoDay("2024-02-29")).toBe(true)
+    expect(isRealIsoDay("2023-02-29")).toBe(false)
+  })
+
+  it("carries the caller's description into the generated JSON Schema", () => {
+    const described = isoDateSchema("Point in time for the compilation")
+    expect(described.description).toBe("Point in time for the compilation")
+  })
+
+  it("shares one pattern with everything that checks the shape", () => {
+    expect(ISO_DATE_PATTERN.test("2024-07-01")).toBe(true)
+    expect(ISO_DATE_PATTERN.test("2024-7-1")).toBe(false)
   })
 })

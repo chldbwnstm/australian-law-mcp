@@ -95,3 +95,34 @@ cca-vol4-schedule2.html
   Endnotes root — i.e. every anchor cca-schedules.ncx points into for schedule
   work, so a whole-schedule slice has a real start anchor to cut from. The gaps
   between the kept runs are elided; markup, classes and entities are untouched.
+
+
+── Wave-3 "F" additions (killer features) ─────────────────────────────────
+
+nsw-decision-overruling.html
+  CRAFTED, NOT RECORDED — and labelled as such in a leading HTML comment.
+  A judgment that actually overrules an earlier case is what cite_check's
+  treatment scan has to be tested against, and no real Australian judgment was
+  going to be trimmed into one without misrepresenting it. Parties, reasoning
+  and the [2019] NSWCCA 12 citation are invented; the only real citation in the
+  file is the scan target, [2010] NSWCCA 333. The markup shape (div.judgment >
+  div.body, coversheet <tr><td> rows) is copied from the recorded
+  ../../lib/sources/__fixtures__/nsw-decision-dela-cruz.html so that
+  lib/sources/nsw-caselaw.ts parseDecision() finds its landmarks.
+
+Reused by the Wave-3 tests, not duplicated:
+  ../../lib/sources/__fixtures__/nsw-mnc-lookup.html        exact MNC lookup, [2010] NSWCCA 333
+  ../../lib/sources/__fixtures__/nsw-search-negligence.html full-text back-trace hits
+  ../../lib/sources/__fixtures__/qld-search-negligence.html full-text back-trace hits
+  ../../lib/sources/__fixtures__/hca-search-native-title.html  HCA year/keyword listing
+  ../../lib/sources/__fixtures__/hca-detail-potter.html     HCA judgment detail page
+  cca-schedules.ncx, cca-endnote-amendments.html, frl-authorises-cca.json,
+  frl-versions-cca.json                                     (above)
+
+Live re-verification during Wave 3 (one request, browser UA):
+  GET https://api.prod.legislation.gov.au/v1/Versions/Find(titleId='C2004A00109',
+      asAt=2010-12-31T00:00:00)                             2026-09-04
+  → name "Trade Practices Act 1974", window 2010-12-18 → 2011-01-01,
+    registerId null. That is the applicable_law rename case (docs/research §8.2)
+    still true today; the shape is reproduced inline in applicable-law.test.ts
+    rather than as a file, because it is four fields.

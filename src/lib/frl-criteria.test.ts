@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest"
 import {
   affectedby,
   and,
+  authorisedby,
+  authorises,
   collection,
   encodeCriteria,
   id,
@@ -163,6 +165,31 @@ describe("double encoding on the wire", () => {
   it("builds the search path relative to the frlApi base", () => {
     expect(titlesSearchPath(id("C2004A00109"))).toBe(
       "Titles/Search(criteria='id(%22C2004A00109%22)')",
+    )
+  })
+})
+
+/**
+ * The two Act ⇄ instrument functions. They are undocumented but real: an
+ * unknown function name answers HTTP 400 `cannot parse <token>`, so the 200
+ * observed live on 2026-09-04 is proof the parser knows them. They live in this
+ * module because they are grammar, and a second copy of a grammar is how one
+ * caller keeps quoting an id after the other stopped.
+ */
+describe("authorises / authorisedby", () => {
+  it("quotes the id, the way the live parser accepts", () => {
+    expect(authorises("C2004A00109")).toBe('authorises("C2004A00109")')
+    expect(authorisedby("F1996B01420")).toBe('authorisedby("F1996B01420")')
+  })
+
+  it("names itself in the error so a bad id is traceable to the caller", () => {
+    expect(() => authorises("not an id!")).toThrow(/authorises\(\)/)
+    expect(() => authorisedby("F1996 B01420")).toThrow(/authorisedby\(\)/)
+  })
+
+  it("composes inside and() with the other facets", () => {
+    expect(and(authorises("C2004A00109"), collection("LegislativeInstrument"), status("InForce"))).toBe(
+      'and(authorises("C2004A00109"),collection(LegislativeInstrument),status(InForce))',
     )
   })
 })

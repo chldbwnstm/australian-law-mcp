@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { AuApiClient, normalizeFrlVersion } from "./api-client.js"
 import { ErrorCodes, LawApiError, UpstreamBlockedError } from "./errors.js"
+import { authorises } from "./frl-criteria.js"
 
 const fixture = (name: string) => readFileSync(new URL(`./__fixtures__/${name}`, import.meta.url), "utf-8")
 
@@ -75,6 +76,52 @@ describe("searchTitles", () => {
   it("rejects a call with neither text nor filter", async () => {
     await expect(client().searchTitles({})).rejects.toBeInstanceOf(LawApiError)
     expect(requested).toHaveLength(0)
+  })
+
+  it("keeps `contains` as the default so existing callers do not move", async () => {
+    route("/Titles/Search", fixture("frl-titles-search.json"))
+    await client().searchTitles({ text: "misleading" })
+    // The comma is percent-encoded on the wire, so the tail reads `%2Ccontains)`.
+    expect(requested[0]).toContain("%2Ccontains)")
+  })
+
+  it("passes a caller's matchType through to the criteria", async () => {
+    // `contains` is a phrase match. Measured live 2026-09-04 against the
+    // notifiable-instrument collection, "CSIRO determination" returns 0 under
+    // `contains` and 2 under `all` — so a keyword caller that cannot ask for
+    // `all` reports absence for an ordinary two-word query.
+    route("/Titles/Search", fixture("frl-titles-search.json"))
+    await client().searchTitles({ text: "CSIRO determination", matchType: "all" })
+    expect(requested[0]).toContain("%2Call)")
+    expect(requested[0]).not.toContain("%2Ccontains)")
+  })
+})
+
+describe("criteriaSearch", () => {
+  it("runs a pre-built fragment with the same wire conventions as searchTitles", async () => {
+    route("/Titles/Search", fixture("frl-titles-search.json"))
+    const { count, titles } = await client().criteriaSearch(authorises("C2004A00109"), {
+      top: 500,
+      select: "id,name",
+      expand: "authorisedBy",
+      orderBy: "name asc",
+    })
+    const url = requested[0]
+    expect(url).toContain("authorises(%22C2004A00109%22)")
+    expect(url).toContain("$count=true")
+    // The one clamp that matters: >100 is a 400 upstream.
+    expect(url).toContain("$top=100")
+    expect(url).toContain("$select=id%2Cname")
+    expect(url).toContain("$expand=authorisedBy")
+    expect(url).toContain("$orderby=name%20asc")
+    expect(count).toBe(42)
+    expect(titles.length).toBeGreaterThan(0)
+  })
+
+  it("falls back to the row count when the server omits @odata.count", async () => {
+    route("/Titles/Search", JSON.stringify({ value: [{ id: "C2004A00109", name: "CCA" }] }))
+    const { count } = await client().criteriaSearch(authorises("C2004A00109"))
+    expect(count).toBe(1)
   })
 })
 

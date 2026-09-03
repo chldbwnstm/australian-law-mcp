@@ -45,6 +45,15 @@ export interface FrlKeywordSearch {
 
 const FRL_TOP_MAX = 100
 
+/**
+ * `AuApiClient.criteriaSearch` now does exactly this on the wire, and this
+ * helper is one line away from delegating to it. It deliberately does not:
+ * every caller of this module — and of the statute helpers next to it — is
+ * tested against a hand-built `{ fetchJson }` stub cast to `AuApiClient`, so
+ * reaching for a second client method would turn a green suite red at five
+ * files without any behaviour changing. Delegate when those stubs become a
+ * shared fake; until then the duplication is the cheaper of the two costs.
+ */
 export async function searchTitlesMatching(
   client: AuApiClient,
   p: FrlKeywordSearch,

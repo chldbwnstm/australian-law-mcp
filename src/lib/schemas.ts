@@ -38,6 +38,46 @@ export const dateSchema = z
 export const optionalDateSchema = dateSchema.optional()
 
 /**
+ * The regex every Australian point-in-time parameter checks against.
+ *
+ * Exported so no tool has to retype it: `/^\d{4}-\d{2}-\d{2}$/` inlined at a
+ * dozen call sites is a dozen chances for one of them to be written
+ * `\d{4}-\d{1,2}-\d{1,2}` and start accepting `2020-1-1`, which every upstream
+ * on the AU side rejects (the FRL document URL grammar and the OData datetime
+ * literal both want zero-padded parts).
+ */
+export const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+
+/**
+ * ISO `YYYY-MM-DD` — the wire format of every Australian upstream.
+ *
+ * Shape *and* calendar are both checked: `2023-02-30` matches the pattern and
+ * is still not a day, and an upstream handed a non-day answers with an empty
+ * result rather than an error, which reads as "no such compilation".
+ *
+ * @param description text for the generated JSON Schema (LLM callers read it)
+ */
+export function isoDateSchema(description: string) {
+  return z
+    .string()
+    .regex(ISO_DATE_PATTERN, "Date format: YYYY-MM-DD (e.g. 2024-07-01)")
+    .refine(isRealIsoDay, { message: "Not a real calendar date." })
+    .describe(description)
+}
+
+/** True when a `YYYY-MM-DD` string names a day that exists. */
+export function isRealIsoDay(value: string): boolean {
+  if (!ISO_DATE_PATTERN.test(value)) return false
+  const [year, month, day] = value.split("-").map((part) => parseInt(part, 10))
+  if (year < 1800 || year > 2200) return false
+  if (month < 1 || month > 12) return false
+  const daysInMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+  const isLeapYear = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0
+  const limit = month === 2 && isLeapYear ? 29 : daysInMonth[month - 1]
+  return day >= 1 && day <= limit
+}
+
+/**
  * Pagination schema
  */
 export const paginationSchema = z.object({

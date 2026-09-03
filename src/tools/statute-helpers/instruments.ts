@@ -26,14 +26,27 @@
  * name-matching fallback the brief allowed for is not needed and is not here —
  * a guess would be strictly worse than the real edge.
  *
- * These two functions are not in `lib/frl-criteria.ts` (a Wave-1 shared file
- * this agent must not edit); they belong there eventually.
+ * The two criteria builders now live in `lib/frl-criteria.ts`, the single
+ * source of that grammar; they are re-exported here so the callers that found
+ * them at this path keep working.
  */
 
 import type { AuApiClient } from "../../lib/api-client.js"
-import { and, collection as criteriaCollection, status as criteriaStatus, titlesSearchPath, type Criteria, type FrlCollection, type FrlStatus } from "../../lib/frl-criteria.js"
+import {
+  and,
+  authorisedby,
+  authorises,
+  collection as criteriaCollection,
+  status as criteriaStatus,
+  titlesSearchPath,
+  type Criteria,
+  type FrlCollection,
+  type FrlStatus,
+} from "../../lib/frl-criteria.js"
 import { SEARCH_CACHE_TTL, lawCache } from "../../lib/cache.js"
 import type { FrlTitle } from "../../lib/types.js"
+
+export { authorisedby, authorises }
 
 function assertId(titleId: string, fn: string): string {
   const value = titleId.trim()
@@ -41,16 +54,6 @@ function assertId(titleId: string, fn: string): string {
     throw new Error(`Invalid FRL title id for ${fn}(): ${JSON.stringify(titleId)}`)
   }
   return value
-}
-
-/** `authorises("C2004A00109")` — every instrument made under that Act. */
-export function authorises(titleId: string): Criteria {
-  return `authorises("${assertId(titleId, "authorises")}")`
-}
-
-/** `authorisedby("F1996B01420")` — the Act(s) an instrument was made under. */
-export function authorisedby(titleId: string): Criteria {
-  return `authorisedby("${assertId(titleId, "authorisedby")}")`
 }
 
 /** One row of the `authorisedBy` expansion: who authorised what, under which provision. */
@@ -72,7 +75,18 @@ interface ODataList {
   value?: RelatedTitle[]
 }
 
-async function criteriaSearch(
+/**
+ * Cached criteria search.
+ *
+ * `AuApiClient.criteriaSearch` covers the wire half of this and delegating
+ * would be a two-line change — but every test of this module and of the four
+ * tools built on it stubs the client as `{ fetchJson }` cast to `AuApiClient`,
+ * so calling a second method turns five green suites red for no behaviour
+ * change. The caching stays here in either case: the key encodes *this*
+ * module's notion of identity (which act, which collections, in force or not)
+ * and no other caller shares it.
+ */
+async function cachedCriteriaSearch(
   client: AuApiClient,
   criteria: Criteria,
   opts: { top: number; skip?: number; expand?: string; orderby?: string; cacheKey: string },
@@ -121,7 +135,7 @@ export async function enabledInstruments(
   if (collections.length > 0) parts.push(criteriaCollection(...collections))
   if (opts.inForceOnly !== false) parts.push(criteriaStatus("InForce" as FrlStatus))
   const top = opts.top ?? 25
-  return criteriaSearch(client, and(...parts), {
+  return cachedCriteriaSearch(client, and(...parts), {
     top,
     ...(opts.skip !== undefined ? { skip: opts.skip } : {}),
     expand: "authorisedBy",
@@ -135,7 +149,7 @@ export async function enablingActs(
   client: AuApiClient,
   instrumentId: string,
 ): Promise<{ acts: RelatedTitle[]; provisions: string[] }> {
-  const found = await criteriaSearch(client, authorisedby(instrumentId), {
+  const found = await cachedCriteriaSearch(client, authorisedby(instrumentId), {
     top: 20,
     orderby: "name asc",
     cacheKey: `authorisedby:${instrumentId}`,
