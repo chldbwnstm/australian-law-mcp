@@ -42,10 +42,24 @@ budget (48 attempts / 2 MiB / 8 MiB).
 | `oaic` | www.oaic.gov.au | HTML | determinations index only |
 | `dfat` | docs.dfat.gov.au | POST JSON | `/api/search`; SPA 404-status quirk |
 | `glossary` | legalanswers.sl.nsw.gov.au | HTML | legal glossary |
+| `mpc` | www.mpc.gov.au | HTML | case-studies index `/resources/case-studies-merits-review-outcomes` (facets `f[0]=...`) |
+| `nacc` | www.nacc.gov.au | HTML + PDF | `/investigation-reports-and-case-studies` single-page index, per-operation anchors + PDFs |
+| `adrp` | www.industry.gov.au | HTML | Anti-Dumping Review Panel current/past review indexes (long official paths; `/reviews` guesses 404) |
+| `aph` | www.aph.gov.au / parlinfo | HTML | Act EMs reachable as HTML; PDFs need Referer (see grok-followup.md §1.2) |
 
 **Blocked set (never fetched server-side; emit deep links + `[UPSTREAM_BLOCKED]`):**
 AustLII (all), LawCite, judgments.fedcourt.gov.au, legislation.nsw.gov.au,
-legislation.sa.gov.au, accc.gov.au, competitiontribunal.gov.au.
+legislation.sa.gov.au, accc.gov.au, competitiontribunal.gov.au, www.ombudsman.gov.au.
+
+**Resolved quirks (grok-followup.md):** NSW Caselaw exact-citation lookup = advanced
+`mnc=[YYYY] NSWXX n` **plus** `_courts=on&courts=<hexId>` (mnc alone returns the blank
+form; `/search` ignores mnc/body — only `query`). ATO known-document grammar:
+`/law/view/document?docid={PREFIX}/{CODE}/NAT/ATO/00001`, print `/law/view/print?DocID=...&PiT=99991231235958`
+(PiT sentinel = current; historical `yyyyMMdd000001`), PDF `/law/view/pdf?DocId=...`;
+`fid=` params are help pages, NOT filters. ATO list-search: use the POST
+`/API/v1/law/lawservices/result` endpoint (verified by researcher 3); if it degrades,
+report upstream failure — never absence. FRL ES download verified end-to-end for
+legislative instruments.
 Deep-link builders live in `src/lib/external-links-map.ts` (AustLII viewdoc grammar,
 LawCite `?cit=`, NSW/SA legislation, Fed Court).
 
@@ -105,12 +119,12 @@ is its own module `src/lib/frl-criteria.ts` — single source of that grammar.
 | `tax_tribunal` | ATO legal DB (decision impact statements etc.) + ARTA deep links | partial |
 | `tax_rulings` | ATO legal DB TR/TD/GSTR/… | live |
 | `interpretations` | ATO interpretative decisions (AID) + practice statements (PS LA) | live |
-| `customs` | ATO customs/excise docs + ABF/ADRP deep links | partial |
-| `competition` | attempt ACCC/ACompT (expect 403 → `[UPSTREAM_BLOCKED]` + links) + case fan-out fallback | degraded |
+| `customs` | ATO customs/excise docs + ADRP review indexes (live) + ABF links | partial+ |
+| `competition` | ACCC/ACompT blocked → `[UPSTREAM_BLOCKED]` + links; case fan-out fallback | degraded |
 | `workplace` | FWC document-search + PDF | live |
 | `privacy` | OAIC determinations index + AICmr deep links | live (index) |
-| `integrity` | NACC/Ombudsman attempt + links | degraded |
-| `public_service` | MPC attempt + ART links | degraded |
+| `integrity` | NACC investigation-reports index + PDFs (live); Ombudsman blocked → links | live (NACC) |
+| `public_service` | MPC case-studies index (live, faceted) + ART links | live (index) |
 | `university_rules` | university acts via state legislation clients | live |
 | `agency_rules` | FRL NotifiableInstrument collection | live |
 | `gazettes` | FRL Gazette collection | live |
