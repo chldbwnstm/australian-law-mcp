@@ -1,0 +1,33 @@
+Fixture provenance — recorded once, live, with a browser User-Agent.
+
+All fixtures below were captured on 2026-09-04 by the Wave-2 "D" agent using
+curl. HTML/XML fixtures repeat their provenance in a leading HTML comment;
+JSON fixtures cannot carry comments, so their provenance lives only here.
+
+Large responses were trimmed to the region a parser actually reads. Every
+trimmed file says so in its header comment; nothing inside a fixture was
+edited, only cut.
+
+  act-a-2001-14.html             GET https://www.legislation.act.gov.au/a/2001-14/
+  adrp-past-reviews.html         GET https://www.industry.gov.au/trade/anti-dumping-review-panel/past-anti-dumping-review-panel-reviews
+  ato-document-tr20241.html      GET https://www.ato.gov.au/law/view/document?docid=TXR%2FTR20241%2FNAT%2FATO%2F00001
+  ato-search-cgt.html            POST https://www.ato.gov.au/API/v1/law/lawservices/result  (tm_and=capital+gains+main+residence)
+  dfat-search-extradition.json   POST https://docs.dfat.gov.au/api/search  {"keyword":"extradition","page":1,"facets":{},"dateFilters":{}}
+                                 (results[] cut to the first 3 of 20; totalCount/paging left untouched)
+  frl-documents-es.json          GET https://api.prod.legislation.gov.au/v1/Documents?$filter=titleId eq 'F2011L00287' and type eq 'ES'
+  fwc-search-redundancy.html     GET https://www.fwc.gov.au/document-search?search-ui=decisions&search=genuine%20redundancy&sort=search_api_relevance%3ADESC&page=0
+  hca-detail-potter.html         GET https://www.hcourt.gov.au/cases-and-judgments/judgments/judgments-1998-current/potter-pseudonym-v-king
+  hca-search-native-title.html   GET https://www.hcourt.gov.au/cases-and-judgments/judgments/judgments-1998-current?keywords=native+title
+  mpc-case-studies.html          GET https://www.mpc.gov.au/resources/case-studies-merits-review-outcomes
+  nacc-investigation-reports.html GET https://www.nacc.gov.au/investigation-reports-and-case-studies
+  nsw-decision-dela-cruz.html    GET https://www.caselaw.nsw.gov.au/decision/549fff1d3004262463c85662
+  nsw-mnc-lookup.html            GET https://www.caselaw.nsw.gov.au/search/advanced?page=&body=&title=&before=&catchwords=&party=&mnc=%5B2010%5D%20NSWCCA%20333&startDate=&endDate=&fileNumber=&legislationCited=&casesCited=&_courts=on&courts=54a634063004de94513d8279&_tribunals=on
+  nsw-search-negligence.html     GET https://www.caselaw.nsw.gov.au/search?query=negligence&page=0
+  nt-acts-by-title.html          GET https://legislation.nt.gov.au/en/LegislationPortal/Acts/By-Title
+  oaic-determinations.html       GET https://www.oaic.gov.au/privacy/privacy-assessments-and-decisions/privacy-decisions/privacy-determinations
+  qld-case-qsc-2020-100.html     GET https://www.queenslandjudgments.com.au/caselaw/qsc/2020/100
+  qld-projectdata-search.json    GET https://www.legislation.qld.gov.au/projectdata?ds=OQPC-FragTocRelationIdxDatasource&config=Y&start=1&count=5&expression=Repealed%3DN%20AND%20PrintType%3D%22act.reprint%22%20AND%20Content%3D(murder)&subset=F&collection=
+  qld-search-negligence.html     GET https://www.queenslandjudgments.com.au/caselaw-search/query?queryStringSearchText=negligence&per-page=20&page=1
+  tas-projectdata-search.json    GET https://www.legislation.tas.gov.au/projectdata?ds=EnAct-FragTocRelationIdxDatasource&config=Y&start=1&count=5&expression=Repealed%3DN%20AND%20Content%3D(dog)&subset=F&collection=
+  vic-act-crimes-1958.html       GET https://www.legislation.vic.gov.au/in-force/acts/crimes-act-1958
+  wa-actsif-c.html               GET https://www.legislation.wa.gov.au/legislation/statutes.nsf/actsif_c.html

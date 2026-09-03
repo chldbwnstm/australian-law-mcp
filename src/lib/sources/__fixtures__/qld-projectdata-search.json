@@ -1,0 +1,407 @@
+{
+"data" : [ {
+"version.series.id" : {
+"__type__" : "UniString",
+"__value__" : "13728c9a-0e6c-41c2-8090-97af5880885b"}
+,
+"version.desc.id" : {
+"__type__" : "UniString",
+"__value__" : "00002f09-d300-4078-87a5-775ebb5895db"}
+,
+"parliament.no" : {
+"__type__" : "UniString",
+"__value__" : ""}
+,
+"amending" : {
+"__type__" : "UniString",
+"__value__" : ""}
+,
+"in.force" : {
+"__type__" : "UniString",
+"__value__" : ""}
+,
+"type" : {
+"__type__" : "UniString",
+"__value__" : "html"}
+,
+"id" : {
+"__type__" : "UniString",
+"__value__" : "Act-2000-005"}
+,
+"publication.date" : "2012-01-30T00:00:00",
+"otherRenditions" : {
+"filename" : "PolicePowResA00_08C_120130.pdf",
+"mimetype" : "REP_PDF",
+"filesize" : {
+"__type__" : "Integer",
+"__value__" : 2995689}
+}
+,
+"title" : {
+"__type__" : "UniString",
+"__value__" : "Police Powers and Responsibilities Act 2000"}
+,
+"title_v" : {
+"__type__" : "UniString",
+"__value__" : "Police Powers and Responsibilities Act 2000"}
+,
+"year" : {
+"__type__" : "UniString",
+"__value__" : "2000"}
+,
+"no" : {
+"__type__" : "UniString",
+"__value__" : "5"}
+,
+"print.type" : {
+"__type__" : "UniString",
+"__value__" : "act.reprint"}
+,
+"repealed" : {
+"__type__" : "UniString",
+"__value__" : "N"}
+,
+"enabling.title" : {
+"__type__" : "UniString",
+"__value__" : ""}
+,
+"enabling.acts" : {
+"__type__" : "UniString",
+"__value__" : ""}
+,
+"enabling.acts.repeating" : {
+"__type__" : "UniString",
+"__value__" : ""}
+,
+"first.valid.date" : "2012-01-30T00:00:00",
+"end.valid.date" : "2012-01-30T00:00:00",
+"style-hash" : {
+"__type__" : "UniString",
+"__value__" : "sha384-ZDiaPEHj6Hk42yWE+SZSs+92tpsPFRlzKVpE\/vXNbb7Z0KLDjORJd\/gtYFgdf\/vN"}
+}
+, {
+"version.series.id" : {
+"__type__" : "UniString",
+"__value__" : "13728c9a-0e6c-41c2-8090-97af5880885b"}
+,
+"version.desc.id" : {
+"__type__" : "UniString",
+"__value__" : "00395213-299b-48e8-81a0-1178a0ab8cc7"}
+,
+"parliament.no" : {
+"__type__" : "UniString",
+"__value__" : ""}
+,
+"amending" : {
+"__type__" : "UniString",
+"__value__" : ""}
+,
+"in.force" : {
+"__type__" : "UniString",
+"__value__" : ""}
+,
+"type" : {
+"__type__" : "UniString",
+"__value__" : "html"}
+,
+"id" : {
+"__type__" : "UniString",
+"__value__" : "Act-2000-005"}
+,
+"publication.date" : "2009-01-01T00:00:00",
+"otherRenditions" : {
+"filename" : "PolicePowResA00_06H_rv_090101.pdf",
+"mimetype" : "REP_PDF",
+"filesize" : {
+"__type__" : "Integer",
+"__value__" : 2747154}
+}
+,
+"title" : {
+"__type__" : "UniString",
+"__value__" : "Police Powers and Responsibilities Act 2000"}
+,
+"title_v" : {
+"__type__" : "UniString",
+"__value__" : "Police Powers and Responsibilities Act 2000"}
+,
+"year" : {
+"__type__" : "UniString",
+"__value__" : "2000"}
+,
+"no" : {
+"__type__" : "UniString",
+"__value__" : "5"}
+,
+"print.type" : {
+"__type__" : "UniString",
+"__value__" : "act.reprint"}
+,
+"repealed" : {
+"__type__" : "UniString",
+"__value__" : "N"}
+,
+"enabling.title" : {
+"__type__" : "UniString",
+"__value__" : ""}
+,
+"enabling.acts" : {
+"__type__" : "UniString",
+"__value__" : ""}
+,
+"enabling.acts.repeating" : {
+"__type__" : "UniString",
+"__value__" : ""}
+,
+"first.valid.date" : "2009-01-01T00:00:00",
+"end.valid.date" : "2009-04-30T00:00:00",
+"style-hash" : {
+"__type__" : "UniString",
+"__value__" : "sha384-B8\/SVewb62q3vzBbbo5VyLQfhOpc6GgMWbvjMwdqE28pg80U5bKIRCHAfsK9SR4r"}
+}
+, {
+"version.series.id" : {
+"__type__" : "UniString",
+"__value__" : "a179046c-ae16-46d7-a7ce-951ca486f673"}
+,
+"version.desc.id" : {
+"__type__" : "UniString",
+"__value__" : "003c62a0-1833-45ac-9e7b-a9118bd7e7a3"}
+,
+"parliament.no" : {
+"__type__" : "UniString",
+"__value__" : ""}
+,
+"amending" : {
+"__type__" : "UniString",
+"__value__" : "none"}
+,
+"in.force" : {
+"__type__" : "UniString",
+"__value__" : "allinforce"}
+,
+"type" : {
+"__type__" : "UniString",
+"__value__" : "act"}
+,
+"id" : {
+"__type__" : "UniString",
+"__value__" : "act-1992-044"}
+,
+"publication.date" : "2014-08-15T00:00:00",
+"otherRenditions" : {
+"filename" : "R16_0483.pdf",
+"mimetype" : "ASMADE_PDF",
+"filesize" : {
+"__type__" : "Integer",
+"__value__" : 2408822}
+}
+,
+"title" : {
+"__type__" : "UniString",
+"__value__" : "Youth Justice Act 1992"}
+,
+"title_v" : {
+"__type__" : "UniString",
+"__value__" : "Youth Justice Act 1992"}
+,
+"year" : {
+"__type__" : "UniString",
+"__value__" : "1992"}
+,
+"no" : {
+"__type__" : "UniString",
+"__value__" : "44"}
+,
+"print.type" : {
+"__type__" : "UniString",
+"__value__" : "act.reprint"}
+,
+"repealed" : {
+"__type__" : "UniString",
+"__value__" : "N"}
+,
+"enabling.title" : {
+"__type__" : "UniString",
+"__value__" : ""}
+,
+"enabling.acts" : {
+"__type__" : "UniString",
+"__value__" : ""}
+,
+"enabling.acts.repeating" : {
+"__type__" : "UniString",
+"__value__" : ""}
+,
+"first.valid.date" : "2014-08-15T00:00:00",
+"end.valid.date" : "2016-05-05T00:00:00"}
+, {
+"version.series.id" : {
+"__type__" : "UniString",
+"__value__" : "6bcfc277-3e30-47e3-a34f-9379b3cd284a"}
+,
+"version.desc.id" : {
+"__type__" : "UniString",
+"__value__" : "00507e30-f576-43c5-9d35-9f855640a854"}
+,
+"parliament.no" : {
+"__type__" : "UniString",
+"__value__" : ""}
+,
+"amending" : {
+"__type__" : "UniString",
+"__value__" : ""}
+,
+"in.force" : {
+"__type__" : "UniString",
+"__value__" : ""}
+,
+"type" : {
+"__type__" : "UniString",
+"__value__" : "html"}
+,
+"id" : {
+"__type__" : "UniString",
+"__value__" : "Act-1992-048"}
+,
+"publication.date" : "2006-08-28T00:00:00",
+"otherRenditions" : {
+"filename" : "PenaltASenA92_08G_rv_060721.pdf",
+"mimetype" : "REP_PDF",
+"filesize" : {
+"__type__" : "Integer",
+"__value__" : 888582}
+}
+,
+"title" : {
+"__type__" : "UniString",
+"__value__" : "Penalties and Sentences Act 1992"}
+,
+"title_v" : {
+"__type__" : "UniString",
+"__value__" : "Penalties and Sentences Act 1992"}
+,
+"year" : {
+"__type__" : "UniString",
+"__value__" : "1992"}
+,
+"introduction.date" : "1992-11-05T00:00:00",
+"no" : {
+"__type__" : "UniString",
+"__value__" : "48"}
+,
+"print.type" : {
+"__type__" : "UniString",
+"__value__" : "act.reprint"}
+,
+"repealed" : {
+"__type__" : "UniString",
+"__value__" : "N"}
+,
+"enabling.title" : {
+"__type__" : "UniString",
+"__value__" : ""}
+,
+"enabling.acts" : {
+"__type__" : "UniString",
+"__value__" : ""}
+,
+"enabling.acts.repeating" : {
+"__type__" : "UniString",
+"__value__" : ""}
+,
+"first.valid.date" : "2006-08-28T00:00:00",
+"end.valid.date" : "2006-08-28T00:00:00",
+"style-hash" : {
+"__type__" : "UniString",
+"__value__" : "sha384-IzFj+O1i8dFX+siGcxbVEirn11\/8nuDqNS7vq5doA7QAavrs2JcwYfe\/QWq7Qcpl"}
+}
+, {
+"version.series.id" : {
+"__type__" : "UniString",
+"__value__" : "19dc3aee-7313-4ba8-a7f6-7abf0c19b425"}
+,
+"version.desc.id" : {
+"__type__" : "UniString",
+"__value__" : "00c892ad-31ce-4230-af6b-11a14cade28d"}
+,
+"parliament.no" : {
+"__type__" : "UniString",
+"__value__" : ""}
+,
+"amending" : {
+"__type__" : "UniString",
+"__value__" : ""}
+,
+"in.force" : {
+"__type__" : "UniString",
+"__value__" : ""}
+,
+"type" : {
+"__type__" : "UniString",
+"__value__" : "html"}
+,
+"id" : {
+"__type__" : "UniString",
+"__value__" : "Act-1899-009"}
+,
+"publication.date" : "2011-12-06T00:00:00",
+"otherRenditions" : {
+"filename" : "CriminCode_08D_111206.pdf",
+"mimetype" : "REP_PDF",
+"filesize" : {
+"__type__" : "Integer",
+"__value__" : 2041897}
+}
+,
+"title" : {
+"__type__" : "UniString",
+"__value__" : "Criminal Code Act 1899"}
+,
+"title_v" : {
+"__type__" : "UniString",
+"__value__" : "Criminal Code Act 1899"}
+,
+"year" : {
+"__type__" : "UniString",
+"__value__" : "1899"}
+,
+"no" : {
+"__type__" : "UniString",
+"__value__" : "9"}
+,
+"print.type" : {
+"__type__" : "UniString",
+"__value__" : "act.reprint"}
+,
+"repealed" : {
+"__type__" : "UniString",
+"__value__" : "N"}
+,
+"enabling.title" : {
+"__type__" : "UniString",
+"__value__" : ""}
+,
+"enabling.acts" : {
+"__type__" : "UniString",
+"__value__" : ""}
+,
+"enabling.acts.repeating" : {
+"__type__" : "UniString",
+"__value__" : ""}
+,
+"first.valid.date" : "2011-12-06T00:00:00",
+"end.valid.date" : "2012-05-18T00:00:00",
+"style-hash" : {
+"__type__" : "UniString",
+"__value__" : "sha384-\/Nj3\/rCqBDy5FhtXmTW39gBja\/oBP94Uyi\/cuZs6as55TqSFKe1Bwnsdm25lScvZ"}
+}
+],
+"totalCount" : {
+"__type__" : "Integer",
+"__value__" : 1796}
+,
+"filteredCount" : {
+"__type__" : "Integer",
+"__value__" : 1796}
+}

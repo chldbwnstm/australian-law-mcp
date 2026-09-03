@@ -1,0 +1,260 @@
+{
+"data" : [ {
+"version.series.id" : {
+"__type__" : "UniString",
+"__value__" : "5A8219A0-22F7-4853-AB60-7D86841CE0BA"}
+,
+"version.desc.id" : {
+"__type__" : "UniString",
+"__value__" : "49E554AB-59E7-4957-A833-5E9CC5C58F74"}
+,
+"parliament.no" : {
+"__type__" : "UniString",
+"__value__" : ""}
+,
+"type" : {
+"__type__" : "UniString",
+"__value__" : "ACT"}
+,
+"id" : {
+"__type__" : "UniString",
+"__value__" : "act-1884-019"}
+,
+"publication.date" : "2022-01-28T00:00:00",
+"title" : {
+"__type__" : "UniString",
+"__value__" : "Conveyancing and Law of Property Act 1884"}
+,
+"title_v" : {
+"__type__" : "UniString",
+"__value__" : "Conveyancing and Law of Property Act 1884"}
+,
+"year" : {
+"__type__" : "UniString",
+"__value__" : "1884"}
+,
+"assent.date" : "1883-10-29T00:00:00",
+"no" : {
+"__type__" : "UniString",
+"__value__" : "19"}
+,
+"print.type" : {
+"__type__" : "UniString",
+"__value__" : "act.reprint"}
+,
+"repealed" : {
+"__type__" : "UniString",
+"__value__" : "N"}
+,
+"first.valid.date" : "1997-02-01T00:00:00",
+"end.valid.date" : "1998-01-01T00:00:00",
+"table" : "Standard"}
+, {
+"version.series.id" : {
+"__type__" : "UniString",
+"__value__" : "5A8219A0-22F7-4853-AB60-7D86841CE0BA"}
+,
+"version.desc.id" : {
+"__type__" : "UniString",
+"__value__" : "1E0B95CA-822E-4BCA-B90A-A3B6848C225F"}
+,
+"parliament.no" : {
+"__type__" : "UniString",
+"__value__" : ""}
+,
+"type" : {
+"__type__" : "UniString",
+"__value__" : "ACT"}
+,
+"id" : {
+"__type__" : "UniString",
+"__value__" : "act-1884-019"}
+,
+"publication.date" : "2022-01-28T00:00:00",
+"title" : {
+"__type__" : "UniString",
+"__value__" : "Conveyancing and Law of Property Act 1884"}
+,
+"title_v" : {
+"__type__" : "UniString",
+"__value__" : "Conveyancing and Law of Property Act 1884"}
+,
+"year" : {
+"__type__" : "UniString",
+"__value__" : "1884"}
+,
+"assent.date" : "1883-10-29T00:00:00",
+"no" : {
+"__type__" : "UniString",
+"__value__" : "19"}
+,
+"print.type" : {
+"__type__" : "UniString",
+"__value__" : "act.reprint"}
+,
+"repealed" : {
+"__type__" : "UniString",
+"__value__" : "N"}
+,
+"first.valid.date" : "2022-01-01T00:00:00",
+"end.valid.date" : "9999-11-02T00:00:00",
+"table" : "Standard"}
+, {
+"version.series.id" : {
+"__type__" : "UniString",
+"__value__" : "5A8219A0-22F7-4853-AB60-7D86841CE0BA"}
+,
+"version.desc.id" : {
+"__type__" : "UniString",
+"__value__" : "94F2D0C3-8D2C-411E-A663-359C677DF9D6"}
+,
+"parliament.no" : {
+"__type__" : "UniString",
+"__value__" : ""}
+,
+"type" : {
+"__type__" : "UniString",
+"__value__" : "ACT"}
+,
+"id" : {
+"__type__" : "UniString",
+"__value__" : "act-1884-019"}
+,
+"publication.date" : "2022-01-28T00:00:00",
+"title" : {
+"__type__" : "UniString",
+"__value__" : "Conveyancing and Law of Property Act 1884"}
+,
+"title_v" : {
+"__type__" : "UniString",
+"__value__" : "Conveyancing and Law of Property Act 1884"}
+,
+"year" : {
+"__type__" : "UniString",
+"__value__" : "1884"}
+,
+"assent.date" : "1883-10-29T00:00:00",
+"no" : {
+"__type__" : "UniString",
+"__value__" : "19"}
+,
+"print.type" : {
+"__type__" : "UniString",
+"__value__" : "act.reprint"}
+,
+"repealed" : {
+"__type__" : "UniString",
+"__value__" : "N"}
+,
+"first.valid.date" : "2019-05-08T00:00:00",
+"end.valid.date" : "2022-01-01T00:00:00",
+"table" : "Standard"}
+, {
+"version.series.id" : {
+"__type__" : "UniString",
+"__value__" : "5A8219A0-22F7-4853-AB60-7D86841CE0BA"}
+,
+"version.desc.id" : {
+"__type__" : "UniString",
+"__value__" : "D0491630-6DBB-4B81-A3CB-68BCA065D8B1"}
+,
+"parliament.no" : {
+"__type__" : "UniString",
+"__value__" : ""}
+,
+"type" : {
+"__type__" : "UniString",
+"__value__" : "ACT"}
+,
+"id" : {
+"__type__" : "UniString",
+"__value__" : "act-1884-019"}
+,
+"publication.date" : "2022-01-28T00:00:00",
+"title" : {
+"__type__" : "UniString",
+"__value__" : "Conveyancing and Law of Property Act 1884"}
+,
+"title_v" : {
+"__type__" : "UniString",
+"__value__" : "Conveyancing and Law of Property Act 1884"}
+,
+"year" : {
+"__type__" : "UniString",
+"__value__" : "1884"}
+,
+"assent.date" : "1883-10-29T00:00:00",
+"no" : {
+"__type__" : "UniString",
+"__value__" : "19"}
+,
+"print.type" : {
+"__type__" : "UniString",
+"__value__" : "act.reprint"}
+,
+"repealed" : {
+"__type__" : "UniString",
+"__value__" : "N"}
+,
+"first.valid.date" : "2009-09-01T00:00:00",
+"end.valid.date" : "2019-05-08T00:00:00",
+"table" : "Standard"}
+, {
+"version.series.id" : {
+"__type__" : "UniString",
+"__value__" : "5A8219A0-22F7-4853-AB60-7D86841CE0BA"}
+,
+"version.desc.id" : {
+"__type__" : "UniString",
+"__value__" : "8E85832F-2B1E-4F5E-B833-C2EF69528AC3"}
+,
+"parliament.no" : {
+"__type__" : "UniString",
+"__value__" : ""}
+,
+"type" : {
+"__type__" : "UniString",
+"__value__" : "ACT"}
+,
+"id" : {
+"__type__" : "UniString",
+"__value__" : "act-1884-019"}
+,
+"publication.date" : "2022-01-28T00:00:00",
+"title" : {
+"__type__" : "UniString",
+"__value__" : "Conveyancing and Law of Property Act 1884"}
+,
+"title_v" : {
+"__type__" : "UniString",
+"__value__" : "Conveyancing and Law of Property Act 1884"}
+,
+"year" : {
+"__type__" : "UniString",
+"__value__" : "1884"}
+,
+"assent.date" : "1883-10-29T00:00:00",
+"no" : {
+"__type__" : "UniString",
+"__value__" : "19"}
+,
+"print.type" : {
+"__type__" : "UniString",
+"__value__" : "act.reprint"}
+,
+"repealed" : {
+"__type__" : "UniString",
+"__value__" : "N"}
+,
+"first.valid.date" : "2008-12-31T00:00:00",
+"end.valid.date" : "2009-09-01T00:00:00",
+"table" : "Standard"}
+],
+"totalCount" : {
+"__type__" : "Integer",
+"__value__" : 1191}
+,
+"filteredCount" : {
+"__type__" : "Integer",
+"__value__" : 1191}
+}
