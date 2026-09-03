@@ -1,0 +1,258 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE ncx PUBLIC "-//NISO//DTD ncx 2005-1//EN" "http://www.daisy.org/z3986/2005/ncx-2005-1.dtd">
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1" xml:lang="en-US">
+  <head>
+    <meta name="dtb:uid" content="eceae830-79a5-4932-a990-1fc4fc9a26b1" />
+  </head>
+  <docTitle>
+    <text>Title</text>
+  </docTitle>
+  <navMap>
+    <navPoint id="navPoint-1" playOrder="1">
+      <navLabel>
+        <text>Volume 1</text>
+      </navLabel>
+      <content src="document_1/document_1.html"/>
+      <navPoint id="navPoint-2" playOrder="2">
+        <navLabel>
+          <text>Chapter 1—Preliminary</text>
+        </navLabel>
+        <content src="document_1/document_1.html#_Toc235540914"/>
+        <navPoint id="navPoint-3" playOrder="3">
+          <navLabel>
+            <text>Part II—The Australian Competition and Consumer Commission</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc235540940"/>
+          <navPoint id="navPoint-4" playOrder="4">
+            <navLabel>
+              <text>17A  Disclosure of certain interests by members of the Commission when taking part in determinations of matters</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235540954"/>
+          </navPoint>
+          <navPoint id="navPoint-5" playOrder="5">
+            <navLabel>
+              <text>18  Meetings of Commission</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235540955"/>
+          </navPoint>
+          <navPoint id="navPoint-6" playOrder="6">
+            <navLabel>
+              <text>19  Chairperson may direct Commission to sit in Divisions</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc235540956"/>
+          </navPoint>
+        </navPoint>
+      </navPoint>
+    </navPoint>
+    <navPoint id="navPoint-7" playOrder="7">
+      <navLabel>
+        <text>Volume 4</text>
+      </navLabel>
+      <content src="document_4/document_4.html"/>
+      <navPoint id="navPoint-8" playOrder="8">
+        <navLabel>
+          <text>Schedule 1—The Schedule version of Part IV</text>
+        </navLabel>
+        <content src="document_4/document_4.html#_Toc235543018"/>
+        <navPoint id="navPoint-9" playOrder="9">
+          <navLabel>
+            <text>Part 1—Schedule version of Part IV</text>
+          </navLabel>
+          <content src="document_4/document_4.html#_Toc235543019"/>
+          <navPoint id="navPoint-10" playOrder="10">
+            <navLabel>
+              <text>Division 1—Cartel conduct</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543020"/>
+          </navPoint>
+          <navPoint id="navPoint-11" playOrder="11">
+            <navLabel>
+              <text>Division 1A—Acquisitions</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543048"/>
+          </navPoint>
+          <navPoint id="navPoint-12" playOrder="12">
+            <navLabel>
+              <text>Division 2—Other provisions</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543060"/>
+          </navPoint>
+        </navPoint>
+      </navPoint>
+      <navPoint id="navPoint-13" playOrder="13">
+        <navLabel>
+          <text>Schedule 2—The Australian Consumer Law</text>
+        </navLabel>
+        <content src="document_4/document_4.html#_Toc235543075"/>
+        <navPoint id="navPoint-14" playOrder="14">
+          <navLabel>
+            <text>Chapter 1—Introduction</text>
+          </navLabel>
+          <content src="document_4/document_4.html#_Toc235543076"/>
+          <navPoint id="navPoint-15" playOrder="15">
+            <navLabel>
+              <text>1  Application of this Schedule</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543077"/>
+          </navPoint>
+          <navPoint id="navPoint-16" playOrder="16">
+            <navLabel>
+              <text>2  Definitions</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543078"/>
+          </navPoint>
+        </navPoint>
+        <navPoint id="navPoint-17" playOrder="17">
+          <navLabel>
+            <text>Chapter 2—General protections</text>
+          </navLabel>
+          <content src="document_4/document_4.html#_Toc235543094"/>
+          <navPoint id="navPoint-18" playOrder="18">
+            <navLabel>
+              <text>Part 2-1—Misleading or deceptive conduct</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543095"/>
+            <navPoint id="navPoint-19" playOrder="19">
+              <navLabel>
+                <text>18  Misleading or deceptive conduct</text>
+              </navLabel>
+              <content src="document_4/document_4.html#_Toc235543096"/>
+            </navPoint>
+            <navPoint id="navPoint-20" playOrder="20">
+              <navLabel>
+                <text>19  Application of this Part to information providers</text>
+              </navLabel>
+              <content src="document_4/document_4.html#_Toc235543097"/>
+            </navPoint>
+          </navPoint>
+          <navPoint id="navPoint-21" playOrder="21">
+            <navLabel>
+              <text>Part 2-2—Unconscionable conduct</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543098"/>
+          </navPoint>
+          <navPoint id="navPoint-22" playOrder="22">
+            <navLabel>
+              <text>Part 2-3—Unfair contract terms</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543103"/>
+          </navPoint>
+        </navPoint>
+        <navPoint id="navPoint-23" playOrder="23">
+          <navLabel>
+            <text>Chapter 3—Specific protections</text>
+          </navLabel>
+          <content src="document_4/document_4.html#_Toc235543111"/>
+          <navPoint id="navPoint-24" playOrder="24">
+            <navLabel>
+              <text>Part 3-1—Unfair practices</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543112"/>
+          </navPoint>
+          <navPoint id="navPoint-25" playOrder="25">
+            <navLabel>
+              <text>Part 3-2—Consumer transactions</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543140"/>
+          </navPoint>
+        </navPoint>
+        <navPoint id="navPoint-26" playOrder="26">
+          <navLabel>
+            <text>Chapter 4—Offences</text>
+          </navLabel>
+          <content src="document_4/document_4.html#_Toc235543287"/>
+          <navPoint id="navPoint-27" playOrder="27">
+            <navLabel>
+              <text>Part 4-1—Offences relating to unfair practices</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543288"/>
+          </navPoint>
+          <navPoint id="navPoint-28" playOrder="28">
+            <navLabel>
+              <text>Part 4-2—Offences relating to consumer transactions</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543312"/>
+          </navPoint>
+        </navPoint>
+        <navPoint id="navPoint-29" playOrder="29">
+          <navLabel>
+            <text>Chapter 5—Enforcement and remedies</text>
+          </navLabel>
+          <content src="document_4/document_4.html#_Toc235543385"/>
+          <navPoint id="navPoint-30" playOrder="30">
+            <navLabel>
+              <text>Part 5-1—Enforcement</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543386"/>
+          </navPoint>
+          <navPoint id="navPoint-31" playOrder="31">
+            <navLabel>
+              <text>Part 5-2—Remedies</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543396"/>
+          </navPoint>
+        </navPoint>
+        <navPoint id="navPoint-32" playOrder="32">
+          <navLabel>
+            <text>Chapter 6—Application and transitional provisions</text>
+          </navLabel>
+          <content src="document_4/document_4.html#_Toc235543475"/>
+          <navPoint id="navPoint-33" playOrder="33">
+            <navLabel>
+              <text>Part 1—Application and transitional provisions relating to the Consumer Credit Legislation Amendment (Enhancements) Act 2012</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543476"/>
+          </navPoint>
+          <navPoint id="navPoint-34" playOrder="34">
+            <navLabel>
+              <text>Part 1A—Application provision relating to the Treasury Legislation Amendment (Small Business and Unfair Contract Terms) Act 2015</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543480"/>
+          </navPoint>
+        </navPoint>
+        <navPoint id="navPoint-35" playOrder="35">
+          <navLabel>
+            <text>Part 9—Application provision relating to the Treasury Laws Amendment (Doubling Penalties for ACCC Enforcement) Act 2026</text>
+          </navLabel>
+          <content src="document_4/document_4.html#_Toc235543506"/>
+          <navPoint id="navPoint-36" playOrder="36">
+            <navLabel>
+              <text>310  Application of amendments relating to penalties</text>
+            </navLabel>
+            <content src="document_4/document_4.html#_Toc235543507"/>
+          </navPoint>
+        </navPoint>
+      </navPoint>
+      <navPoint id="navPoint-37" playOrder="37">
+        <navLabel>
+          <text>Endnotes</text>
+        </navLabel>
+        <content src="document_4/document_4.html#_Toc235543508"/>
+      </navPoint>
+        <navPoint id="navPoint-38" playOrder="38">
+          <navLabel>
+            <text>Endnote 1—About the endnotes</text>
+          </navLabel>
+          <content src="document_4/document_4.html#_Toc235543509"/>
+        </navPoint>
+        <navPoint id="navPoint-39" playOrder="39">
+          <navLabel>
+            <text>Endnote 2—Abbreviation key</text>
+          </navLabel>
+          <content src="document_4/document_4.html#_Toc235543510"/>
+        </navPoint>
+        <navPoint id="navPoint-40" playOrder="40">
+          <navLabel>
+            <text>Endnote 3—Legislation history</text>
+          </navLabel>
+          <content src="document_4/document_4.html#_Toc235543511"/>
+        </navPoint>
+        <navPoint id="navPoint-41" playOrder="41">
+          <navLabel>
+            <text>Endnote 4—Amendment history</text>
+          </navLabel>
+          <content src="document_4/document_4.html#_Toc235543512"/>
+        </navPoint>
+    </navPoint>
+  </navMap>
+</ncx>

@@ -1,0 +1,97 @@
+Offline fixtures for the statute tools (src/tools/*.test.ts).
+
+Nothing in `npm test` touches the network. Every file below was recorded once
+by hand with curl against the keyless public Federal Register endpoints
+documented in docs/research/frl-api-reference.md, then trimmed.
+
+All captures: 2026-09-04.
+Host A: https://api.prod.legislation.gov.au/v1
+Host B: https://www.legislation.gov.au
+
+
+frl-search-cca.json
+  GET A/Titles/Search(criteria='text("competition%20and%20consumer%20act",name,contains)')
+      ?$top=5&$select=id,name,collection,subCollection,status,isPrincipal,isInForce,
+       year,number,seriesType,nameHistory,statusHistory,hasCommencedUnincorporatedAmendments
+      &$count=true
+  Verbatim, untrimmed. Recorded because it IS the ranking problem: FRL relevance
+  order puts a 2020 amending Act and two repealed price-notification instruments
+  ABOVE C2004A00109 (the CCA itself, 4th). rankTitles has to fix that.
+
+frl-title-tpa-rename.json
+  GET A/Titles?$filter=name eq 'Trade Practices Act 1974'&$select=<as above>&$count=true
+  Verbatim. Two facts live here: a name filter matches HISTORICAL names (the
+  query is the old name, the returned `name` is "Competition and Consumer Act
+  2010"), and `nameHistory[].start` is when each name BEGAN — the row for
+  "Trade Practices Act 1974" starts 1974-08-24. It also carries the duplicated
+  nameHistory row upstream serves, and hasCommencedUnincorporatedAmendments=true.
+
+frl-title-asic1989-repealed.json
+  GET A/Titles?$filter=contains(name,'Australian Securities and Investments
+      Commission Act 1989')&$select=<as above>&$count=true
+  Verbatim. A Repealed title whose statusHistory names the repealing Act
+  (Corporations (Repeals, Consequentials and Transitionals) Act 2001, sch 1
+  item 1, C2004A00823) — the "what replaced it" link.
+
+frl-authorises-cca.json
+  GET A/Titles/Search(criteria='and(authorises("C2004A00109"),
+      collection(LegislativeInstrument),status(InForce))')
+      ?$top=10&$select=id,name,collection,subCollection,status,year,number
+      &$expand=authorisedBy&$count=true&$orderby=name asc
+  Verbatim. THE three-tier discovery: `authorises(...)` is an undocumented
+  criteria function (not in the reference doc) that returns the instruments made
+  under an Act, and $expand=authorisedBy attaches the enabling provision
+  ("s 172", "s 134(1) of sch 2"). 146 in force at capture time.
+
+frl-authorisedby-ccr.json
+  GET A/Titles?$filter=id eq 'F1996B01420'&$select=id,name,collection,
+      subCollection,status&$expand=authorisedBy
+  Verbatim. The converse edge for one instrument: Competition and Consumer
+  Regulations 2010 → C2004A00109 s 172.
+
+frl-versions-cca.json
+  GET A/Versions?$filter=titleId eq 'C2004A00109'&$orderby=start desc
+      &$top=6&$count=true
+  Verbatim (210 versions upstream; the 6 newest kept). Shows the two traps the
+  tools label: the newest rows are FUTURE commencements with registerId:null,
+  and reasons[].affectedByTitle.provisions describes the AMENDING Act's items
+  ("sch 1 (item 66)"), never the amended sections — which is why
+  get_provision_history reads the endnotes instead.
+
+cca-schedules.ncx
+  GET B/C2004A00109/latest/latest/text/latest/epub/OEBPS/document.ncx
+  Full response: 2,603 navPoints, 830 KB. Pruned to 37 navPoints; labels,
+  content src values and element shapes are byte-identical to the capture,
+  playOrder/id were renumbered over the pruned tree. Kept: Volume 1 → Part II →
+  ss 17A/18/19 (body) and Volume 4 → Schedule 1, Schedule 2 (chapters, Part 2-1,
+  ACL ss 18/19) and Endnotes. That is the sch-2-s-18-vs-s-18 collision plus
+  enough schedule structure for item counts.
+
+cca-endnote-amendments.html
+  GET B/C2004A00109/latest/latest/text/latest/epub/OEBPS/document_4/document_4.html
+  Full response 4.3 MB. Kept: the `Endnote 4—Amendment history` anchor paragraph
+  plus two windows of the table, verbatim <p> elements — the body rows around
+  `s 18....................  am No 17, 1986; No 88, 1995; No 159, 2007`, and the
+  `Schedule 2` scope heading with its own `s 18....................  ad No 103,
+  2010`. Both `s 18` rows in one table is exactly why the parser tracks schedule
+  scope.
+
+
+Reused from ../../lib/__fixtures__/ (Wave 1 captures of the same document, same
+day, same anchors — not duplicated here):
+
+  cca-vol1-slice.html   CCA volume 1, ss 17A-19 (anchors _Toc235540954/955/956)
+  cca-vol4-slice.html   CCA volume 4, Schedule 2 Part 2-1 ss 18-19
+                        (anchors _Toc235543095/096/097)
+
+  Both are referenced by cca-schedules.ncx above, so the NCX here and the volume
+  HTML there address the same paragraphs — that is what lets the offline tests
+  exercise the real sch-2-s-18-vs-s-18 slice.
+
+cca-vol4-schedule2.html
+  GET B/C2004A00109/latest/latest/text/latest/epub/OEBPS/document_4/document_4.html
+  Full response 4.3 MB. Kept: the verbatim <p> runs anchored at the Schedule 2
+  root (_Toc235543075), Chapter 1, Chapter 2, Part 2-1, ACL ss 18/19/20 and the
+  Endnotes root — i.e. every anchor cca-schedules.ncx points into for schedule
+  work, so a whole-schedule slice has a real start anchor to cut from. The gaps
+  between the kept runs are elided; markup, classes and entities are untouched.
