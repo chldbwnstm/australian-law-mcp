@@ -1,0 +1,74 @@
+{
+  "name": "australian-law-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for Australian law — legislation, case law and delegated instruments from keyless public sources, exposed as MCP tools and a natural-language CLI",
+  "type": "module",
+  "main": "build/index.js",
+  "types": "build/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./build/index.d.ts",
+      "import": "./build/index.js"
+    },
+    "./lib/*": {
+      "types": "./build/lib/*.d.ts",
+      "import": "./build/lib/*.js"
+    },
+    "./tools/*": {
+      "types": "./build/tools/*.d.ts",
+      "import": "./build/tools/*.js"
+    },
+    "./server/*": {
+      "types": "./build/server/*.d.ts",
+      "import": "./build/server/*.js"
+    }
+  },
+  "bin": {
+    "australian-law-mcp": "build/index.js",
+    "australian-law": "build/cli.js"
+  },
+  "scripts": {
+    "clean": "node ./scripts/clean-build.mjs",
+    "build": "npm run clean && tsc",
+    "watch": "tsc --watch",
+    "start": "node build/index.js",
+    "cli": "node build/cli.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "mcp",
+    "mcp-server",
+    "australian-law",
+    "legislation",
+    "case-law",
+    "austlii",
+    "claude",
+    "model-context-protocol",
+    "legal-ai",
+    "cli"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "commander": "^14.0.3",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.19.3",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.9"
+  },
+  "files": [
+    "build",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20.19.0"
+  }
+}
