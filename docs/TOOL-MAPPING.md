@@ -32,29 +32,29 @@ Reference clone: `/tmp/korean-law-mcp` (structure, budgets, error taxonomy, and 
 
 ## 18 decision domains (`search_decisions` / `get_decision_text`)
 
-| # | Korean domain | Australian domain (`domain` value) | Source |
-|---|--------------|-------------------------------------|--------|
-| 1 | 판례 (courts) | `cases` — HCA, FCA, FCAFC + state supreme courts | AustLII (+ NSW Caselaw, HCA eresources per research) |
-| 2 | 헌재 | `constitutional` — HCA constitutional matters | AustLII HCA filtered |
-| 3 | 조세심판원 | `tax_tribunal` — ART/AAT taxation division | AustLII ARTA/AATA |
-| 4 | 국세청 해석 | `tax_rulings` — ATO public rulings/determinations | ATO Legal Database |
-| 5 | 관세 해석 | `customs` — customs/excise tribunal + rulings | ART customs + ABF (per research) |
-| 6 | 법령해석례 (MOLEG interpretations) | `interpretations` — ATO IDs + official interpretive guidance | per research |
-| 7 | 행정심판 | `admin_appeals` — ART (formerly AAT) decisions | AustLII ARTA/AATA |
-| 8 | 공정위 | `competition` — Australian Competition Tribunal + ACCC | AustLII ACompT |
-| 9 | 노동위 | `workplace` — Fair Work Commission decisions | FWC / AustLII FWC/FWCFB |
-| 10 | 개보위 | `privacy` — OAIC determinations | AustLII AICmr |
-| 11 | 감사원 심사 | `ombudsman` — Cth Ombudsman / integrity bodies | per research |
-| 12 | 감사원 특별행심 | `integrity` — NACC/audit decisions | per research |
-| 13 | 소청심사 | `public_service` — public-service employment appeals (ART/MPC) | per research |
-| 14 | 학칙 | `university_rules` — university legislation/statutes | per research |
-| 15 | 공단 규정 | `agency_rules` — statutory agency rules/instruments | FRL notifiable instruments |
-| 16 | 공공기관 규정 | `gazettes` — Commonwealth gazette notices | FRL gazettes |
-| 17 | 조약 | `treaties` — Australian Treaty Series | DFAT/AustLII ATS |
-| 18 | 영문법령 | `explanatory` — Explanatory Memoranda / Statements | AustLII/FRL EMs (AU-specific analog: "the version written for humans") |
+| # | Korean domain | Australian domain (`domain` value) | Source | Grade |
+|---|--------------|-------------------------------------|--------|-------|
+| 1 | 판례 (courts) | `cases` | fan-out: NSW Caselaw + hcourt.gov.au + QLD Judgments | live |
+| 2 | 헌재 | `constitutional` | HCA `keywords=constitutional` (catchwords) | live |
+| 3 | 행정심판 | `admin_appeals` | NCAT (NSW Caselaw) + QCAT (QLD Judgments) + ART deep links | live (states) |
+| 4 | 조세심판원 | `tax_tribunal` | ATO legal DB (decision impact statements) + ARTA deep links | partial |
+| 5 | 국세청 해석 | `tax_rulings` | ATO Legal Database TR/TD/GSTR/… | live |
+| 6 | 법령해석례 | `interpretations` | ATO interpretative decisions (AID) + practice statements (PS LA) | live |
+| 7 | 관세 해석 | `customs` | ATO customs/excise docs + ABF/ADRP deep links | partial |
+| 8 | 공정위 | `competition` | ACCC/ACompT attempt (→ [UPSTREAM_BLOCKED] + links) + case fan-out fallback | degraded |
+| 9 | 노동위 | `workplace` | FWC document-search + PDFs | live |
+| 10 | 개보위 | `privacy` | OAIC determinations index + AICmr deep links | live (index) |
+| 11 | 권익위 | `integrity` | NACC/Cth Ombudsman attempt + links | degraded |
+| 12 | 소청심사 | `public_service` | Merit Protection Commissioner attempt + ART links | degraded |
+| 13 | 학칙 | `university_rules` | university acts via state legislation clients | live |
+| 14 | 공단 규정 | `agency_rules` | FRL NotifiableInstrument collection | live |
+| 15 | 공공기관 규정 | `gazettes` | FRL Gazette collection (18,593 notices) | live |
+| 16 | 조약 | `treaties` | DFAT Australian Treaties Database JSON API | live |
+| 17 | 영문법령 | `explanatory` | FRL Explanatory Statements (type=ES) + APH EM links — "the version written for humans" | live |
+| 18 | 자치법규 (also own tools) | `state_law` | unified state/territory legislation search (QLD/TAS/WA/VIC/NT/ACT; NSW/SA link-only) | live |
 
-Domains 11–16 carry the weakest analogies; final source assignments follow the research reports.
-The count and the unified two-tool surface are preserved regardless.
+13 of 18 domains have fully live verified sources; the 5 degraded ones attempt the real
+upstream, map WAF blocks to `[UPSTREAM_BLOCKED]` with deep links, and never claim absence.
 
 ## Unexposed specialized tools (reachable via discover/execute — same names unless noted)
 
