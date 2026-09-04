@@ -32,6 +32,8 @@
     "build": "npm run clean && tsc",
     "watch": "tsc --watch",
     "start": "node build/index.js",
+    "start:http": "node build/index.js --mode http",
+    "setup": "node build/index.js setup",
     "cli": "node build/cli.js",
     "test": "vitest run",
     "test:watch": "vitest",

@@ -36,10 +36,16 @@ ENV NODE_ENV=production
 ENV PORT=3000
 # A container is explicitly a remote deployment unit. Bind externally, but
 # fail startup unless the operator supplies MCP_AUTH_TOKEN (or deliberately
-# opts into MCP_ALLOW_UNAUTHENTICATED_REMOTE at runtime).
+# opts into MCP_ALLOW_UNAUTHENTICATED_REMOTE at runtime):
+#
+#   docker run -p 3000:3000 -e MCP_AUTH_TOKEN=replace-with-a-secret australian-law-mcp
+#
+# Behind a reverse proxy add -e TRUST_PROXY=1 (the exact hop count — never
+# "true"), and -e ALLOWED_ORIGINS=https://your.app if a browser calls /mcp.
+# No API key is needed: every upstream source is a keyless public endpoint.
 ENV MCP_HTTP_HOST=0.0.0.0
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
 
-CMD ["node", "build/index.js", "--mode", "sse", "--port", "3000"]
+CMD ["node", "build/index.js", "--mode", "http", "--port", "3000"]
