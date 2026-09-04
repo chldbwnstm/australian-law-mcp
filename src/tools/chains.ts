@@ -25,7 +25,7 @@
 
 import { z } from "zod"
 import type { AuApiClient } from "../lib/api-client.js"
-import { formatToolError } from "../lib/errors.js"
+import { ErrorCodes, formatToolError } from "../lib/errors.js"
 import { truncateSections } from "../lib/schemas.js"
 import { getRequestSignal, runWithRequestContext, throwIfRequestCancelled } from "../lib/session-state.js"
 import type { LooseToolResponse, ToolResponse } from "../lib/types.js"
@@ -141,12 +141,53 @@ function wrapError(error: unknown, toolName?: string): ToolResponse {
   return { content: [{ type: "text", text: response.content[0]?.text ?? String(error) }], isError: true }
 }
 
+/** The failed rungs, one per line, for either of the two no-base-law answers. */
+function failureLines(base: ChainBaseLawResult): string[] {
+  const failures = base.failures ?? []
+  if (failures.length === 0) return []
+  return ["", "Lookups that failed:", ...failures.map((failure) => `  - "${failure.term}": ${clip(failure.message, 200)}`)]
+}
+
+/**
+ * The base-law search did not come back empty — it did not come back.
+ *
+ * `[NOT_FOUND]` here would turn an unreachable Federal Register into "there is
+ * no such Commonwealth law", which is the one thing this server may never say.
+ * The label is the upstream one, the failed rungs are named so the caller can
+ * see it was transport rather than vocabulary, and nothing invites a rephrase —
+ * rephrasing a query the Register never answered changes nothing.
+ */
+function unreachableBaseLaw(query: string, base: ChainBaseLawResult): ToolResponse {
+  const lines = [
+    `[${ErrorCodes.API_ERROR}] The base-law search for "${query}" could not be completed — ` +
+      `${(base.failures ?? []).length} of the Federal Register lookups failed, so no title was matched.`,
+    "",
+    "⚠️ This is an upstream failure, NOT a finding that no such law exists. Do not tell the user there is no such " +
+      "Act, and do not invent one. Report that the Register could not be searched.",
+  ]
+  lines.push(...failureLines(base))
+  if (base.attempts.length > 0) {
+    lines.push("")
+    lines.push(`Search terms tried: ${base.attempts.map((attempt) => `"${attempt}"`).join(" → ")}`)
+  }
+  lines.push("")
+  lines.push("Worth trying:")
+  lines.push("  - retry shortly — the Federal Register was unreachable, not empty;")
+  lines.push("  - search_state_law, which uses different hosts entirely, if the subject may be state law.")
+  return { content: [{ type: "text", text: lines.join("\n") }], isError: true }
+}
+
 /**
  * No base law — the chain has nothing to stand on, so it stops and says what it
  * searched for. Listing the attempted terms is the difference between a user
  * who can rephrase and one who concludes the law does not exist.
+ *
+ * Only reached when every rung actually ran: a rung that failed for transport
+ * reasons establishes no absence, and takes the `unreachableBaseLaw` route.
  */
-function noBaseLaw(query: string, attempts: string[]): ToolResponse {
+function noBaseLaw(query: string, base: ChainBaseLawResult): ToolResponse {
+  if ((base.failures ?? []).length > 0) return unreachableBaseLaw(query, base)
+  const attempts = base.attempts
   const lines = [`[NOT_FOUND] No Commonwealth title could be matched to "${query}".`, ""]
   lines.push(
     "⚠️ The chain stopped because it never found a law to build on. Do not invent an Act, a section or a case. " +
@@ -292,7 +333,7 @@ export async function chainLawSystem(
 ): Promise<ToolResponse> {
   try {
     const base = await resolveChainBaseLaw(apiClient, input.query)
-    if (base.laws.length === 0) return noBaseLaw(input.query, base.attempts)
+    if (base.laws.length === 0) return noBaseLaw(input.query, base)
 
     const law = base.laws[0]
     const parts = [`═══ Legislative structure: ${law.name} ═══`, baseLawHeader(law, base.notes)]
@@ -362,7 +403,7 @@ export async function chainActionBasis(
       if (baseO.value.laws.length === 0) {
         // An empty result *caused by* expiry is not an absence claim.
         if (dl.expired()) return expiredChainResult(parts)
-        return noBaseLaw(input.query, baseO.value.attempts)
+        return noBaseLaw(input.query, baseO.value)
       }
 
       const law = baseO.value.laws[0]
@@ -560,7 +601,7 @@ export async function chainAmendmentTrack(
 ): Promise<ToolResponse> {
   try {
     const base = await resolveChainBaseLaw(apiClient, input.query, 1)
-    if (base.laws.length === 0) return noBaseLaw(input.query, base.attempts)
+    if (base.laws.length === 0) return noBaseLaw(input.query, base)
 
     const law = base.laws[0]
     const parts = [`═══ Amendment tracking: ${law.name} ═══`, baseLawHeader(law, base.notes)]
@@ -639,6 +680,23 @@ export async function chainStateLawCompare(
       parts.push(baseLawHeader(law, base.notes))
       const threeTier = await callTool(getThreeTier as Handler, apiClient, { registerId: law.registerId })
       parts.push(secOrSkip("Commonwealth Act and what is made under it", threeTier))
+    } else if ((base.failures ?? []).length > 0) {
+      // The Commonwealth half is missing because the Register did not answer.
+      // "That is the correct answer rather than a failure" is true of a search
+      // that ran; said of one that did not, it manufactures a federal/state
+      // conclusion out of an outage. The state half below still stands, so this
+      // is a marked gap rather than a failed chain.
+      parts.push(
+        sec(
+          "Commonwealth position [NOT RETRIEVED]",
+          `[${ErrorCodes.API_ERROR}] The Federal Register could not be searched (tried ` +
+            `${base.attempts.map((a) => `"${a}"`).join(" → ")}).` +
+            failureLines(base).join("\n") +
+            "\n\n⚠️ No Commonwealth title is shown because the lookup failed, NOT because none exists. Do not " +
+            "conclude that this subject is state law only, and do not read the state material below as the whole " +
+            "answer — re-run once the Register responds.",
+        ),
+      )
     } else {
       parts.push(
         sec(
@@ -790,7 +848,7 @@ export async function chainProcedureDetail(
 ): Promise<ToolResponse> {
   try {
     const base = await resolveChainBaseLaw(apiClient, input.query)
-    if (base.laws.length === 0) return noBaseLaw(input.query, base.attempts)
+    if (base.laws.length === 0) return noBaseLaw(input.query, base)
 
     const law = base.laws[0]
     const parts = [`═══ Procedure, fees and forms: ${input.query} ═══`, baseLawHeader(law, base.notes)]

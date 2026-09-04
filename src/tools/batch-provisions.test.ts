@@ -112,6 +112,58 @@ describe("get_batch_provisions results", () => {
     expect(text).toContain("Meetings of Commission")
   })
 
+  it("marks the provisions of a dead volume and keeps everything already retrieved", async () => {
+    // The CCA's body is volume 1 and schedule 2 is volume 4; only the second
+    // fails. Before the fix the exception escaped runTask and the whole call
+    // became one error, discarding the volume-1 text and the budget spent on it.
+    const api = {
+      getTitle: async () => CCA,
+      getToc: async () => ENTRIES,
+      getVolumeHtml: async (_id: string, volume: number) => {
+        if (volume === 4) throw new Error("frlDocs upstream server error (500)")
+        return VOL1
+      },
+    } as unknown as AuApiClient
+
+    const result = await getBatchProvisions(api, {
+      registerId: "C2004A00109",
+      provisions: ["s 18", "s 19", "sch 2 s 18"],
+      maxCharsPerProvision: 2500,
+    } as never)
+    const text = result.content[0].text
+
+    expect(result.isError).toBeFalsy()
+    expect(text).toContain("3 requested, 2 retrieved, 1 not found")
+    expect(text).toContain("Meetings of Commission")
+    expect(text).toContain("could not be read: frlDocs upstream server error (500)")
+    // A failed volume is not a missing provision — the reason travels with it.
+    expect(text).not.toContain("not in this compilation's table of contents")
+  })
+
+  it("does not re-fetch a volume that already failed once in the same batch", async () => {
+    // Thirty sections of one dead volume must cost one attempt, not thirty.
+    const attempts: number[] = []
+    const api = {
+      getTitle: async () => CCA,
+      getToc: async () => ENTRIES,
+      getVolumeHtml: async (_id: string, volume: number) => {
+        attempts.push(volume)
+        throw new Error("frlDocs upstream server error (500)")
+      },
+    } as unknown as AuApiClient
+
+    const text = (
+      await getBatchProvisions(api, {
+        registerId: "C2004A00109",
+        provisions: ["s 18", "s 19", "s 17A"],
+        maxCharsPerProvision: 2500,
+      } as never)
+    ).content[0].text
+
+    expect(attempts).toEqual([1])
+    expect(text).toContain("3 requested, 0 retrieved, 3 not found")
+  })
+
   it("shortens a long provision rather than letting it crowd out the others", async () => {
     const { api } = client()
     const text = (

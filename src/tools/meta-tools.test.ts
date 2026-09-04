@@ -107,3 +107,75 @@ describe("execute_tool", () => {
     expect(result.content[0].text).toContain("do not answer as if the capability were missing")
   })
 })
+
+// discover_tools prints no parameter schemas, so a guessed parameter name is
+// the expected input here — and Zod's strip mode answers a guess that missed
+// with the *unfiltered* result. `asAt` is a real parameter name on this
+// server's get_ruling_text; get_law_text's is `date`.
+describe("execute_tool parameter checking", () => {
+  beforeEach(() => {
+    setAllToolsRef([
+      ...tools,
+      {
+        name: "get_law_text",
+        description: "Unadvertised: statute text",
+        schema: z.object({
+          query: z.string().optional(),
+          date: z.string().optional(),
+          maxChars: z.number().default(20000),
+        }),
+        handler,
+      },
+      {
+        // `legal_research` is a z.preprocess around its object; reading `.shape`
+        // off the wrapper gives undefined, which would make every parameter of
+        // every wrapped tool look unknown.
+        name: "wrapped_tool",
+        description: "Unadvertised: preprocess-wrapped",
+        schema: z.preprocess((raw) => raw, z.object({ query: z.string().optional(), task: z.string().default("full") })),
+        handler,
+      },
+    ])
+  })
+
+  it("names a parameter the target tool does not have instead of dropping it", async () => {
+    const result = await executeTool(client, {
+      tool_name: "get_law_text",
+      params: { query: "Privacy Act 1988", asAt: "2015-06-30" },
+    })
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toContain("[INVALID_PARAMETER]")
+    expect(result.content[0].text).toContain('has no parameter named "asAt"')
+    // The accepted list is the correction: nothing else on this path publishes it.
+    expect(result.content[0].text).toContain("get_law_text accepts: query, date, maxChars.")
+    expect(result.content[0].text).toContain("NOT applied")
+    // The point of the check: the tool must not run and answer as if the date applied.
+    expect(handler).not.toHaveBeenCalled()
+  })
+
+  it("suggests the closest accepted name for a misspelling", async () => {
+    const result = await executeTool(client, { tool_name: "get_law_text", params: { quer: "Privacy Act" } })
+    expect(result.content[0].text).toContain('"quer" is closest to "query"')
+  })
+
+  it("offers no suggestion for a name that is wrong rather than mistyped", async () => {
+    const result = await executeTool(client, { tool_name: "get_law_text", params: { asAt: "2015-06-30" } })
+    expect(result.content[0].text).not.toContain("did you mean that?")
+  })
+
+  it("leaves optional and defaulted parameters alone", async () => {
+    const result = await executeTool(client, { tool_name: "get_law_text", params: { query: "Privacy Act 1988" } })
+    expect(result.isError).toBeUndefined()
+    expect(handler).toHaveBeenCalledWith(client, { query: "Privacy Act 1988", maxChars: 20000 })
+  })
+
+  it("reads the shape through a preprocess wrapper rather than rejecting everything", async () => {
+    const ran = await executeTool(client, { tool_name: "wrapped_tool", params: { query: "x" } })
+    expect(ran.isError).toBeUndefined()
+    expect(handler).toHaveBeenCalledWith(client, { query: "x", task: "full" })
+
+    const rejected = await executeTool(client, { tool_name: "wrapped_tool", params: { querry: "x" } })
+    expect(rejected.isError).toBe(true)
+    expect(rejected.content[0].text).toContain('has no parameter named "querry"')
+  })
+})

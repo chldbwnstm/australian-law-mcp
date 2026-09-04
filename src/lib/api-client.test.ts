@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { AuApiClient, normalizeFrlVersion } from "./api-client.js"
+import { lawCache } from "./cache.js"
 import { ErrorCodes, LawApiError, UpstreamBlockedError } from "./errors.js"
 import { authorises } from "./frl-criteria.js"
 
@@ -13,6 +14,8 @@ const fixture = (name: string) => readFileSync(new URL(`./__fixtures__/${name}`,
  */
 let routes: Array<{ match: (url: string) => boolean; body: string; status?: number; contentType?: string }>
 let requested: string[]
+/** Wall-clock moment each request left, in order — the politeness clock's evidence. */
+let requestedAt: number[]
 
 function route(substr: string, body: string, extra: { status?: number; contentType?: string } = {}) {
   routes.push({ match: (url) => url.includes(substr), body, ...extra })
@@ -21,11 +24,16 @@ function route(substr: string, body: string, extra: { status?: number; contentTy
 beforeEach(() => {
   routes = []
   requested = []
+  requestedAt = []
+  // The TOC cache is process-global (shared with tools/statute-helpers/toc.ts),
+  // so a warm entry from an earlier test would hide a real fetch from the next.
+  lawCache.clear()
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input)
       requested.push(url)
+      requestedAt.push(Date.now())
       const hit = routes.find((r) => r.match(url))
       if (!hit) throw new Error(`api-client.test: no stub route for ${url}`)
       return new Response(hit.body, {
@@ -221,6 +229,83 @@ describe("getProvision — end-to-end over recorded CCA fixtures", () => {
     expect(err).toBeInstanceOf(LawApiError)
     expect(err?.code).toBe(ErrorCodes.NOT_FOUND)
     expect(String(err?.message)).toContain("9999")
+  })
+})
+
+describe("getToc caching", () => {
+  const epub = "C2004A00109/latest/latest/text/latest/epub/OEBPS"
+  const ncx = () => fixture("cca-document.ncx")
+
+  it("fetches the NCX once per (title, date), not once per provision", async () => {
+    // No per-section endpoint exists, so every provision fetch needs the whole
+    // TOC first — the CCA's is ~830 KB. Re-downloading it per provision spends
+    // the request budget and a politeness interval on bytes already in hand.
+    route(`${epub}/document.ncx`, ncx(), { contentType: "application/x-dtbncx+xml" })
+    route(`${epub}/document_1/document_1.html`, fixture("cca-vol1-slice.html"), { contentType: "text/html" })
+    route(`${epub}/document_4/document_4.html`, fixture("cca-vol4-slice.html"), { contentType: "text/html" })
+
+    const c = client()
+    await c.getProvision("C2004A00109", "s 18")
+    await c.getProvision("C2004A00109", "sch 2 s 18")
+    await c.getToc("C2004A00109")
+
+    expect(requested.filter((url) => url.endsWith("document.ncx"))).toHaveLength(1)
+  })
+
+  it("keys by date, so a point-in-time TOC is never served as the current one", async () => {
+    route("/latest/latest/text/latest/epub/OEBPS/document.ncx", ncx(), { contentType: "application/x-dtbncx+xml" })
+    route("/2015-06-30/2015-06-30/text/latest/epub/OEBPS/document.ncx", ncx(), {
+      contentType: "application/x-dtbncx+xml",
+    })
+
+    const c = client()
+    await c.getToc("C2004A00109")
+    await c.getToc("C2004A00109", "2015-06-30")
+
+    expect(requested.filter((url) => url.endsWith("document.ncx"))).toHaveLength(2)
+  })
+
+  it("never caches a failure — an upstream error is about this attempt only", async () => {
+    routes.push({
+      match: (url) => url.endsWith("document.ncx"),
+      body: "upstream is down",
+      status: 500,
+      contentType: "text/plain",
+    })
+
+    const c = client()
+    const err = await c.getToc("C2004A00109").then(() => null, (e: LawApiError) => e)
+    expect(err?.code).toBe(ErrorCodes.API_ERROR)
+
+    // The same TOC, now healthy: a remembered failure would either replay the
+    // error or, worse, stand in for the document.
+    routes.length = 0
+    route("document.ncx", ncx(), { contentType: "application/x-dtbncx+xml" })
+    expect((await c.getToc("C2004A00109")).length).toBeGreaterThan(0)
+  })
+})
+
+describe("per-host politeness", () => {
+  it("spaces a concurrent fan-out to one host instead of letting it burst", async () => {
+    // get_law_statistics fans 8 count queries out through Promise.all. Reading a
+    // "last request at" timestamp and writing it back after the sleep let all of
+    // them read the same value and leave together, which is exactly the burst
+    // minIntervalMs exists to prevent (ARCHITECTURE.md: ">=1 req/s per scraped
+    // host"). frlApi's floor is 250ms.
+    route("/Titles", JSON.stringify({ value: [] }))
+
+    const c = client()
+    await Promise.all([
+      c.searchTitles({ filter: "id eq 'A'" }),
+      c.searchTitles({ filter: "id eq 'B'" }),
+      c.searchTitles({ filter: "id eq 'C'" }),
+    ])
+
+    expect(requestedAt).toHaveLength(3)
+    const gaps = requestedAt.slice(1).map((at, index) => at - requestedAt[index])
+    // Asserted below the 250ms floor to leave timer slack, and far above the
+    // ~0ms three simultaneous departures produce.
+    for (const gap of gaps) expect(gap).toBeGreaterThanOrEqual(200)
   })
 })
 

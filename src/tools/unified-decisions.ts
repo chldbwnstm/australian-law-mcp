@@ -16,6 +16,11 @@
  *    or `full` is dropped rather than merged. Without that guard an
  *    `options.id` silently redirects the fetch to a different document than the
  *    one the caller named.
+ *  - **Every dispatch is checked against the target domain's own schema.**
+ *    This tool carries three search parameters; the domain behind it may
+ *    require others (`state_law` cannot run without a jurisdiction). Checking
+ *    here is what stops a malformed call from reaching the source module and
+ *    coming back labelled as an upstream failure.
  *  - **Post-processing compaction is skipped for domains that already do it.**
  *    Handlers that take a `full` flag shorten their own body through
  *    `renderDocument`; running `compactLongSections` over their output as well
@@ -25,17 +30,30 @@
 
 import { z } from "zod"
 import type { AuApiClient } from "../lib/api-client.js"
-import { compactLongSections } from "../lib/decision-compact.js"
+import { OMISSION_MARKER, compactLongSections } from "../lib/decision-compact.js"
 import { formatToolError } from "../lib/errors.js"
 import { truncateResponse } from "../lib/schemas.js"
 import type { LooseToolResponse } from "../lib/types.js"
 
-import { getCaseText, searchCases } from "./precedents.js"
-import { getConstitutionalDecisionText, searchConstitutionalDecisions } from "./constitutional-decisions.js"
-import { getAdminAppealText, searchAdminAppeals } from "./admin-appeals.js"
-import { getTaxTribunalDecisionText, searchTaxTribunalDecisions } from "./tax-tribunal-decisions.js"
-import { getRulingText, searchRulings } from "./rulings.js"
+import { SearchCasesSchema, getCaseText, searchCases } from "./precedents.js"
 import {
+  SearchConstitutionalSchema,
+  getConstitutionalDecisionText,
+  searchConstitutionalDecisions,
+} from "./constitutional-decisions.js"
+import { SearchAdminAppealsSchema, getAdminAppealText, searchAdminAppeals } from "./admin-appeals.js"
+import {
+  SearchTaxTribunalSchema,
+  getTaxTribunalDecisionText,
+  searchTaxTribunalDecisions,
+} from "./tax-tribunal-decisions.js"
+import { SearchRulingsSchema, getRulingText, searchRulings } from "./rulings.js"
+import {
+  SearchCompetitionSchema,
+  SearchIntegritySchema,
+  SearchPrivacySchema,
+  SearchPublicServiceSchema,
+  SearchWorkplaceSchema,
   getCompetitionDecisionText,
   getIntegrityDecisionText,
   getPrivacyDecisionText,
@@ -48,14 +66,17 @@ import {
   searchWorkplaceDecisions,
 } from "./committee-decisions.js"
 import {
+  SearchAgencyRulesSchema,
+  SearchGazettesSchema,
+  SearchUniversityRulesSchema,
   getRegisteredInstrumentText,
   searchAgencyRules,
   searchGazettes,
   searchUniversityRules,
 } from "./institutional-rules.js"
-import { getTreatyText, searchTreaties } from "./treaties.js"
-import { getExplanatoryText, searchExplanatory } from "./explanatory.js"
-import { getStateLawText, searchStateLaw } from "./state-law.js"
+import { SearchTreatiesSchema, getTreatyText, searchTreaties } from "./treaties.js"
+import { SearchExplanatorySchema, getExplanatoryText, searchExplanatory } from "./explanatory.js"
+import { SearchStateLawSchema, getStateLawText, searchStateLaw } from "./state-law.js"
 
 /** The 18 domains of docs/ARCHITECTURE.md, in that document's order. */
 export const DECISION_DOMAINS = [
@@ -125,6 +146,40 @@ const SEARCH_HANDLERS: Record<DecisionDomain, Handler> = {
   state_law: searchStateLaw,
 }
 
+/**
+ * Each domain's **own** search schema, so a dispatch is checked against the
+ * tool that will run it rather than only against this file's three shared
+ * parameters. Without it a required domain parameter — `state_law`'s
+ * `jurisdiction`, every keyword domain's `query` — reaches the handler as
+ * `undefined`, throws inside the source module, and `formatToolError` labels
+ * the local wiring crash `[EXTERNAL_API_ERROR]`: an outage report for what is
+ * really a malformed call.
+ *
+ * The parsed value is deliberately *not* forwarded. Zod strips unknown keys,
+ * and `options` is a passthrough by design; validating the shape while
+ * dispatching the merged args keeps both properties.
+ */
+export const SEARCH_SCHEMAS: Record<DecisionDomain, z.ZodType> = {
+  cases: SearchCasesSchema,
+  constitutional: SearchConstitutionalSchema,
+  admin_appeals: SearchAdminAppealsSchema,
+  tax_tribunal: SearchTaxTribunalSchema,
+  tax_rulings: SearchRulingsSchema,
+  interpretations: SearchRulingsSchema,
+  customs: SearchRulingsSchema,
+  competition: SearchCompetitionSchema,
+  workplace: SearchWorkplaceSchema,
+  privacy: SearchPrivacySchema,
+  integrity: SearchIntegritySchema,
+  public_service: SearchPublicServiceSchema,
+  university_rules: SearchUniversityRulesSchema,
+  agency_rules: SearchAgencyRulesSchema,
+  gazettes: SearchGazettesSchema,
+  treaties: SearchTreatiesSchema,
+  explanatory: SearchExplanatorySchema,
+  state_law: SearchStateLawSchema,
+}
+
 const GET_HANDLERS: Record<DecisionDomain, Handler> = {
   cases: getCaseText,
   constitutional: getConstitutionalDecisionText,
@@ -160,7 +215,20 @@ export const SELF_COMPACTING: ReadonlySet<DecisionDomain> = new Set<DecisionDoma
   "customs",
   "university_rules",
   "state_law",
+  "workplace",
+  "integrity",
+  "public_service",
 ])
+
+/**
+ * Domains that hand over a body but whose handler does not take `full`, so the
+ * omission marker's "call again with full=true" cannot be acted on. The marker
+ * is generic, and a caller that follows it loops; the note below says so once
+ * instead. `constitutional` is the only one left — its handler lives in
+ * `constitutional-decisions.ts` and renders the High Court reasons through
+ * `renderDocument` without threading the flag.
+ */
+const FULL_NOT_HONOURED: ReadonlySet<DecisionDomain> = new Set<DecisionDomain>(["constitutional"])
 
 /** Domains whose handler takes an `id` under a different name. */
 const ID_KEY: Partial<Record<DecisionDomain, string>> = {
@@ -172,6 +240,14 @@ const NEEDS_JURISDICTION: ReadonlySet<DecisionDomain> = new Set<DecisionDomain>(
   "state_law",
   "university_rules",
 ])
+
+/**
+ * The same guard on the search side. `university_rules` is deliberately absent:
+ * its handler searches every reachable register at once when no jurisdiction is
+ * named, so requiring one would remove a working call. `state_law` cannot —
+ * the register *is* the search.
+ */
+const SEARCH_NEEDS_JURISDICTION: ReadonlySet<DecisionDomain> = new Set<DecisionDomain>(["state_law"])
 
 const SEARCH_RESERVED = new Set(["query", "domain", "limit", "page"])
 const GET_RESERVED = new Set(["id", "domain", "full"])
@@ -202,6 +278,31 @@ function droppedNote(dropped: string[]): LooseToolResponse["content"][number] | 
   }
 }
 
+/**
+ * A dispatch the target tool's own schema rejects. Reported as the parameter
+ * problem it is: the upstream was never asked, so this response is not evidence
+ * about the record either way, and telling the caller to retry an outage would
+ * send it round the same broken call.
+ */
+function invalidDomainArgs(domain: DecisionDomain, error: z.ZodError): LooseToolResponse {
+  const issues = error.issues
+    .map((issue) => `${issue.path.join(".") || "(input)"}: ${issue.message}`)
+    .join("; ")
+  return {
+    content: [
+      {
+        type: "text",
+        text:
+          `[INVALID_PARAMETER] search_decisions(domain="${domain}") — ${issues}. ` +
+          "Domain-specific parameters travel in `options` (see this tool's `options` description), " +
+          'e.g. options={"jurisdiction":"QLD"}. ' +
+          "No source was queried, so this says nothing about whether such a decision exists.",
+      },
+    ],
+    isError: true,
+  }
+}
+
 // ── search_decisions ──────────────────────────────────────────────────────
 
 export const SearchDecisionsSchema = z.object({
@@ -215,7 +316,10 @@ export const SearchDecisionsSchema = z.object({
     "Search terms. Required for most domains; optional for privacy, integrity and public_service, " +
     "whose sources are browsable indexes.",
   ),
-  limit: z.number().min(1).max(50).default(10).optional().describe("Maximum hits (default 10)."),
+  limit: z.number().min(1).max(50).default(10).optional().describe(
+    "Maximum hits (default 10). Ignored by constitutional and treaties, whose sources hand over a " +
+    "fixed page (12 and 20 rows) — move through those with `page` instead.",
+  ),
   page: z.number().min(1).default(1).optional().describe("1-based page number."),
   options: z.record(z.string(), z.unknown()).optional().describe(
     "Domain-specific parameters. cases:{jurisdiction,court} constitutional:{year,verifyCatchwords} " +
@@ -247,6 +351,26 @@ export async function searchDecisions(
     if (input.page !== undefined) args.page = input.page
     const dropped = mergeOptions(args, input.options, SEARCH_RESERVED)
 
+    if (SEARCH_NEEDS_JURISDICTION.has(input.domain) && !args.jurisdiction) {
+      return {
+        content: [
+          {
+            type: "text",
+            text:
+              `[INVALID_PARAMETER] domain "${input.domain}" needs a jurisdiction. ` +
+              `Call search_decisions(domain="${input.domain}", query=${JSON.stringify(input.query ?? "…")}, ` +
+              'options={"jurisdiction":"QLD"}) — the state and territory registers are eight separate ' +
+              "sites and this server does not pick one for you. Nothing was searched, so nothing here " +
+              "says whether such a law exists.",
+          },
+        ],
+        isError: true,
+      }
+    }
+
+    const checked = SEARCH_SCHEMAS[input.domain].safeParse(args)
+    if (!checked.success) return invalidDomainArgs(input.domain, checked.error)
+
     const result = await handler(client, args)
     const note = droppedNote(dropped)
     return note ? { ...result, content: [note, ...result.content] } : result
@@ -265,7 +389,11 @@ export const GetDecisionTextSchema = z.object({
   ),
   full: z.boolean().optional().describe(
     "true = return the body verbatim. Omitted = a long body is shortened from the middle and the " +
-    "gap is marked with the exact number of characters removed.",
+    "gap is marked with the exact number of characters removed. Every domain that hands over a body " +
+    "honours it except constitutional, whose High Court reasons are shortened by their own renderer — " +
+    "that response says so and prints the judgment URL. The remaining domains (privacy, competition, " +
+    "agency_rules, gazettes, treaties, explanatory) return metadata and links, so there is no body to " +
+    "return verbatim.",
   ),
   options: z.record(z.string(), z.unknown()).optional().describe(
     "Domain-specific parameters. state_law|university_rules:{jurisdiction} (required) " +
@@ -317,9 +445,36 @@ export async function getDecisionText(
       })
     }
 
-    const note = droppedNote(dropped)
-    return note ? { ...result, content: [note, ...result.content] } : result
+    const notes = [
+      droppedNote(dropped),
+      input.full === true ? fullNotHonouredNote(input.domain, result) : undefined,
+    ].filter((entry): entry is LooseToolResponse["content"][number] => entry !== undefined)
+    return notes.length > 0 ? { ...result, content: [...notes, ...result.content] } : result
   } catch (error) {
     return formatToolError(error, `get_decision_text[${input.domain}]`)
+  }
+}
+
+/**
+ * `full=true` on a domain whose handler cannot act on it. The body still
+ * carries the generic "call again with full=true" marker, and a caller that
+ * follows it makes the identical call forever — so the one thing that does
+ * work, the source URL already printed above, is named instead.
+ */
+function fullNotHonouredNote(
+  domain: DecisionDomain,
+  result: LooseToolResponse,
+): LooseToolResponse["content"][number] | undefined {
+  if (!FULL_NOT_HONOURED.has(domain)) return undefined
+  const shortened = result.content.some(
+    (entry) => typeof entry.text === "string" && entry.text.includes(OMISSION_MARKER),
+  )
+  if (!shortened) return undefined
+  return {
+    type: "text",
+    text:
+      `Note: domain "${domain}" does not honour full=true — its source renderer shortens long bodies ` +
+      "and the omission marker below is generic, so calling again with full=true returns this same " +
+      "response. The complete text is at the Source URL printed with the document.",
   }
 }

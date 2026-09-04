@@ -1,6 +1,9 @@
 import { readFileSync } from "node:fs"
 import { describe, expect, it } from "vitest"
-import { UpstreamBlockedError } from "../errors.js"
+import type { AuApiClient } from "../api-client.js"
+import { ErrorCodes, LawApiError, UpstreamBlockedError, formatToolError } from "../errors.js"
+import { ExecutionLimitError } from "../execution-limits.js"
+import { requestCancelledError } from "../session-state.js"
 import {
   actDownloadUrls,
   actRegisterId,
@@ -32,6 +35,22 @@ const noNetworkClient = new Proxy({} as never, {
   },
 })
 
+/** A client whose every fetch fails the same way — the upstream-failure paths. */
+const rejectingClient = (error: unknown): AuApiClient =>
+  ({ fetchHtml: () => Promise.reject(error), fetchJson: () => Promise.reject(error) } as unknown as AuApiClient)
+
+/** Records the paths asked for, so "never requested" is assertable. */
+function spyClient(html = ""): { client: AuApiClient; paths: string[] } {
+  const paths: string[] = []
+  const client = {
+    fetchHtml: (_host: string, path: string) => {
+      paths.push(path)
+      return Promise.resolve(html)
+    },
+  } as unknown as AuApiClient
+  return { client, paths }
+}
+
 describe("normaliseJurisdiction", () => {
   it("accepts abbreviations and full names, case-insensitively", () => {
     expect(normaliseJurisdiction("qld")).toBe("QLD")
@@ -58,6 +77,15 @@ describe("NSW and SA are blocked, never empty", () => {
     const error = await getStateLawText(noNetworkClient, "SA", "CRIMINAL LAW").catch((e) => e)
     expect(error).toBeInstanceOf(UpstreamBlockedError)
     expect(error.links[0]).toContain("legislation.sa.gov.au/lz?path=/C/A/")
+  })
+
+  it("percent-encodes the SA slug exactly once — a %2520 link is a dead link", async () => {
+    // The only thing a blocked host can offer is the link, so it has to work.
+    const error = await getStateLawText(noNetworkClient, "SA", "Fair Work Act 1994").catch((e) => e)
+    expect(error.links[0]).toBe(
+      "https://www.legislation.sa.gov.au/lz?path=/C/A/FAIR%20WORK%20ACT%201994",
+    )
+    expect(error.links[0]).not.toContain("%2520")
   })
 })
 
@@ -127,6 +155,94 @@ describe("Victoria", () => {
     const document = parseVicActPage(VIC, "crimes-act-1958")
     expect(document.note).toMatch(/injected by JavaScript/i)
     expect(document.note).toMatch(/says nothing about whether it exists/i)
+  })
+})
+
+describe("Victoria — a failed lookup is never reported as a miss", () => {
+  it("keeps a genuine 404 a miss, with the slug wording", async () => {
+    const client = rejectingClient(
+      new LawApiError("vicLegislation returned 404 for https://x", ErrorCodes.NOT_FOUND),
+    )
+    const result = await searchStateLaw(client, "VIC", "Crimes Act 1958")
+    expect(result.hits).toEqual([])
+    expect(result.total).toBe(0)
+    expect(result.totalNote).toMatch(/did not\s+resolve/i)
+  })
+
+  it("surfaces an upstream failure as [EXTERNAL_API_ERROR] instead of an unresolved slug", async () => {
+    const client = rejectingClient(
+      new LawApiError("vicLegislation upstream server error (503)", ErrorCodes.API_ERROR),
+    )
+    const error = await searchStateLaw(client, "VIC", "Crimes Act 1958").catch((e) => e)
+    expect(error).toBeInstanceOf(LawApiError)
+    expect(error.code).toBe(ErrorCodes.API_ERROR)
+    const rendered = formatToolError(error, "search_state_law").content[0].text
+    expect(rendered).toContain("[EXTERNAL_API_ERROR]")
+    expect(rendered).not.toMatch(/did not resolve/i)
+  })
+
+  it("surfaces a timeout rather than swallowing it", async () => {
+    const client = rejectingClient(new Error("Request timeout after 30000ms for https://x"))
+    await expect(searchStateLaw(client, "VIC", "Crimes Act 1958")).rejects.toThrowError(
+      /Request timeout/i,
+    )
+  })
+
+  it("lets budget exhaustion and cancellation abort the call", async () => {
+    const budget = rejectingClient(new ExecutionLimitError("Upstream request budget exhausted."))
+    await expect(searchStateLaw(budget, "VIC", "Crimes Act 1958")).rejects.toBeInstanceOf(
+      ExecutionLimitError,
+    )
+    const cancelled = rejectingClient(requestCancelledError())
+    const error = await searchStateLaw(cancelled, "VIC", "Crimes Act 1958").catch((e) => e)
+    expect(error.name).toBe("AbortError")
+  })
+
+  it("reports a response-shape failure as UPSTREAM_NO_DATA, not as a slug that missed", async () => {
+    const { client } = spyClient("   ")
+    const error = await searchStateLaw(client, "VIC", "Crimes Act 1958").catch((e) => e)
+    expect(error.code).toBe(ErrorCodes.UPSTREAM_NO_DATA)
+  })
+})
+
+describe("caller-supplied ids cannot rewrite an upstream path", () => {
+  it("rejects NT ids that are not one register slug, before any request", async () => {
+    const { client, paths } = spyClient(NT_ACT)
+    for (const bad of [
+      "CRIMINAL-CODE-ACT-1983?view=full#top",
+      "../../en/LegislationPortal/Acts",
+      "CRIMINAL/CODE",
+      "%2e%2e%2fadmin",
+    ]) {
+      const error = await getStateLawText(client, "NT", bad).catch((e) => e)
+      expect(error).toBeInstanceOf(LawApiError)
+      expect(error.code).toBe(ErrorCodes.INVALID_PARAM)
+    }
+    expect(paths).toEqual([])
+  })
+
+  it("still accepts the register slug, and the title it is built from", async () => {
+    const { client, paths } = spyClient(NT_ACT)
+    await getStateLawText(client, "NT", "CRIMINAL-CODE-ACT-1983")
+    // The By-Title list spells the slug as the upper-cased title with hyphens
+    // (fixture: "CRIMINAL CODE ACT 1983" ↔ CRIMINAL-CODE-ACT-1983).
+    await getStateLawText(client, "NT", "Criminal Code Act 1983")
+    expect(paths).toEqual([
+      "en/Legislation/CRIMINAL-CODE-ACT-1983",
+      "en/Legislation/CRIMINAL-CODE-ACT-1983",
+    ])
+  })
+
+  it("rejects a QLD/TAS register id carrying a query string or fragment, before any request", async () => {
+    const { client, paths } = spyClient()
+    for (const jurisdiction of ["QLD", "TAS"] as const) {
+      const error = await getStateLawText(client, jurisdiction, "act-1899-009?view=full#top").catch(
+        (e) => e,
+      )
+      expect(error).toBeInstanceOf(LawApiError)
+      expect(error.code).toBe(ErrorCodes.INVALID_PARAM)
+    }
+    expect(paths).toEqual([])
   })
 })
 

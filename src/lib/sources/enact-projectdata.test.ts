@@ -1,6 +1,14 @@
 import { readFileSync } from "node:fs"
 import { describe, expect, it } from "vitest"
-import { buildExpression, parseRecords, sanitiseTerm, unwrap, wholeTextPath } from "./enact-projectdata.js"
+import { ErrorCodes, LawApiError } from "../errors.js"
+import {
+  assertRegisterId,
+  buildExpression,
+  parseRecords,
+  sanitiseTerm,
+  unwrap,
+  wholeTextPath,
+} from "./enact-projectdata.js"
 
 const json = (name: string) =>
   JSON.parse(readFileSync(new URL(`./__fixtures__/${name}`, import.meta.url), "utf-8")) as unknown
@@ -90,5 +98,48 @@ describe("parseRecords — defensive", () => {
 describe("wholeTextPath", () => {
   it("lower-cases the id and uses /view/whole/ (the plain /view/html/ path is a JS shell)", () => {
     expect(wholeTextPath("Act-2000-005")).toBe("view/whole/html/inforce/current/act-2000-005")
+  })
+
+  it("accepts every id shape the two registers publish", () => {
+    expect(wholeTextPath("act-1884-019")).toBe("view/whole/html/inforce/current/act-1884-019")
+    expect(wholeTextPath(" Act-1899-009 ")).toBe("view/whole/html/inforce/current/act-1899-009")
+    expect(wholeTextPath("sl-2011-0045")).toBe("view/whole/html/inforce/current/sl-2011-0045")
+  })
+
+  it("refuses an id that would rewrite the request rather than name a record", () => {
+    // The id is one path segment. `act-1899-009?view=full#top` would send a
+    // query string and drop the fragment, and the page that came back would
+    // still be reported under the register id that was asked for.
+    for (const bad of [
+      "act-1899-009?view=full#top",
+      "act-1899-009/../../secret",
+      "act 1899 009",
+      "..",
+      "%2e%2e%2fadmin",
+      "",
+    ]) {
+      try {
+        wholeTextPath(bad)
+        throw new Error(`should have thrown for ${JSON.stringify(bad)}`)
+      } catch (error) {
+        expect((error as { code?: string }).code).toBe("INVALID_PARAMETER")
+      }
+    }
+  })
+})
+
+describe("assertRegisterId", () => {
+  it("names the shape it wants instead of asserting the record is absent", () => {
+    const error = (() => {
+      try {
+        assertRegisterId("act-1899-009?view=full")
+      } catch (e) {
+        return e as LawApiError
+      }
+      return undefined
+    })()
+    expect(error).toBeInstanceOf(LawApiError)
+    expect(error?.code).toBe(ErrorCodes.INVALID_PARAM)
+    expect(error?.suggestions.join(" ")).toMatch(/act-1899-009/)
   })
 })

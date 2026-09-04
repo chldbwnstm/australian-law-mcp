@@ -23,13 +23,20 @@
  * Every rung is an *attempt*, never an assertion, and the closing message says
  * what was tried. The ladder is cheap on purpose: at most two extra upstream
  * calls, and both are skipped when the query does not look like their case.
+ *
+ * A rung that *threw* is kept strictly apart from a rung that found nothing.
+ * Every message below the rungs reads as "the Commonwealth register was
+ * searched and holds nothing" — the state-law rung says so in those words — so
+ * a failed rung ends the ladder with `[UPSTREAM_NO_DATA]` instead. The ladder
+ * is only ever entered on a genuine `[NOT_FOUND]`; see `isNoMatch` in
+ * `search-all.ts`.
  */
 
 import type { AuApiClient } from "../lib/api-client.js"
 import { noResultHint } from "../lib/errors.js"
 import { truncateResponse } from "../lib/schemas.js"
 import { STATE_JURISDICTIONS } from "../lib/sources/state-legislation.js"
-import type { ToolResponse } from "../lib/types.js"
+import type { FrlTitle, ToolResponse } from "../lib/types.js"
 import { TITLE_SELECT, rankTitles } from "./statute-helpers/title-lookup.js"
 import { formatTitleBlock } from "./statute-helpers/format.js"
 
@@ -78,20 +85,23 @@ export async function searchLawFallbacks(
   const query = input.query.trim()
   const limit = input.limit ?? 10
   const tried: string[] = ["Commonwealth Acts, by title"]
+  /** Rungs that threw. A rung that failed found nothing *and proved nothing*. */
+  const failures: string[] = []
 
   // 1) Delegated legislation. Cheap, and the commonest cause of a miss for
   //    anyone who said "regulations" out loud.
   if (looksLikeInstrumentQuery(query)) {
     tried.push("legislative instruments, by title")
     const instruments = await safeSearch(apiClient, query, limit, "LegislativeInstrument")
-    if (instruments.length > 0) {
+    if (instruments.failure) failures.push(`legislative instruments, by title: ${instruments.failure}`)
+    if (instruments.titles.length > 0) {
       return asText(
         [
           `[FALLBACK] No Act matched "${query}", but the Register has matching legislative instruments.`,
           "Regulations, rules, determinations and standards are a separate collection from Acts — that is why the",
           "first search missed them.",
           "",
-          ...instruments.map((title, index) => formatTitleBlock(title, index + 1, query)),
+          ...instruments.titles.map((title, index) => formatTitleBlock(title, index + 1, query)),
           "",
           "Next: get_law_text(registerId) for the text, get_enabling_acts(registerId) for the Act it is made under.",
         ].join("\n"),
@@ -103,7 +113,8 @@ export async function searchLawFallbacks(
   //    annotated with what repealed them — a rename must not read as a repeal.
   tried.push("repealed and former-name titles")
   const historical = await safeSearch(apiClient, query, limit)
-  if (historical.length > 0) {
+  if (historical.failure) failures.push(`repealed and former-name titles: ${historical.failure}`)
+  if (historical.titles.length > 0) {
     return asText(
       [
         `[FALLBACK] No title matched "${query}" among in-force Acts, but the Register knows these.`,
@@ -111,12 +122,17 @@ export async function searchLawFallbacks(
         "⚠️ A renamed Act is NOT a repealed one: the Trade Practices Act 1974 is the Competition and Consumer",
         "Act 2010, still in force. Read the annotation before describing any of these as no longer law.",
         "",
-        ...historical.map((title, index) => formatTitleBlock(title, index + 1, query)),
+        ...historical.titles.map((title, index) => formatTitleBlock(title, index + 1, query)),
         "",
         "Next: get_law_history(registerId) for the amendment trail, get_historical_law for the text as it stood.",
       ].join("\n"),
     )
   }
+
+  // Nothing to show — so before saying so, check whether the Register actually
+  // answered. A rung that threw is not a rung that found nothing, and every
+  // message below this point reads as "the Commonwealth register was searched".
+  if (failures.length > 0) return rungFailure(query, tried, failures)
 
   // 3) State law. No search is run here: the state registers need a nominated
   //    jurisdiction, two of the eight are blocked, and a Queensland content
@@ -168,13 +184,53 @@ export async function searchLawFallbacks(
   }
 }
 
+/**
+ * A rung that failed, reported as the observation it is.
+ *
+ * The rungs below this point all read as "the Commonwealth register was
+ * searched and holds nothing" — the state-law rung says so in those words. If a
+ * rung threw, that sentence is an absence claim nobody established, so the
+ * ladder stops and hands back the distinct label instead. The next steps are
+ * kept: a caller in this position still needs somewhere to go.
+ */
+function rungFailure(query: string, tried: string[], failures: string[]): ToolResponse {
+  const lines = [
+    `[UPSTREAM_NO_DATA] The Federal Register did not answer every search for "${query}", so this response ` +
+      "carries no finding about whether a Commonwealth title matches.",
+    "",
+    "⚠️ Do not report this as 'no such Act'. The register was asked and did not hand over a result — that is " +
+      "not evidence either way.",
+    ...failures.map((failure) => `  - ${failure}`),
+    "",
+    `Attempted: ${tried.join("; ")}.`,
+    "",
+    "Next:",
+    "  - retry shortly — a register that did not answer is usually transient;",
+    `  - search_ai_law(query="${query}") searches the TEXT of legislation rather than titles;`,
+  ]
+  if (looksLikeStateLawQuery(query)) {
+    lines.push(
+      "  - the subject also reads as State or Territory law, which is on no Commonwealth register at all: " +
+        `search_state_law(jurisdiction="QLD", query="${query}") or get_state_equivalents(query="${query}").`,
+    )
+  }
+  return { content: [{ type: "text", text: truncateResponse(lines.join("\n")) }], isError: true }
+}
+
+/** What one rung produced: its ranked titles, and why it produced none. */
+interface RungResult {
+  titles: FrlTitle[]
+  /** Set when the rung threw — an empty `titles` that proves nothing. */
+  failure?: string
+}
+
 /** A search rung never throws: a broken rung must not become the chain's answer. */
 async function safeSearch(
   apiClient: AuApiClient,
   query: string,
   limit: number,
   collection?: string,
-) {
+): Promise<RungResult> {
   try {
     const found = await apiClient.searchTitles({
       text: query,
@@ -183,8 +239,8 @@ async function safeSearch(
       top: Math.min(limit * 2, 50),
       select: TITLE_SELECT,
     })
-    return rankTitles(query, found.titles).slice(0, limit)
-  } catch {
-    return []
+    return { titles: rankTitles(query, found.titles).slice(0, limit) }
+  } catch (error) {
+    return { titles: [], failure: error instanceof Error ? error.message : String(error) }
   }
 }

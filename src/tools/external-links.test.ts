@@ -24,6 +24,28 @@ describe("statute links", () => {
     expect(text).toContain("https://www.legislation.gov.au/C2004A00109/2015-06-30/text")
   })
 
+  it("does not build a register URL out of an id of the wrong shape", async () => {
+    // The whole premise of this tool is that it never invents an address, and a
+    // malformed id interpolated into legislation.gov.au/{id}/{date}/text is
+    // indistinguishable from a real page.
+    const text = textOf(await run({ titleId: "my favourite act", date: "whenever" }))
+    expect(text).not.toContain("legislation.gov.au/my favourite act")
+    expect(text).not.toContain("/whenever/")
+    expect(text).toContain("[INVALID_PARAMETER]")
+    expect(text).toContain("C2004A00109")
+    expect(text).toContain("search_law")
+    // A bad parameter is not evidence about the Act.
+    expect(text).toContain("says nothing about whether the Act exists")
+  })
+
+  it("drops a malformed compilation date rather than putting it in a URL", async () => {
+    const text = textOf(await run({ titleId: "C2004A00109", date: "as at July" }))
+    // Quoted back so the caller can see what was rejected, but never in a URL.
+    expect(text).not.toContain("C2004A00109/as at July")
+    expect(text).toContain("[INVALID_PARAMETER]")
+    expect(text).toContain("https://www.legislation.gov.au/C2004A00109/latest/text")
+  })
+
   it("warns instead of picking a jurisdiction for an ambiguous alias", async () => {
     const text = textOf(await run({ law: "Evidence Act" }))
     expect(text).toContain("resolves in")

@@ -13,6 +13,7 @@
  */
 
 import type { AuApiClient } from "../api-client.js"
+import { ErrorCodes, LawApiError } from "../errors.js"
 import type { HostKey } from "../upstream-hosts.js"
 import { getHostConfig } from "../upstream-hosts.js"
 import type { SourceHit, SourceLabel, SourceSearchResult } from "./types.js"
@@ -147,9 +148,31 @@ export function parseRecords(json: unknown): { total?: number; records: EnactRec
   return total === undefined ? { records } : { total, records }
 }
 
+/**
+ * A register id addresses **one path segment** of the `/view/whole/` URL
+ * (`act-1899-009`, `Act-2000-005`), so an id carrying `/`, `?`, `#`, `%`, a
+ * space or a `..` does not name a record — it renames the request, and whatever
+ * page comes back is then reported under the id that was asked for.
+ *
+ * Checked rather than encoded, the same discipline `assertTitleId` applies on
+ * the Federal Register side: an id that cannot be a register id is a caller
+ * error and `[INVALID_PARAMETER]` says exactly that.
+ */
+export function assertRegisterId(id: string): string {
+  const value = id.trim()
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value) || value.includes("..")) {
+    throw new LawApiError(
+      `Invalid QLD/TAS register id: ${JSON.stringify(id)}`,
+      ErrorCodes.INVALID_PARAM,
+      ["Register ids look like act-1899-009. Take them from search_state_law results, never invent one."],
+    )
+  }
+  return value
+}
+
 /** Human URL for a register id — the `/view/whole/` form, which is real HTML. */
 export function wholeTextPath(id: string): string {
-  return `view/whole/html/inforce/current/${id.toLowerCase()}`
+  return `view/whole/html/inforce/current/${assertRegisterId(id).toLowerCase()}`
 }
 
 export function humanUrl(jurisdiction: EnactJurisdiction, id: string): string {

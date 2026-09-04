@@ -62,7 +62,22 @@ export async function amendmentTable(
     const volume = /document_(\d+)/.exec(node.volumeDoc)
     const html = await client.getVolumeHtml(titleId, volume ? Number(volume[1]) : 1, date)
     const slice = sliceSubtree(html, toc, node)
-    const parsed = slice === null ? [] : parseAmendmentHistory(slice)
+    if (slice === null) {
+      // `sliceSubtree` returns null when the endnote's anchor is missing from
+      // the volume the TOC points at — a parse failure, which `toc.ts`
+      // documents as something the caller must surface. It is emphatically not
+      // an empty table: an empty table makes every caller print "no amending
+      // Act appears against this provision", and neither the table nor the
+      // absence was ever read. It is not cached either, or the shape failure
+      // would be served as data for the whole TTL.
+      return {
+        error:
+          `the amendment-history endnote's anchor (${node.anchor ?? "?"}) is missing from ${node.volumeDoc} — ` +
+          "the table of contents and the volume disagree upstream",
+        toc,
+      }
+    }
+    const parsed = parseAmendmentHistory(slice)
     lawCache.set(key, parsed, ARTICLE_CACHE_TTL)
     return { entries: parsed, toc }
   } catch (error) {

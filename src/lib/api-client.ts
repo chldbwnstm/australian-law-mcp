@@ -20,6 +20,7 @@
  * absent.
  */
 
+import { ARTICLE_CACHE_TTL, lawCache } from "./cache.js"
 import { ErrorCodes, LawApiError, UpstreamBlockedError } from "./errors.js"
 import { fetchWithRetry, maskSensitiveUrl, sleep } from "./fetch-with-retry.js"
 import {
@@ -169,11 +170,14 @@ export function normalizeFrlVersion(raw: unknown): FrlVersion {
 export class AuApiClient {
   private readonly userAgent?: string
   /**
-   * Per-host politeness clock (`minIntervalMs` from the hosts table). Kept per
-   * client instance; production runs one client per process, so this is the
-   * per-host floor the scraped sites' robots files ask for.
+   * Per-host politeness clock (`minIntervalMs` from the hosts table): the
+   * earliest moment the *next* request to that host may leave. A slot cursor
+   * rather than a "last request at" timestamp because slots are claimed
+   * synchronously — see `politeWait`. Kept per client instance; production runs
+   * one client per process, so this is the per-host floor the scraped sites'
+   * robots files ask for.
    */
-  private readonly lastRequestAt = new Map<HostKey, number>()
+  private readonly nextSlotAt = new Map<HostKey, number>()
 
   constructor(config: { userAgent?: string } = {}) {
     this.userAgent = config.userAgent
@@ -372,7 +376,26 @@ export class AuApiClient {
 
   // ── document text (epub member extraction) ──────────────────────────────
 
+  /**
+   * The parsed NCX for one `(title, date)`, cached for the document TTL.
+   *
+   * There is no per-section endpoint, so every provision fetch needs the whole
+   * table of contents first — and the CCA's is ~830 KB. Without the cache a
+   * multi-provision flow (`get_law_text`, `get_instrument_provisions`,
+   * `get_historical_law`, a batch) re-downloads the same document once per
+   * provision, spending both the request budget and a politeness interval on
+   * bytes it already has. The key is exactly the one
+   * `tools/statute-helpers/toc.ts` uses, so the two paths share one warm entry
+   * instead of keeping two copies.
+   *
+   * Only a parsed, non-empty TOC is stored: an upstream failure or an empty
+   * document is an observation about this attempt, never an answer to remember.
+   */
   async getToc(titleId: string, date?: string): Promise<NcxEntry[]> {
+    const cacheKey = `toc:${assertTitleId(titleId)}:${assertDateSegment(date)}`
+    const cached = lawCache.get<NcxEntry[]>(cacheKey)
+    if (cached) return cached
+
     const xml = await this.fetchHtml("frlDocs", this.epubMemberPath(titleId, date, "document.ncx"))
     const entries = parseNcx(xml)
     if (entries.length === 0) {
@@ -382,6 +405,7 @@ export class AuApiClient {
         ["This is an upstream document problem, not evidence the title is absent — retry, then verify the id and date."],
       )
     }
+    lawCache.set(cacheKey, entries, ARTICLE_CACHE_TTL)
     return entries
   }
 
@@ -466,14 +490,23 @@ export class AuApiClient {
     return url
   }
 
-  /** Honour the host's `minIntervalMs` between two requests to the same host. */
+  /**
+   * Honour the host's `minIntervalMs` between two requests to the same host.
+   *
+   * The slot is claimed **before** the sleep, and the cursor is advanced in the
+   * same synchronous step. Reading a "last request" timestamp and writing it
+   * back after awaiting is the shape that quietly does nothing under
+   * concurrency: every member of a `Promise.all` fan-out reads the same value,
+   * waits the same amount, and then hits the host in one burst — which is
+   * precisely the burst the floor exists to prevent on sites whose robots ask
+   * for a crawl delay.
+   */
   private async politeWait(host: HostKey, minIntervalMs: number): Promise<void> {
-    const last = this.lastRequestAt.get(host)
-    if (last !== undefined) {
-      const wait = last + minIntervalMs - Date.now()
-      if (wait > 0) await sleep(wait)
-    }
-    this.lastRequestAt.set(host, Date.now())
+    const now = Date.now()
+    const slot = Math.max(now, this.nextSlotAt.get(host) ?? 0)
+    this.nextSlotAt.set(host, slot + minIntervalMs)
+    const wait = slot - now
+    if (wait > 0) await sleep(wait)
   }
 
   private async request(

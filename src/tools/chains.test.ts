@@ -130,6 +130,29 @@ describe("chain_law_system", () => {
     expect(text).toContain("search_state_law")
   })
 
+  it("reports an unreachable Register as an upstream failure, never as absence", async () => {
+    // Every rung threw, so nothing was searched. `[NOT_FOUND]` here would say
+    // there is no such Commonwealth law on the strength of an outage.
+    resolveChainBaseLaw.mockResolvedValue({
+      laws: [],
+      attempts: ["Fair Work Act", "Fair Work Act (full text)"],
+      failures: [
+        { term: "Fair Work Act", message: "frlApi upstream server error (503)" },
+        { term: "Fair Work Act (full text)", message: "frlApi request timed out" },
+      ],
+    })
+    const result = await chainLawSystem(client, { query: "Fair Work Act" })
+    expect(result.isError).toBe(true)
+    const text = result.content[0].text
+
+    expect(text).toContain("[EXTERNAL_API_ERROR]")
+    expect(text).not.toContain("[NOT_FOUND]")
+    expect(text).toContain("NOT a finding that no such law exists")
+    // The failed rungs are named, so the caller can see it was transport.
+    expect(text).toContain('"Fair Work Act": frlApi upstream server error (503)')
+    expect(text).toContain("frlApi request timed out")
+  })
+
   it("fetches only the provisions that were asked for", async () => {
     await chainLawSystem(client, { query: "CCA" })
     expect(getBatchProvisions).not.toHaveBeenCalled()
@@ -241,6 +264,25 @@ describe("chain_state_law_compare", () => {
     const text = result.content[0].text
     expect(text).toContain("that is the correct")
     expect(getStateEquivalents).toHaveBeenCalled()
+  })
+
+  it("does not call an unreachable Register 'the correct answer' for the federal side", async () => {
+    resolveChainBaseLaw.mockResolvedValue({
+      laws: [],
+      attempts: ["residential tenancy"],
+      failures: [{ term: "residential tenancy", message: "frlApi upstream server error (503)" }],
+    })
+    const result = await chainStateLawCompare(client, { query: "residential tenancy" })
+    const text = result.content[0].text
+
+    // "That is the correct answer rather than a failure: they are state law"
+    // is a federal/state conclusion, and an outage establishes no such thing.
+    expect(text).not.toContain("that is the correct")
+    expect(text).toContain("[EXTERNAL_API_ERROR]")
+    expect(text).toContain("NOT because none exists")
+    // The state half is real data and still runs — a marked gap, not a dead chain.
+    expect(getStateEquivalents).toHaveBeenCalled()
+    expect(searchStateLaw).toHaveBeenCalledTimes(2)
   })
 
   it("searches at most two registers, because each is a different slow site", async () => {

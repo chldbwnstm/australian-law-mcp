@@ -24,7 +24,7 @@
  */
 
 import type { AuApiClient } from "../api-client.js"
-import { UpstreamBlockedError } from "../errors.js"
+import { ErrorCodes, LawApiError, UpstreamBlockedError } from "../errors.js"
 import { nswLegislationUrl, saLegislationUrl } from "../external-links-map.js"
 import { getHostConfig } from "../upstream-hosts.js"
 import { absoluteUrl, attr, elementsByClass, extractElements, firstText, links, textOf } from "./html.js"
@@ -68,7 +68,10 @@ function blockedError(jurisdiction: "NSW" | "SA", hint?: string): UpstreamBlocke
     linkList.unshift(nswLegislationUrl(Number(numbered[1]), Number(numbered[2])))
   }
   if (jurisdiction === "SA" && hint) {
-    linkList.unshift(saLegislationUrl(hint.trim().toUpperCase().replace(/\s+/g, "%20")))
+    // The raw slug, spaces and all: `saLegislationUrl` percent-encodes it. Encoding
+    // the spaces here first made the builder encode the `%` again, so the one link a
+    // blocked host has to offer arrived as `%2520` and the register never resolved it.
+    linkList.unshift(saLegislationUrl(hint.trim().toUpperCase()))
   }
   return new UpstreamBlockedError(key, config.blockedReason ?? "blocked by policy", linkList)
 }
@@ -212,6 +215,28 @@ export function parseNtIndex(html: string, sourceUrl: string): Array<{ slug: str
   return out
 }
 
+/**
+ * `CRIMINAL-CODE-ACT-1983` — the act title upper-cased with hyphens for spaces,
+ * which is exactly the shape `parseNtIndex` reads off the By-Title list, so a
+ * caller who hands over the title still lands on the right page.
+ *
+ * Anything else is rejected rather than encoded, in the spirit of `assertTitleId`
+ * on the Federal Register side: the slug is one path segment, and an id carrying
+ * `/`, `?`, `#` or `%` would fetch a *different* resource while the answer stayed
+ * labelled with the register id that was asked for.
+ */
+export function ntSlug(id: string): string {
+  const value = id.replace(/^\/?en\/Legislation\//i, "").trim().toUpperCase().replace(/\s+/g, "-")
+  if (!/^[A-Za-z0-9-]+$/.test(value)) {
+    throw new LawApiError(
+      `NT ids look like CRIMINAL-CODE-ACT-1983; got ${JSON.stringify(id)}`,
+      ErrorCodes.INVALID_PARAM,
+      ['Take the id from search_state_law(jurisdiction="NT") results, never invent one.'],
+    )
+  }
+  return value
+}
+
 async function searchNt(client: AuApiClient, query: string, limit: number): Promise<SourceSearchResult> {
   const path = "en/LegislationPortal/Acts/By-Title"
   const html = await client.fetchHtml("ntLegislation", path)
@@ -314,6 +339,17 @@ export function parseVicActPage(html: string, slug: string): SourceDocument {
   return document
 }
 
+/**
+ * The one failure that means "this slug is not an act": the register answered
+ * 404 for it. A timeout, a 5xx, a shape failure, the shared request budget
+ * running out or a cancelled request are all failures *to look*, and calling
+ * any of them a slug that "did not resolve" manufactures an absence out of an
+ * outage — so those keep their own label and propagate.
+ */
+function isVicSlugMiss(error: unknown): boolean {
+  return error instanceof LawApiError && error.code === ErrorCodes.NOT_FOUND
+}
+
 async function searchVic(client: AuApiClient, query: string): Promise<SourceSearchResult> {
   const slug = vicSlug(query)
   const sourceUrl = `${VIC_BASE}/in-force/acts/${slug}`
@@ -328,7 +364,8 @@ async function searchVic(client: AuApiClient, query: string): Promise<SourceSear
         "Victoria has no server-side search endpoint; the title was resolved by slug. " +
         "A miss here means the slug did not match, not that the act does not exist.",
     }
-  } catch {
+  } catch (error) {
+    if (!isVicSlugMiss(error)) throw error
     return {
       hits: [],
       total: 0,
@@ -483,7 +520,7 @@ export async function getStateLawText(
     case "WA":
       return getWaText(client, clean)
     case "NT": {
-      const slug = clean.replace(/^\/?en\/Legislation\//i, "").toUpperCase()
+      const slug = ntSlug(clean)
       const html = await client.fetchHtml("ntLegislation", `en/Legislation/${slug}`)
       return parseNtActPage(html, slug)
     }

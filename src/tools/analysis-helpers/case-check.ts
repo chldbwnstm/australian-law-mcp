@@ -13,11 +13,15 @@
  *                   and does not hold it. Real evidence.
  *   `unreachable` — the source failed, or was never queried because it is
  *                   blocked. Evidence of nothing.
- *   `unsupported` — no reachable source covers this court at all.
+ *   `unsupported` — no lookup was run, because nothing this server reads covers
+ *                   this court: the source is blocked, or the court's decisions
+ *                   are not in the collection the reachable source exposes.
  *
  * Only `absent` may ever become a ✗. A verifier that collapses the other three
  * into "no such case" advises a real authority out of existence, which is the
- * exact failure the reference implementation was rebuilt around.
+ * exact failure the reference implementation was rebuilt around. `absent` is
+ * therefore claimed only for the courts `coveringSource` names, and that list
+ * is narrower than "the source has a page for this jurisdiction".
  */
 
 import type { AuApiClient } from "../../lib/api-client.js"
@@ -178,12 +182,75 @@ async function locateQld(client: AuApiClient, citation: MncCitation): Promise<Ca
   }
 }
 
-/** Which of the three reachable sources, if any, covers this court. */
+/**
+ * Which of the three reachable sources, if any, covers this court.
+ *
+ * A court is only listed here when the source can actually answer *for that
+ * court*, because a covered miss becomes `absent`, and `absent` is printed as
+ * "✗ … very likely invented". Two families look covered and are not:
+ *
+ *  - `HCASL` (special leave dispositions, from 2008) and `HCASJ` (single
+ *    justice, from January 2024) are NOT in the judgments-1998-current listing
+ *    `locateHca` walks. HCASL is published through AustLII; HCASJ has its own
+ *    collection on the Court's site (grok-au-law-landscape.md §2.3, §4.4).
+ *  - NSW Caselaw's advanced search must be handed the court's own id, so a NSW
+ *    body with no entry in `NSW_COURT_IDS` (NSWADT, NSWADTAP, bare NSWCAT) is
+ *    outside the search that can be run — its decisions could never appear in
+ *    the result the miss would be read off.
+ */
 export function coveringSource(citation: MncCitation): "hca" | "nsw" | "qld" | undefined {
-  if (/^HCA(?:SL|SJ)?$/.test(citation.court)) return "hca"
-  if (citation.court_info.jurisdiction === "NSW") return "nsw"
+  if (citation.court === "HCA") return "hca"
+  if (citation.court_info.jurisdiction === "NSW" && nsw.NSW_COURT_IDS[citation.court]) return "nsw"
   if ((qld.QLD_COURTS as readonly string[]).includes(citation.court)) return "qld"
   return undefined
+}
+
+/** The Court's separate single-justice collection (grok-au-law-landscape.md §2.3). */
+const HCA_SINGLE_JUSTICE_URL =
+  "https://www.hcourt.gov.au/cases-and-judgments/judgments/single-justice-judgments"
+
+/**
+ * Why no lookup was run. Every branch describes what this server did NOT do;
+ * none of them is an observation about the citation.
+ */
+function uncovered(citation: MncCitation): CaseLocation {
+  const links = deepLinks(citation)
+  if (citation.court === "HCASL") {
+    return {
+      status: "unsupported",
+      reason:
+        `special leave dispositions (HCASL) are not published in the High Court's judgments-1998-current listing, ` +
+        `the only High Court collection this server reads — they are held by AustLII and LawCite, which refuse ` +
+        `automated clients, so this citation was NOT looked up.`,
+      links,
+    }
+  }
+  if (citation.court === "HCASJ") {
+    return {
+      status: "unsupported",
+      reason:
+        `single justice judgments (HCASJ, from January 2024) sit in the Court's separate single-justice collection, ` +
+        `not the judgments-1998-current listing this server reads, so this citation was NOT looked up.`,
+      links: [HCA_SINGLE_JUSTICE_URL, ...links],
+    }
+  }
+  if (citation.court_info.jurisdiction === "NSW") {
+    return {
+      status: "unsupported",
+      reason:
+        `NSW Caselaw's exact medium-neutral search has to be given the deciding body's own court id, and this server ` +
+        `holds none for ${citation.court_info.name}, so this citation was NOT looked up.`,
+      links,
+    }
+  }
+  return {
+    status: "unsupported",
+    reason:
+      `no case-law source this server may fetch covers ${citation.court_info.name}. ` +
+      `AustLII, LawCite and the Federal Court all refuse automated clients, so this citation was NOT looked up — ` +
+      `nothing here says it is wrong.`,
+    links,
+  }
 }
 
 /** Locate a medium-neutral citation. Never throws. */
@@ -196,14 +263,7 @@ export async function locateCase(client: AuApiClient, citation: MncCitation): Pr
     case "qld":
       return locateQld(client, citation)
     default:
-      return {
-        status: "unsupported",
-        reason:
-          `no case-law source this server may fetch covers ${citation.court_info.name}. ` +
-          `AustLII, LawCite and the Federal Court all refuse automated clients, so this citation was NOT looked up — ` +
-          `nothing here says it is wrong.`,
-        links: deepLinks(citation),
-      }
+      return uncovered(citation)
   }
 }
 
@@ -233,7 +293,10 @@ export function renderCaseVerdict(citation: CaseCitation, location: CaseLocation
     return {
       mark: "⚠",
       line:
-        `⚠ ${shown} — unverifiable here (source blocked): ${location?.reason ?? "no reachable source covers this court"}` +
+        // Not "(source blocked)": some of these courts are not blocked at all,
+        // they are simply outside the collections this server reads. Either way
+        // the honest statement is that no lookup ran.
+        `⚠ ${shown} — NOT checked here: ${location?.reason ?? "no reachable source covers this court"}` +
         `${links.length > 0 ? ` Open: ${links.join(" | ")}` : ""}${warnings}`,
       ...(location ? { location } : {}),
     }

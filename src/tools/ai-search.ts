@@ -169,7 +169,13 @@ export async function searchAiLawStructured(
     via: via.get(title.id) ?? "query",
   }))
 
-  const totalReported = results.reduce((sum, result) => sum + result.count, 0)
+  // Not a sum. The two passes overlap by construction — the alias pass is the
+  // same question asked with the expanded title — and the list above is
+  // de-duplicated, so adding the counts reports a corpus no single upstream
+  // query returned and contradicts what is shown.
+  const passes = results
+    .filter((result) => !result.failed)
+    .map((result) => ({ text: result.text, count: result.count }))
   const everyPassFailed = results.every((result) => result.failed)
 
   return {
@@ -178,7 +184,7 @@ export async function searchAiLawStructured(
         {
           type: "text",
           text: truncateResponse(
-            render({ query, ranked, titleSignals, notes, totalReported, provisionRefs, everyPassFailed, input }),
+            render({ query, ranked, titleSignals, notes, passes, provisionRefs, everyPassFailed, input }),
           ),
         },
       ],
@@ -204,7 +210,8 @@ interface RenderArgs {
   ranked: FrlTitle[]
   titleSignals: AiLawTitleSignal[]
   notes: string[]
-  totalReported: number
+  /** One entry per search pass that answered, with the count that pass reported. */
+  passes: Array<{ text: string; count: number }>
   provisionRefs: string[]
   everyPassFailed: boolean
   input: SearchAiLawInput
@@ -230,7 +237,7 @@ function render(args: RenderArgs): string {
     "ranking: Federal Register full-text relevance (every word must appear — matchType 'all'), " +
       "then re-ranked locally so principal Acts outrank same-named instruments.",
   )
-  lines.push(`${args.totalReported.toLocaleString()} matching title(s) upstream; showing ${args.ranked.length}.`)
+  lines.push(countLine(args))
   for (const note of args.notes) lines.push(`note: ${note}`)
 
   if (args.ranked.length === 0) {
@@ -275,6 +282,24 @@ function render(args: RenderArgs): string {
   )
   lines.push(`Register search: ${frlSearchUrl(args.query)}`)
   return lines.join("\n")
+}
+
+/**
+ * What the upstream reported, in a form the displayed list can be checked
+ * against. Two overlapping passes have no combined total this server can know —
+ * the Register never answered that question — so each pass is reported with the
+ * words it was asked, and the de-duplicated list size is named separately.
+ */
+function countLine(args: RenderArgs): string {
+  if (args.passes.length <= 1) {
+    const count = args.passes[0]?.count ?? 0
+    return `${count.toLocaleString()} matching title(s) upstream; showing ${args.ranked.length}.`
+  }
+  const each = args.passes.map((pass) => `${pass.count.toLocaleString()} for "${pass.text}"`).join(", ")
+  return (
+    `Matching titles upstream: ${each} — overlapping searches, so those counts do not add up to a ` +
+    `corpus size. Showing ${args.ranked.length} after de-duplication.`
+  )
 }
 
 function followUp(registerId: string, provisionRefs: string[]): string {

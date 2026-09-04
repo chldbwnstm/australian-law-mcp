@@ -110,4 +110,37 @@ describe("get_provision_history", () => {
     expect(text).toContain("Not a finding that the provision was never amended")
     expect(text).toContain("search_historical_law")
   })
+
+  /**
+   * The TOC lists `Endnote 4—Amendment history` at `_Toc235543512` in
+   * document_4, but the volume served does not contain that anchor —
+   * `sliceSubtree` returns null. That is the TOC/volume disagreement
+   * `AuApiClient.getProvision` raises PARSE_ERROR for, and the one thing it
+   * must never become is an empty table.
+   */
+  describe("when the endnote anchor is missing from the volume", () => {
+    const ANCHORLESS = "<html><body><p>Endnote 4 is not in this volume.</p></body></html>"
+
+    it("surfaces the parse failure instead of an empty amendment table", async () => {
+      const result = await run({ provision: "s 18" }, client({ html: ANCHORLESS }))
+      const text = result.content[0].text
+      expect(result.isError).toBe(true)
+      expect(text).toContain("[PARSE_ERROR]")
+      expect(text).toContain("_Toc235543512")
+      // The empty-table collapse produced exactly these two, and both are
+      // absence claims nothing here established.
+      expect(text).not.toContain("[NOT_FOUND]")
+      expect(text).not.toContain("never been amended")
+      expect(text).toContain("Not a finding that the provision was never amended")
+    })
+
+    it("does not cache the failure as an empty table for the next caller", async () => {
+      // The endnote cache is keyed by (title, date) only, so a cached [] would
+      // answer "never amended" for every provision of this Act for the TTL.
+      await run({ provision: "s 18" }, client({ html: ANCHORLESS }))
+      const text = (await run({ provision: "s 18" })).content[0].text
+      expect(text).toContain("am (amended)")
+      expect(text).toContain("No 17, 1986")
+    })
+  })
 })

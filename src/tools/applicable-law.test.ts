@@ -46,8 +46,12 @@ interface Options {
   title?: FrlTitle
   versions?: FrlVersion[]
   findVersion?: (asAt: string) => FrlVersion | undefined
+  /** Thrown by `findVersion` instead of answering — an upstream failure, not a 404. */
+  findVersionError?: Error
   provisionThen?: string | Error
   provisionNow?: string | Error
+  /** Records the `date` each getProvision call asked for. */
+  provisionDates?: Array<string | undefined>
 }
 
 const DEFAULT_THEN = "52 Misleading or deceptive conduct\n(1) A corporation shall not, in trade or commerce, engage in conduct that is misleading or deceptive."
@@ -66,6 +70,7 @@ function client(options: Options = {}): AuApiClient {
     getTitle: async () => title,
     listVersions: async () => options.versions ?? VERSIONS,
     findVersion: async (p: { asAt?: string }) => {
+      if (options.findVersionError) throw options.findVersionError
       const found = options.findVersion ? options.findVersion(p.asAt ?? "") : TPA_VERSION
       if (!found) throw new LawApiError("frlApi returned 404", ErrorCodes.NOT_FOUND)
       return found
@@ -73,6 +78,7 @@ function client(options: Options = {}): AuApiClient {
     getToc: async () => ENTRIES,
     getVolumeHtml: async () => ENDNOTE,
     getProvision: async (_id: string, provision: string, date?: string) => {
+      options.provisionDates?.push(date)
       const value = date === undefined ? (options.provisionNow ?? DEFAULT_NOW) : (options.provisionThen ?? DEFAULT_THEN)
       if (value instanceof Error) throw value
       return { ref: provision, heading: "", text: value, volumeDoc: "document_1/document_1.html", breadcrumb: [] }
@@ -111,6 +117,45 @@ describe("applicable_law — the version in force", () => {
     expect(text).toContain("as made")
     expect(text).toContain('date:"asmade"')
     expect(text).toContain("do not report the Act as non-existent on that date")
+  })
+
+  /**
+   * `Versions/Find` failing is not `Versions/Find` answering. A 500 or a
+   * timeout says nothing about which compilation covered the date, and the
+   * as-made pointer under "no compilation covers it" is a 1974-wording answer
+   * to a 2015 question.
+   */
+  describe("when Versions/Find fails rather than answering", () => {
+    const outage = { findVersionError: new LawApiError("frlApi upstream server error (503)", ErrorCodes.API_ERROR) }
+
+    it("labels the upstream failure instead of reporting no compilation", async () => {
+      const text = await run({ lawName: "CCA", date: "2015-06-01" }, outage)
+      expect(text).toContain("[EXTERNAL_API_ERROR]")
+      expect(text).toContain("503")
+      expect(text).toContain("NOT a finding that no compilation covers that date")
+      expect(text).not.toContain("The Register has no compilation covering")
+      expect(text).not.toContain('date:"asmade"')
+    })
+
+    it("still hands back the version list it did get, rather than a bare error", async () => {
+      const result = await applicableLaw(client(outage), { lawName: "CCA", date: "2015-06-01" } as never)
+      const text = result.content[0].text
+      expect(text).toContain(`${VERSIONS.length} rows`)
+      expect(text).toContain("get_law_history")
+    })
+
+    it("does not read the provision as made when the lookup merely failed", async () => {
+      const provisionDates: Array<string | undefined> = []
+      const text = await run(
+        { lawName: "CCA", date: "2015-06-01", provision: "s 52" },
+        { ...outage, provisionDates },
+      )
+      // "asmade" here would diff the 1974 text against today and present it as
+      // the law of 2015.
+      expect(provisionDates).not.toContain("asmade")
+      expect(provisionDates).toContain("2015-06-01")
+      expect(text).toContain("▶ s 52 as at 2015-06-01")
+    })
   })
 })
 

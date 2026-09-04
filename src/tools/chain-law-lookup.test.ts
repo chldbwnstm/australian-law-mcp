@@ -13,6 +13,7 @@
  */
 import { describe, expect, it } from "vitest"
 import type { AuApiClient } from "../lib/api-client.js"
+import { ErrorCodes, LawApiError } from "../lib/errors.js"
 import type { FrlTitle } from "../lib/types.js"
 import {
   contentWords,
@@ -345,5 +346,98 @@ describe("resolveChainBaseLaw — the full-text rung", () => {
 
     expect(result.laws).toEqual([])
     expect(result.attempts).toContain("penalty for misleading conduct (full text)")
+  })
+})
+
+// ── "searched and found nothing" vs "could not search" ────────────────────
+
+describe("resolveChainBaseLaw — a rung that could not run", () => {
+  /** Every FRL entry point throws whatever it is handed. */
+  function brokenClient(error: unknown, over: Partial<Record<"getTitle", unknown>> = {}) {
+    const calls = { getTitle: [] as string[] }
+    const client = {
+      async searchTitles() {
+        throw error
+      },
+      async fetchJson() {
+        throw error
+      },
+      async getTitle(id: string) {
+        calls.getTitle.push(id)
+        throw "getTitle" in over ? over.getTitle : error
+      },
+    }
+    return { client: client as unknown as AuApiClient, calls }
+  }
+
+  it("records the name rung and the full-text rung as failures, not as a zero match", async () => {
+    const { client } = brokenClient(new LawApiError("frlApi upstream server error (503)", ErrorCodes.API_ERROR))
+    const result = await resolveChainBaseLaw(client, "Widget Levy Act 1999", 2)
+
+    expect(result.laws).toEqual([])
+    // The whole point: an empty `laws` with failures is an unreachable
+    // Register, not an Act that does not exist.
+    expect(result.failures?.map((failure) => failure.term)).toEqual([
+      "Widget Levy Act 1999",
+      "Widget Levy Act 1999 (full text)",
+    ])
+    expect(result.failures?.[0].message).toContain("503")
+  })
+
+  it("leaves `failures` off a genuine zero match, so the caller keeps [NOT_FOUND]", async () => {
+    const { client } = stubClient({ fullText: [] })
+    const result = await resolveChainBaseLaw(client, "Widget Levy Act 1999", 2)
+
+    expect(result.laws).toEqual([])
+    expect(result.failures).toBeUndefined()
+  })
+
+  it("counts a broken full-text pass as a failure even though search_ai_law does not throw", async () => {
+    // `searchAiLawStructured` catches its own pass failures and flags the
+    // response instead of throwing, so an unread flag looks exactly like a
+    // search that ran and matched nothing.
+    const client = {
+      async searchTitles() {
+        return { count: 0, titles: [] as FrlTitle[] }
+      },
+      async fetchJson() {
+        throw new LawApiError("frlApi request failed (403)", ErrorCodes.API_ERROR)
+      },
+    } as unknown as AuApiClient
+    const result = await resolveChainBaseLaw(client, "Widget Levy Act 1999", 2)
+
+    expect(result.laws).toEqual([])
+    expect(result.failures?.map((failure) => failure.term)).toEqual(["Widget Levy Act 1999 (full text)"])
+    expect(result.failures?.[0].message).toContain("403")
+  })
+
+  it("keeps a 404 on a register id as an authoritative miss, but not a 500", async () => {
+    // Only `getTitle` can fail here: the search rungs answer cleanly with
+    // nothing, so `failures` reports the register-id rung alone.
+    const idClient = (error: unknown) =>
+      ({
+        async searchTitles() {
+          return { count: 0, titles: [] as FrlTitle[] }
+        },
+        async fetchJson() {
+          return { "@odata.count": 0, value: [] as FrlTitle[] }
+        },
+        async getTitle() {
+          throw error
+        },
+      }) as unknown as AuApiClient
+
+    // The Register holds every Commonwealth id, so its own "no such title" is
+    // authoritative absence and the chain may print [NOT_FOUND].
+    const miss = await resolveChainBaseLaw(idClient(new LawApiError("frlApi returned 404", ErrorCodes.NOT_FOUND)), "C2004A99999", 1)
+    expect(miss.laws).toEqual([])
+    expect(miss.failures).toBeUndefined()
+
+    const outage = await resolveChainBaseLaw(
+      idClient(new LawApiError("frlApi upstream server error (500)", ErrorCodes.API_ERROR)),
+      "C2004A99999",
+      1,
+    )
+    expect(outage.failures?.map((failure) => failure.term)).toEqual(["C2004A99999"])
   })
 })

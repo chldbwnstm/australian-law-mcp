@@ -193,12 +193,15 @@ export async function searchCases(
       if (blocked) return formatToolError(blocked, "search_cases")
       if (result && result.hits.length > 0) {
         const text = renderSearch(
-          { ...result, hits: result.hits.slice(0, limit) },
+          // Prefixed here too: `renderSearch` prints `id:` as the identifier the
+          // get_ call takes, and a bare NSW hex / HCA slug / QLD number is
+          // rejected by get_case_text and get_decision_text alike.
+          { ...result, hits: result.hits.slice(0, limit).map(withPrefixedId) },
           {
             heading: "Case law — exact citation lookup",
             query: input.query,
             showSource: true,
-            followUp: `get_case_text(citation="${input.query}")`,
+            followUp: `get_case_text(citation="${input.query}") or get_case_text(id="<id from above>")`,
           },
         )
         lawCache.set(cacheKey, text, SEARCH_CACHE_TTL)

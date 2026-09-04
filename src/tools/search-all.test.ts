@@ -118,6 +118,29 @@ describe("the empty-Commonwealth-result ladder", () => {
     // The ladder answered, so the family is not reported as unretrieved.
     expect(text).not.toContain("Commonwealth legislation (Federal Register) [NOT RETRIEVED]")
   })
+
+  it("does not run the ladder over an upstream failure", async () => {
+    // The ladder's rungs read as "the Commonwealth register was searched and
+    // holds nothing". Running them after an outage renders a transport failure
+    // as a completed empty search — the absence claim this server exists to
+    // avoid. Only [NOT_FOUND] means the register answered.
+    searchLaw.mockResolvedValue(fail("[EXTERNAL_API_ERROR] api.prod.legislation.gov.au: 503"))
+    const text = (await run({ query: "residential tenancy bond" })).content[0].text
+    expect(searchLawFallbacks).not.toHaveBeenCalled()
+    expect(text).toContain("Commonwealth legislation (Federal Register) [NOT RETRIEVED]")
+    expect(text).toContain("[EXTERNAL_API_ERROR]")
+    expect(text).toContain("do not treat it as empty")
+    expect(text).not.toContain("[FALLBACK] ladder output")
+  })
+
+  it("does not run the ladder over an ambiguous alias", async () => {
+    // "which jurisdiction did you mean" is a question for the caller, not a
+    // miss to climb a ladder over.
+    searchLaw.mockResolvedValue(fail('[AMBIGUOUS] "Evidence Act" names Acts in more than one jurisdiction'))
+    const text = (await run({ query: "Evidence Act" })).content[0].text
+    expect(searchLawFallbacks).not.toHaveBeenCalled()
+    expect(text).toContain("[AMBIGUOUS]")
+  })
 })
 
 describe("budget", () => {

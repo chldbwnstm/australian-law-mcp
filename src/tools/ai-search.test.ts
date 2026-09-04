@@ -102,6 +102,33 @@ describe("what the caller is told about the ordering", () => {
     const { api } = client([FW_ACT], 137)
     expect((await run(api)).content[0].text).toContain("137 matching title(s)")
   })
+
+  it("never adds the two passes' counts together", async () => {
+    // The alias pass is the same question asked with the expanded title, so the
+    // two result sets overlap and the list below is de-duplicated. Summing them
+    // taught the caller a corpus size no single upstream query returned.
+    const counts = [120, 80]
+    let call = 0
+    const api = {
+      fetchJson: async () => ({ "@odata.count": counts[call++] ?? 0, value: [FW_ACT] }),
+    } as unknown as AuApiClient
+
+    const text = (await run(api, { query: "ACL" })).content[0].text
+    expect(call).toBe(2)
+    expect(text).not.toContain("200 matching")
+    expect(text).toContain('120 for "ACL"')
+    expect(text).toContain("80 for")
+    expect(text).toContain("do not add up")
+    // One title survived de-duplication, and the count line says so.
+    expect(text).toContain("Showing 1 after de-duplication")
+  })
+
+  it("still prints one plain count when only one pass ran", async () => {
+    const { api } = client([FW_ACT], 137)
+    const text = (await run(api)).content[0].text
+    expect(text).toContain("137 matching title(s) upstream; showing 1.")
+    expect(text).not.toContain("do not add up")
+  })
 })
 
 describe("pointing, not answering", () => {

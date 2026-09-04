@@ -916,7 +916,12 @@ export function registerTools(
 
       try {
         throwIfRequestCancelled()
-        const input = tool.schema.parse(args)
+        // `arguments` is optional in the MCP CallTool schema, and a
+        // spec-compliant client omits it for a tool it was advertised with
+        // `required: []` — `discover_tools`, `legal_research`, every all-optional
+        // tool. Parsing `undefined` rejects all of them with
+        // [INVALID_PARAMETER] for a call that was in fact well formed.
+        const input = tool.schema.parse(args ?? {})
         const result = await tool.handler(apiClient, input)
         throwIfRequestCancelled()
         const text = truncateResponse(

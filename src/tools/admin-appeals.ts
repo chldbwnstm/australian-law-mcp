@@ -19,7 +19,7 @@
 import { z } from "zod"
 import type { AuApiClient } from "../lib/api-client.js"
 import { ErrorCodes, LawApiError, formatToolError } from "../lib/errors.js"
-import { austliiSearchUrl } from "../lib/external-links-map.js"
+import { austliiSearchUrl, lawCiteUrl } from "../lib/external-links-map.js"
 import { lawCache, SEARCH_CACHE_TTL } from "../lib/cache.js"
 import type { LooseToolResponse } from "../lib/types.js"
 import * as nsw from "../lib/sources/nsw-caselaw.js"
@@ -185,6 +185,19 @@ export async function getAdminAppealText(
         const found = await nsw.lookupByCitation(client, raw)
         const hit = found.hits[0]
         if (hit) return render(await nsw.getDecision(client, hit.id), full)
+        // The id was well formed and this register simply did not hand the row
+        // over. Falling through to "unrecognised id" would blame the caller for
+        // an upstream outcome and hide the one thing worth retrying.
+        throw new LawApiError(
+          `NSW Caselaw's exact-citation search returned no row for ${raw}.`,
+          ErrorCodes.UPSTREAM_NO_DATA,
+          [
+            "⚠️ This is one register's answer, not a finding that the decision does not exist.",
+            `Check it in a browser: ${lawCiteUrl(raw)}`,
+            "If the decision is recent, the listing can lag; retry shortly or search it with " +
+            'search_decisions(domain="admin_appeals").',
+          ],
+        )
       }
     }
     if (/^[0-9a-f]{16,32}$/i.test(raw)) return render(await nsw.getDecision(client, raw), full)

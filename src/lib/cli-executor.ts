@@ -20,10 +20,16 @@
  *    detail tool takes one. `SEARCH_DETAIL_CHAINS` already knows which
  *    parameter and which line for every search tool, so that table is read
  *    rather than restated.
+ *  - **The run is charged to an execution budget.** This is a front door like
+ *    the other two, and the upstream ceilings live in AsyncLocalStorage rather
+ *    than in the client, so a call made outside a request context is not
+ *    "unlimited" by design — it is unmetered by accident.
  */
 
 import { z } from "zod"
 import { AuApiClient } from "./api-client.js"
+import { RequestExecutionBudget, readExecutionLimits } from "./execution-limits.js"
+import { requestContext, runWithRequestContext } from "./session-state.js"
 import { allTools } from "../tool-registry.js"
 import { SEARCH_DETAIL_CHAINS } from "./tool-chain-config.js"
 import { ID_LINE, extractHitIds } from "../tools/search-hits.js"
@@ -46,6 +52,25 @@ export function getApiClient(): AuApiClient {
 // ──────────────────────────────────────────────────────────────────────────
 // Core
 // ──────────────────────────────────────────────────────────────────────────
+
+/**
+ * The console path's request boundary — the counterpart of `tool-registry`'s
+ * CallTool wrapper, and deliberately the same shape.
+ *
+ * `fetchWithRetry` charges `consumeUpstreamRequest` and `readResponseBytes`
+ * enforces the per-response and per-request byte ceilings by reading the budget
+ * out of AsyncLocalStorage. With no context those are silently no-ops, so
+ * without this the CLI would run every chain with no attempt ceiling and buffer
+ * a pathological response whole, while the identical query over MCP is bounded.
+ *
+ * An existing budget is reused rather than replaced: an embedder that already
+ * opened a request (or a future outer CLI scope) must not have its allowance
+ * multiplied by the number of tools a run happens to call.
+ */
+function withRequestBudget<T>(work: () => Promise<T>): Promise<T> {
+  const budget = requestContext.getStore()?.budget ?? new RequestExecutionBudget(readExecutionLimits())
+  return runWithRequestContext({ budget }, work)
+}
 
 /**
  * Run one tool by name.
@@ -82,7 +107,7 @@ export async function executeTool(
 
   try {
     const parsed = tool.schema.parse(params)
-    const result = await tool.handler(apiClient, parsed)
+    const result = await withRequestBudget(() => tool.handler(apiClient, parsed))
     return { content: result.content.map((part) => ({ type: "text" as const, text: part.text })), ...(result.isError ? { isError: true } : {}) }
   } catch (error) {
     const message =

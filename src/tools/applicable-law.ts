@@ -90,7 +90,8 @@ export async function applicableLaw(apiClient: AuApiClient, input: ApplicableLaw
     const today = new Date().toISOString().slice(0, 10)
 
     const versions = await safeVersions(apiClient, title.id)
-    const asAt = await safeFindVersion(apiClient, title.id, date)
+    const found = await safeFindVersion(apiClient, title.id, date)
+    const asAt = found.version
 
     const lines: string[] = []
     lines.push(`Applicable law — ${title.name} [${title.id}] as at ${date}`)
@@ -99,7 +100,25 @@ export async function applicableLaw(apiClient: AuApiClient, input: ApplicableLaw
 
     // ── which compilation, and under what name ───────────────────────────
     lines.push("▶ In force on that date")
-    if (!asAt) {
+    if (found.error) {
+      // Not "no compilation covers that date" — the Register never said so.
+      // Printing that sentence here, and the as-made pointer under it, hands
+      // back the 1974 text as the law of 2015 on the strength of a timeout.
+      lines.push(`  [${ErrorCodes.API_ERROR}] The point-in-time lookup for ${date} failed: ${found.error}`)
+      lines.push(
+        "  ⚠️ This is an upstream failure, NOT a finding that no compilation covers that date. Do NOT fall back to " +
+          "the Act as made on the strength of it — for a renamed Act that is decades of the wrong wording. Retry, " +
+          "and do not answer from the current text either.",
+      )
+      lines.push(
+        versions.length > 0
+          ? `  The version list did load (${versions.length} rows): get_law_history({registerId:"${title.id}"}) shows the ` +
+            `compilation windows, and get_law_text({registerId:"${title.id}", date:"${date}"}) fetches the text for that ` +
+            "date directly."
+          : "  The version list could not be read either, so nothing about this title's compilations was retrieved.",
+      )
+      lines.push(`  ${frlHumanUrl(title.id, date)}`)
+    } else if (!asAt) {
       const earliest = versions.length > 0 ? versions[versions.length - 1] : undefined
       lines.push(
         earliest
@@ -185,7 +204,9 @@ export async function applicableLaw(apiClient: AuApiClient, input: ApplicableLaw
     // ── the provision ────────────────────────────────────────────────────
     if (input.provision) {
       lines.push("")
-      lines.push(...(await provisionSection(apiClient, title.id, input.provision, date, asAt)))
+      // Only a *confirmed* absence of a covering compilation justifies reading
+      // the as-made text; a failed lookup must still ask for the date.
+      lines.push(...(await provisionSection(apiClient, title.id, input.provision, date, !asAt && !found.error)))
       lines.push("")
       lines.push(...(await amendmentSection(apiClient, title.id, input.provision, date)))
     } else {
@@ -217,25 +238,44 @@ async function safeVersions(client: AuApiClient, titleId: string): Promise<FrlVe
   }
 }
 
-async function safeFindVersion(client: AuApiClient, titleId: string, date: string): Promise<FrlVersion | undefined> {
+/**
+ * The point-in-time lookup, with a miss and a failure kept apart.
+ *
+ * `{}` is "the Register answered, and no compilation covers that date" — the
+ * date precedes the first compilation, and the as-made text is the real answer.
+ * `{ error }` is "the Register did not answer", which proves nothing about any
+ * date and must never be rendered as the first case: doing so points the caller
+ * at the as-made text, i.e. at 1974 wording for a 2015 question.
+ */
+async function safeFindVersion(
+  client: AuApiClient,
+  titleId: string,
+  date: string,
+): Promise<{ version?: FrlVersion; error?: string }> {
   try {
     const version = await client.findVersion({ titleId, asAt: date })
-    return version.titleId ? version : undefined
+    // An empty record is the API's own "no version here" shape.
+    return version.titleId ? { version } : {}
   } catch (error) {
     // A 404 here is the honest "no compilation covered that date"; anything else
     // is an upstream problem and must not masquerade as one.
-    if (error instanceof LawApiError && error.code === ErrorCodes.NOT_FOUND) return undefined
-    return undefined
+    if (error instanceof LawApiError && error.code === ErrorCodes.NOT_FOUND) return {}
+    return { error: error instanceof Error ? error.message : String(error) }
   }
 }
 
-/** The provision's text then, the text now, and the difference. */
+/**
+ * The provision's text then, the text now, and the difference.
+ *
+ * `asMade` is set only when the Register *confirmed* that no compilation covers
+ * the date — the one case where the as-made text is the operative one.
+ */
 async function provisionSection(
   client: AuApiClient,
   titleId: string,
   provision: string,
   date: string,
-  asAt: FrlVersion | undefined,
+  asMade: boolean,
 ): Promise<string[]> {
   const ref = parseSectionRef(provision)
   if (!ref) {
@@ -244,7 +284,7 @@ async function provisionSection(
   const lines: string[] = [`▶ ${formatRef(ref)} as at ${date}`]
 
   const [then, now] = await Promise.all([
-    safeProvision(client, titleId, provision, asAt ? date : "asmade"),
+    safeProvision(client, titleId, provision, asMade ? "asmade" : date),
     safeProvision(client, titleId, provision, undefined),
   ])
 

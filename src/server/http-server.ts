@@ -15,13 +15,21 @@
  *  2. **Auth** before the body is parsed, so an unauthenticated caller cannot
  *     make the process spend memory on its payload.
  *  3. **Batch cap and per-IP rate accounting** *after* parsing, because both
- *     count `tools/call` items — a JSON-RPC array dispatches every element, so
- *     charging one request per envelope would let a batch multiply the quota.
+ *     count items — a JSON-RPC array dispatches every element, so charging one
+ *     request per envelope would let a batch multiply the quota.
  *
- * Handshake traffic (`initialize`, `tools/list`, notifications) is never rate
- * limited: a 429 there costs the client its whole tool list, and connectors
- * funnel many users through a few egress IPs. Only the calls that cost upstream
- * work are gated.
+ * The batch cap bounds the **whole envelope**, not just its `tools/call` items.
+ * Every element of an array is dispatched and its response buffered, so a
+ * 1,600-element array of `tools/list` is a 26 MB response out of a 98 KB
+ * request — amplification that a `tools/call`-only count never saw. `tools/call`
+ * additionally spends the shared upstream allowance, which nothing else does.
+ *
+ * The handshake a client cannot skip — `initialize` and notifications — is
+ * never rate limited: a 429 there costs the client its whole session, and
+ * connectors funnel many users through a few egress IPs. Everything else,
+ * `tools/list` and `ping` included, is charged per message: each one still
+ * makes this process serialise a response, so leaving them free left an
+ * unmetered CPU sink open to anyone who can reach `/mcp`.
  */
 
 import { timingSafeEqual } from "node:crypto"
@@ -74,7 +82,35 @@ export function countToolCalls(body: unknown): number {
 }
 
 export function exceedsBatchLimit(body: unknown, maxBatchCalls: number): boolean {
-  return countToolCalls(body) > maxBatchCalls
+  return countEnvelopeItems(body) > maxBatchCalls
+}
+
+/**
+ * Every JSON-RPC message an envelope carries, whatever its method.
+ *
+ * The transport dispatches each element of a batch and buffers each answer, so
+ * this — not the `tools/call` subset — is what the batch cap has to bound.
+ */
+export function countEnvelopeItems(body: unknown): number {
+  if (Array.isArray(body)) return body.length
+  return typeof body === "object" && body !== null ? 1 : 0
+}
+
+/**
+ * Messages charged to the per-IP limiter.
+ *
+ * `initialize` and notifications are exempt: the first is the handshake a
+ * client cannot skip, and a notification is answered with an empty 202. Every
+ * other method costs this process a serialised response and is counted.
+ */
+export function countRateLimitedItems(body: unknown): number {
+  const messages = Array.isArray(body) ? body : [body]
+  return messages.filter((message) => {
+    if (typeof message !== "object" || message === null) return false
+    const method = (message as { method?: unknown }).method
+    if (method === "initialize") return false
+    return !(typeof method === "string" && method.startsWith("notifications/"))
+  }).length
 }
 
 const METHOD_NOT_ALLOWED = {
@@ -186,22 +222,32 @@ export async function startHTTPServer(
   app.use((req, res, next) => {
     if (isPublicPath(req.path)) return next()
 
-    // Charged per tools/call, not per envelope: a batch of twenty costs twenty.
-    const callCount = countToolCalls(req.body)
-    if (callCount === 0) return next()
-
-    // Bounded whether or not the per-IP limiter is on, so RATE_LIMIT_RPM=0 does
-    // not accidentally disable this guard as well.
-    if (callCount > config.maxBatchCalls) {
+    // The envelope is bounded first, and by its total length: every element of
+    // a batch is dispatched and its answer buffered, so an array of any method
+    // multiplies the work one request buys. Bounded whether or not the per-IP
+    // limiter is on, so RATE_LIMIT_RPM=0 does not disable this guard as well.
+    const itemCount = countEnvelopeItems(req.body)
+    if (itemCount > config.maxBatchCalls) {
+      const callCount = countToolCalls(req.body)
       res.status(429).json({
         jsonrpc: "2.0",
-        error: { code: -32000, message: `Too many tool calls in one request (max ${config.maxBatchCalls}).` },
+        error: {
+          code: -32000,
+          message:
+            callCount > config.maxBatchCalls
+              ? `Too many tool calls in one request (max ${config.maxBatchCalls}).`
+              : `Too many messages in one request (max ${config.maxBatchCalls}).`,
+        },
         id: null,
       })
       return
     }
 
     if (config.rateLimitRpm === 0) return next()
+
+    // Charged per message, not per envelope: a batch of twenty costs twenty.
+    const charge = countRateLimitedItems(req.body)
+    if (charge === 0) return next()
 
     const ip = req.ip || req.socket.remoteAddress || "unknown"
     const now = Date.now()
@@ -210,7 +256,7 @@ export async function startHTTPServer(
       bucket = { count: 0, resetAt: now + 60_000 }
       rateBuckets.set(ip, bucket)
     }
-    bucket.count += callCount
+    bucket.count += charge
 
     if (bucket.count > config.rateLimitRpm) {
       const retryAfterSec = Math.max(1, Math.ceil((bucket.resetAt - now) / 1000))
@@ -393,16 +439,21 @@ export async function startHTTPServer(
   // Final error handler. Express's default sends the stack trace and the
   // install path in the body when NODE_ENV is unset; body-parser's 413/400 also
   // arrive here.
-  app.use((err: { status?: unknown } | undefined, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  app.use((err: { status?: unknown; type?: unknown } | undefined, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     const status = typeof err?.status === "number" ? err.status : 500
+    // An unparseable body is the client's syntax error, and JSON-RPC reserves
+    // -32700 for exactly it. Answering -32603 tells an operator debugging a
+    // truncated request that this server failed, which sends them looking in
+    // the wrong process.
+    const unparseable = err?.type === "entity.parse.failed" || (status === 400 && err instanceof SyntaxError)
     const scrubbed = scrubError(err)
     console.error(`[express] ${status} ${scrubbed.message}`)
     if (res.headersSent) return
     res.status(status).json({
       jsonrpc: "2.0",
       error: {
-        code: status === 413 ? -32600 : -32603,
-        message: status === 413 ? "Request entity too large." : "Internal server error",
+        code: status === 413 ? -32600 : unparseable ? -32700 : -32603,
+        message: status === 413 ? "Request entity too large." : unparseable ? "Parse error" : "Internal server error",
       },
       id: null,
     })

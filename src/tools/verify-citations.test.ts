@@ -155,8 +155,20 @@ describe("verify_citations — cases", () => {
   it("reports a blocked court as unverifiable, with the deep link", async () => {
     const text = await run("See Smith v Jones [2020] FCA 1.")
     expect(text).toContain("⚠ [2020] FCA 1")
-    expect(text).toContain("unverifiable here (source blocked)")
+    expect(text).toContain("NOT checked here")
     expect(text).toContain("austlii.edu.au")
+    expect(text).toContain("✗ 0 cannot be right")
+  })
+
+  it("never marks a special-leave disposition as invented", async () => {
+    // HCASL is not in the judgments-1998-current listing the HCA lookup walks,
+    // so walking it to exhaustion says nothing about this citation.
+    const text = await run("Special leave was refused: Smith v Jones [2019] HCASL 123.", {
+      html: () => HCA_LIST,
+    })
+    expect(text).toContain("⚠ [2019] HCASL 123")
+    expect(text).toContain("NOT looked up")
+    expect(text).not.toContain("✗ NOT_FOUND: [2019] HCASL 123")
     expect(text).toContain("✗ 0 cannot be right")
   })
 
@@ -196,6 +208,49 @@ describe("verify_citations — cases", () => {
   it("warns about a medium-neutral citation that predates the court's adoption", async () => {
     const text = await run("See Mabo v Queensland [1992] HCA 23.")
     expect(text).toContain("predates that")
+  })
+})
+
+describe("verify_citations — the maxCitations cap", () => {
+  /** 20 blocked-court citations: extracted and counted, none of them fetched. */
+  const TWENTY_CASES = Array.from({ length: 20 }, (_, index) => `See Party v Party [2020] FCA ${index + 1}.`).join(" ")
+
+  it("says how many citations were found as well as how many were checked", async () => {
+    const text = await run(TWENTY_CASES)
+    expect(text).toContain("Case citations: 15 checked of 20 found")
+  })
+
+  it("refuses to read a capped check as a clean bill of health", async () => {
+    const text = await run(TWENTY_CASES)
+    expect(text).not.toContain("[VERIFIED] Citation check")
+    expect(text).toContain("[PARTIALLY_VERIFIED]")
+    expect(text).toContain("NOT CHECKED: 5 citation(s)")
+    expect(text).toContain("maxCitations=15")
+    expect(text).toContain("covers PART of the text only")
+  })
+
+  it("lists the citations it never looked at, so a fabricated one is still visible", async () => {
+    // The 16th citation is the one the cap drops; before it was listed, a
+    // hallucination past the cap was reported as though the text had passed.
+    const text = await run(TWENTY_CASES)
+    expect(text).toContain("⚠ [2020] FCA 16 — NOT checked: past this call's maxCitations limit (15).")
+    expect(text).toContain("[2020] FCA 20")
+  })
+
+  it("counts statute citations the same way", async () => {
+    const statutes = Array.from(
+      { length: 18 },
+      (_, index) => `Competition and Consumer Act 2010 (Cth) s ${index + 1} applies.`,
+    ).join("\n\n")
+    const text = await run(statutes)
+    expect(text).toContain("Statute citations: 15 checked of 18 found")
+    expect(text).toContain("NOT CHECKED: 3 citation(s)")
+  })
+
+  it("still reads as verified when nothing was dropped", async () => {
+    const text = await run("ACL s 18 prohibits misleading or deceptive conduct.")
+    expect(text).toContain("[VERIFIED]")
+    expect(text).not.toContain("NOT CHECKED")
   })
 })
 

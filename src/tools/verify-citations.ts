@@ -68,6 +68,16 @@ export const verifyCitationsDescription =
 const MAX_CASE_LOOKUPS = 8
 /** Distinct Acts one call may resolve on the Register. */
 const MAX_TITLE_LOOKUPS = 6
+/**
+ * Extraction ceiling, deliberately independent of `maxCitations`.
+ *
+ * `maxCitations` governs how many citations are *checked*. How many were
+ * *found* has to be counted separately and honestly: a citation dropped at the
+ * cap is a citation this report says nothing about, and a summary that counts
+ * only the prefix describes a text the caller did not submit. The ceiling
+ * bounds the work of counting; hitting it is printed as `N+`.
+ */
+const EXTRACTION_CEILING = 200
 
 interface Tally {
   ok: number
@@ -83,14 +93,24 @@ function tally(marks: readonly string[]): Tally {
   }
 }
 
+/** `201` printed as `200+`, so a count at the ceiling is never read as exact. */
+function foundCount(total: number): string {
+  return total >= EXTRACTION_CEILING ? `${EXTRACTION_CEILING}+` : String(total)
+}
+
 export async function verifyCitations(
   apiClient: AuApiClient,
   input: VerifyCitationsInput,
 ): Promise<ToolResponse> {
   try {
     const max = input.maxCitations ?? 15
-    const statutes = extractStatuteCitations(input.text, max)
-    const cases = extractCaseCitations(input.text).slice(0, max)
+    const foundStatutes = extractStatuteCitations(input.text, EXTRACTION_CEILING)
+    const foundCases = extractCaseCitations(input.text)
+    const statutes = foundStatutes.slice(0, max)
+    const cases = foundCases.slice(0, max)
+    const skippedStatutes = foundStatutes.slice(max)
+    const skippedCases = foundCases.slice(max)
+    const skipped = skippedStatutes.length + skippedCases.length
 
     if (statutes.length === 0 && cases.length === 0) {
       return {
@@ -152,30 +172,50 @@ export async function verifyCitations(
     const banner =
       impossible > 0
         ? "[CITATION_ERRORS_FOUND]"
-        : statuteTally.warn + caseTally.warn > 0
+        : // Citations left unchecked at the cap are exactly as unverified as a
+          // blocked source's: a text this tool only read the first part of has
+          // not been verified, and [VERIFIED] would say it had.
+          skipped > 0 || statuteTally.warn + caseTally.warn > 0
           ? "[PARTIALLY_VERIFIED]"
           : "[VERIFIED]"
 
     const lines: string[] = []
     lines.push(`${banner} Citation check`)
+    // The first number stays the number of lines printed below; "of N found"
+    // is what the cap used to hide.
     lines.push(
-      `Statute citations: ${statuteVerdicts.length} | ✓ ${statuteTally.ok} verified | ` +
-        `✗ ${statuteTally.bad} cannot be right | ⚠ ${statuteTally.warn} not checked here`,
+      `Statute citations: ${statuteVerdicts.length} checked of ${foundCount(foundStatutes.length)} found | ` +
+        `✓ ${statuteTally.ok} verified | ✗ ${statuteTally.bad} cannot be right | ⚠ ${statuteTally.warn} not checked here`,
     )
     lines.push(
-      `Case citations: ${caseVerdicts.length} | ✓ ${caseTally.ok} verified | ` +
-        `✗ ${caseTally.bad} cannot be right | ⚠ ${caseTally.warn} not checked here`,
+      `Case citations: ${caseVerdicts.length} checked of ${foundCount(foundCases.length)} found | ` +
+        `✓ ${caseTally.ok} verified | ✗ ${caseTally.bad} cannot be right | ⚠ ${caseTally.warn} not checked here`,
     )
+    if (skipped > 0) {
+      lines.push(
+        `⚠️ NOT CHECKED: ${skipped} citation(s) in this text were never looked at — this call checks at most ` +
+          `${max} of each kind (maxCitations=${max}) and they fell past that limit. They are listed below. This ` +
+          `report covers PART of the text only: a wrong or invented citation among them would not appear here. ` +
+          `Re-run with a higher maxCitations (maximum 30) or split the text, and do not report the text as verified.`,
+      )
+    }
 
-    if (statuteVerdicts.length > 0) {
+    if (statuteVerdicts.length > 0 || skippedStatutes.length > 0) {
       lines.push("")
       lines.push("▶ Statute citations")
       for (const verdict of statuteVerdicts) lines.push(verdict.line)
+      for (const citation of skippedStatutes) {
+        lines.push(`⚠ ${citation.raw} — NOT checked: past this call's maxCitations limit (${max}).`)
+      }
     }
-    if (caseVerdicts.length > 0) {
+    if (caseVerdicts.length > 0 || skippedCases.length > 0) {
       lines.push("")
       lines.push("▶ Case citations")
       for (const verdict of caseVerdicts) lines.push(verdict.line)
+      for (const result of skippedCases) {
+        const raw = result.ok ? result.citation.raw : result.raw
+        lines.push(`⚠ ${raw} — NOT checked: past this call's maxCitations limit (${max}).`)
+      }
     }
 
     lines.push("")

@@ -20,6 +20,7 @@ import { formatToolError } from "../lib/errors.js"
 import { htmlToText } from "../lib/provision-slicer.js"
 import { truncateResponse } from "../lib/schemas.js"
 import { formatRef, parseSectionRef } from "../lib/section-ref.js"
+import { getRequestSignal } from "../lib/session-state.js"
 import type { NcxEntry, ToolResponse } from "../lib/types.js"
 import { cachedToc, locate } from "./statute-helpers/toc.js"
 import { resolveTitle } from "./statute-helpers/title-lookup.js"
@@ -173,6 +174,8 @@ async function runTask(
   const lines: string[] = [`▶ ${titleName} [${titleId}]${date ? ` as at ${date}` : ""}`]
   const misses: string[] = []
   const volumes = new Map<string, string>()
+  /** Volumes whose fetch failed, so thirty sections of one dead volume cost one attempt. */
+  const volumeErrors = new Map<string, string>()
   let found = 0
 
   for (const provision of task.provisions) {
@@ -188,12 +191,31 @@ async function runTask(
     }
     let html = volumes.get(node.volumeDoc)
     if (html === undefined) {
+      const alreadyFailed = volumeErrors.get(node.volumeDoc)
+      if (alreadyFailed !== undefined) {
+        misses.push(`${formatRef(ref)} — ${node.volumeDoc} could not be read: ${alreadyFailed}`)
+        continue
+      }
       const volume = /document_(\d+)/.exec(node.volumeDoc)
       if (!volume) {
         misses.push(`${formatRef(ref)} — table of contents entry has no volume document`)
         continue
       }
-      html = await apiClient.getVolumeHtml(titleId, Number(volume[1]), date)
+      try {
+        html = await apiClient.getVolumeHtml(titleId, Number(volume[1]), date)
+      } catch (error) {
+        // One volume that would not load is one provision's miss, not the
+        // call's. Letting it escape discards every provision already retrieved
+        // — and the upstream budget already spent on them — which is the
+        // opposite of this tool's "misses are reported individually and never
+        // silently dropped". Cancellation is the exception: an aborted request
+        // has no consumer, so it is re-thrown rather than answered.
+        if (getRequestSignal()?.aborted) throw error
+        const message = error instanceof Error ? error.message : String(error)
+        volumeErrors.set(node.volumeDoc, message)
+        misses.push(`${formatRef(ref)} — ${node.volumeDoc} could not be read: ${message}`)
+        continue
+      }
       volumes.set(node.volumeDoc, html)
     }
     const text = sliceOne(html, entries, node)

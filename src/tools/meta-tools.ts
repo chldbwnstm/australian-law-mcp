@@ -12,7 +12,7 @@
  */
 
 import { z } from "zod"
-import { formatToolError } from "../lib/errors.js"
+import { ErrorCodes, LawApiError, formatToolError } from "../lib/errors.js"
 import { truncateResponse } from "../lib/schemas.js"
 import { browsableCategories, selectSections, suggestCategories } from "../lib/tool-discovery.js"
 import { TOOL_CATEGORIES, V3_EXPOSED, describeCallPath } from "../lib/tool-profiles.js"
@@ -129,8 +129,9 @@ export const ExecuteToolSchema = z.object({
 
 export const executeToolDescription =
   "Run any tool on this server by name, including the ~50 that are not advertised in the tool list. " +
-  "Pair it with discover_tools: that returns the name, this runs it. Parameters are passed straight through and " +
-  "validated by the target tool, so an unknown or malformed parameter comes back as that tool's own error.";
+  "Pair it with discover_tools: that returns the name, this runs it. Parameters are checked against the target " +
+  "tool's schema first — a name it does not have is named back to you with the accepted list, never dropped — and " +
+  "a malformed value comes back as that tool's own error.";
 
 const META_TOOL_NAMES: ReadonlySet<string> = new Set(["discover_tools", "execute_tool"])
 
@@ -160,12 +161,121 @@ export async function executeTool(
     return { content: [{ type: "text", text: unknownToolMessage(input.tool_name) }], isError: true }
   }
 
+  // Zod strips an unknown key in silence, and discover_tools prints no
+  // parameter schemas — so a guessed name is the expected input here, and a
+  // guess that misses is answered with the *unfiltered* result. `asAt` on
+  // get_law_text (whose parameter is `date`) returns the current compilation
+  // as the law at a date the caller named. Naming the miss is the whole
+  // correction, so it happens before the tool runs rather than after.
+  const rejection = rejectUnknownParams(tool, input.params)
+  if (rejection) return rejection
+
   try {
     const parsed = tool.schema.parse(input.params)
     return (await tool.handler(apiClient, parsed)) as ToolResponse
   } catch (error) {
     return formatToolError(error, input.tool_name)
   }
+}
+
+/**
+ * The [INVALID_PARAMETER] answer for parameters the target has no field for,
+ * or `undefined` when every key is one it accepts.
+ *
+ * Only unknown keys are refused. A parameter the caller legitimately omitted —
+ * optional, or carrying a `.default()` — is the target schema's business and is
+ * left to it.
+ */
+function rejectUnknownParams(
+  tool: McpTool<AuApiClient>,
+  params: Record<string, unknown>,
+): ToolResponse | undefined {
+  const shape = schemaShape(tool.schema)
+  // A schema whose shape cannot be read (nothing object-like behind the
+  // wrappers) would make every parameter look unknown. Silence beats a
+  // fabricated rejection: let the tool's own validation answer.
+  if (!shape) return undefined
+
+  // Internal plumbing is accepted but never advertised — `__taskWas` is set by
+  // legal_research's own preprocess step, exactly as ListTools hides it.
+  const accepted = Object.keys(shape).filter((key) => key !== "__taskWas" && key !== "apiKey")
+  const unknown = Object.keys(params).filter((key) => !(key in shape))
+  if (unknown.length === 0) return undefined
+
+  const suggestions: string[] = []
+  for (const key of unknown) {
+    const near = closestKey(key, accepted)
+    if (near) suggestions.push(`"${key}" is closest to "${near}" — did you mean that?`)
+  }
+  suggestions.push(`${tool.name} accepts: ${accepted.join(", ")}.`)
+  suggestions.push(
+    "The value was NOT applied and NOT dropped silently — re-run with a supported name. Do not report the " +
+      "result as if this parameter had been honoured.",
+  )
+
+  return formatToolError(
+    new LawApiError(
+      `${tool.name} has no parameter named ${unknown.map((key) => `"${key}"`).join(", ")}.`,
+      ErrorCodes.INVALID_PARAM,
+      suggestions,
+    ),
+    tool.name,
+  )
+}
+
+/**
+ * The object shape behind a schema, seeing through the wrappers Zod adds.
+ *
+ * `z.preprocess` and `.refine` wrap the object — `legal_research` uses the
+ * former — and reading `.shape` off the wrapper returns undefined rather than
+ * failing. `cli-executor` needs the same thing on the CLI side, but importing
+ * it here would close the registry cycle this module exists to avoid.
+ */
+function schemaShape(schema: unknown): Record<string, unknown> | undefined {
+  let current: unknown = schema
+  for (let depth = 0; depth < 5 && current; depth += 1) {
+    if (current instanceof z.ZodObject) return current.shape as Record<string, unknown>
+    const def = (current as { _def?: { innerType?: unknown; schema?: unknown; in?: unknown; out?: unknown } })._def
+    if (!def) return undefined
+    current = def.innerType ?? def.schema ?? def.out ?? def.in
+  }
+  return undefined
+}
+
+/**
+ * The accepted key a misspelling most likely meant, if one is close enough.
+ *
+ * Deliberately tight: a wrong *name* ("asAt" for "date") is not a typo, and
+ * offering the nearest string for it would send the caller to a parameter that
+ * means something else.
+ */
+function closestKey(name: string, accepted: string[]): string | undefined {
+  if (name.length > 64) return undefined
+  const wanted = name.toLowerCase()
+  let best: { key: string; distance: number } | undefined
+  for (const key of accepted) {
+    const distance = editDistance(wanted, key.toLowerCase())
+    if (distance > Math.max(1, Math.floor(key.length / 3))) continue
+    if (!best || distance < best.distance) best = { key, distance }
+  }
+  return best?.key
+}
+
+/** Levenshtein distance, one row at a time. */
+function editDistance(a: string, b: string): number {
+  let previous = Array.from({ length: b.length + 1 }, (_, index) => index)
+  for (let i = 1; i <= a.length; i += 1) {
+    const current = [i]
+    for (let j = 1; j <= b.length; j += 1) {
+      current[j] = Math.min(
+        previous[j] + 1,
+        current[j - 1] + 1,
+        previous[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1),
+      )
+    }
+    previous = current
+  }
+  return previous[b.length]
 }
 
 /**

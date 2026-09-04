@@ -46,10 +46,11 @@
  */
 
 import type { AuApiClient } from "../lib/api-client.js"
+import { ErrorCodes, LawApiError } from "../lib/errors.js"
 import { LAW_ALIAS_ENTRIES, resolveLawAlias } from "../lib/law-alias.js"
 import { LEGAL_TERM_ENTRIES } from "../lib/legal-terms-data.js"
 import { SCENARIO_RULES } from "../lib/scenario-rules.js"
-import type { FrlTitle } from "../lib/types.js"
+import type { FrlTitle, ToolResponse } from "../lib/types.js"
 import { searchAiLawStructured } from "./ai-search.js"
 import { fold, rankSeedTerms, stem } from "./kb-utils.js"
 import { TITLE_SELECT, looksLikeRegisterId, rankTitles } from "./statute-helpers/title-lookup.js"
@@ -61,6 +62,14 @@ export interface ChainBaseLaw {
   status?: string
   /** Principal Act / instrument rather than an amending one. Used by the re-rank. */
   isPrincipal?: boolean
+}
+
+/** A rung that could not be *run*, as against a rung that ran and matched nothing. */
+export interface ChainRungFailure {
+  /** The term the rung was searching for — the same string that appears in `attempts`. */
+  term: string
+  /** The upstream error, verbatim. */
+  message: string
 }
 
 export interface ChainBaseLawResult {
@@ -75,6 +84,15 @@ export interface ChainBaseLawResult {
    * it is. Optional so older callers (and test doubles) stay valid.
    */
   notes?: string[]
+  /**
+   * Rungs that failed for transport reasons. Empty `laws` **plus** a non-empty
+   * `failures` means the Register could not be searched, which is a different
+   * fact from "the Register was searched and holds no such title" — the caller
+   * must render an upstream failure and never the `[NOT_FOUND]` absence label.
+   * Absent when every rung ran cleanly, so an ordinary zero-match keeps its
+   * existing shape (and older test doubles stay valid).
+   */
+  failures?: ChainRungFailure[]
 }
 
 /**
@@ -351,13 +369,52 @@ export function rankFullTextCandidates(
   return { laws, notes }
 }
 
+/** The upstream error as a caller-facing string. */
+function failureMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+/**
+ * Did the Register itself answer "no such title", as against failing to answer?
+ *
+ * `getTitle` raises `NOT_FOUND` only when the Register replied and its own
+ * `Titles` collection — which holds every Commonwealth register id — had no
+ * row. That is authoritative absence. A 500, a timeout or a spent budget is a
+ * lookup that never happened, and collapsing the two is exactly the mistake
+ * this server exists to avoid.
+ */
+function isAuthoritativeMiss(error: unknown): boolean {
+  return error instanceof LawApiError && error.code === ErrorCodes.NOT_FOUND
+}
+
+/**
+ * Why the full-text rung failed, read off `search_ai_law`'s own response.
+ *
+ * That tool does not throw when its passes fail — it renders a note per pass
+ * and flags the response — so the rung has to read the flag to tell "found
+ * nothing" from "never ran".
+ */
+function fullTextFailure(response: ToolResponse): string {
+  const detail = (response.content?.[0]?.text ?? "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.includes("did not complete"))
+    .join(" ")
+  return detail || "every full-text search pass failed upstream"
+}
+
 export async function resolveChainBaseLaw(
   apiClient: AuApiClient,
   query: string,
   max = 3,
 ): Promise<ChainBaseLawResult> {
   const attempts: string[] = []
+  const failures: ChainRungFailure[] = []
   const tried = new Set<string>()
+
+  /** Attach the transport failures, when there were any, to any return shape. */
+  const answer = (result: ChainBaseLawResult): ChainBaseLawResult =>
+    failures.length > 0 ? { ...result, failures } : result
 
   const byName = async (text: string): Promise<ChainBaseLaw[]> => {
     const key = text.trim()
@@ -372,9 +429,12 @@ export async function resolveChainBaseLaw(
         select: TITLE_SELECT,
       })
       return rankTitles(key, found.titles).slice(0, max).map(toBaseLaw)
-    } catch {
+    } catch (error) {
       // A failed attempt is not a failed chain: the next rung may answer, and
-      // if none does, the caller is told which terms were tried.
+      // if none does, the caller is told which terms were tried. It is not a
+      // zero-match either, so it is recorded — a rung that threw searched
+      // nothing, and the caller must not report absence on the strength of it.
+      failures.push({ term: key, message: failureMessage(error) })
       return []
     }
   }
@@ -385,8 +445,9 @@ export async function resolveChainBaseLaw(
     try {
       const title = await apiClient.getTitle(trimmed)
       return { laws: [toBaseLaw(title)], searchedWith: trimmed, attempts: [trimmed] }
-    } catch {
+    } catch (error) {
       attempts.push(trimmed)
+      if (!isAuthoritativeMiss(error)) failures.push({ term: trimmed, message: failureMessage(error) })
     }
   }
 
@@ -394,19 +455,19 @@ export async function resolveChainBaseLaw(
   const alias = resolveLawAlias(trimmed)
   if (!alias.needsJurisdiction && alias.searchText && alias.searchText !== trimmed) {
     const hits = await byName(alias.searchText)
-    if (hits.length > 0) return { laws: actsFirst(hits), searchedWith: alias.searchText, attempts }
+    if (hits.length > 0) return answer({ laws: actsFirst(hits), searchedWith: alias.searchText, attempts })
   }
 
   // 2) A title-shaped phrase inside the question.
   const phrase = titlePhraseFrom(trimmed)
   if (phrase && phrase !== trimmed) {
     const hits = await byName(phrase)
-    if (hits.length > 0) return { laws: actsFirst(hits), searchedWith: phrase, attempts }
+    if (hits.length > 0) return answer({ laws: actsFirst(hits), searchedWith: phrase, attempts })
   }
 
   // 3) The query as typed.
   const asTyped = await byName(trimmed)
-  if (asTyped.length > 0) return { laws: actsFirst(asTyped), searchedWith: trimmed, attempts }
+  if (asTyped.length > 0) return answer({ laws: actsFirst(asTyped), searchedWith: trimmed, attempts })
 
   // 4) Subject → statute, via full text. Last because it costs an extra call
   //    and returns titles whose *body* mentions the words, not whose name does.
@@ -415,11 +476,14 @@ export async function resolveChainBaseLaw(
   //    a hard partition by collection would undo the overlap ordering.
   attempts.push(`${trimmed} (full text)`)
   try {
-    const { titleSignals } = await searchAiLawStructured(apiClient, {
+    const { response, titleSignals } = await searchAiLawStructured(apiClient, {
       query: trimmed,
       limit: Math.max(max, FULL_TEXT_CANDIDATES),
       provisionHints: false,
     })
+    if (response.isError) {
+      failures.push({ term: `${trimmed} (full text)`, message: fullTextFailure(response) })
+    }
     const candidates = titleSignals.map((signal) => ({
       registerId: signal.registerId,
       name: signal.name,
@@ -431,18 +495,21 @@ export async function resolveChainBaseLaw(
     const anchored = await resolveDomainAnchor(apiClient, trimmed, candidates, attempts)
     const ranked = rankFullTextCandidates(trimmed, candidates, anchored)
     if (ranked.laws.length > 0) {
-      return {
+      return answer({
         laws: ranked.laws.slice(0, max),
         searchedWith: `${trimmed} (full text)`,
         attempts,
         notes: ranked.notes,
-      }
+      })
     }
-  } catch {
-    // Same contract as the name attempts: a broken rung never becomes a claim.
+  } catch (error) {
+    // Same contract as the name attempts: a broken rung never becomes a claim,
+    // and is recorded so the caller can tell "searched, nothing" from "could
+    // not search".
+    failures.push({ term: `${trimmed} (full text)`, message: failureMessage(error) })
   }
 
-  return { laws: [], attempts }
+  return answer({ laws: [], attempts })
 }
 
 /**

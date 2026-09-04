@@ -19,7 +19,7 @@ import { V3_EXPOSED } from "../lib/tool-profiles.js"
 import { registerTools } from "../tool-registry.js"
 import { VERSION } from "../version.js"
 import { readHttpServerConfig } from "./http-config.js"
-import { countToolCalls, startHTTPServer } from "./http-server.js"
+import { countEnvelopeItems, countRateLimitedItems, countToolCalls, startHTTPServer } from "./http-server.js"
 
 /** Recorded live 2026-09-04 — see src/tools/__fixtures__/PROVENANCE.txt. */
 const FRL_SEARCH_CCA = readFileSync(new URL("../tools/__fixtures__/frl-search-cca.json", import.meta.url), "utf8")
@@ -102,6 +102,25 @@ describe("counting tool calls", () => {
     expect(countToolCalls({ method: "tools/list" })).toBe(0)
     expect(countToolCalls([{ method: "tools/call" }, { method: "initialize" }, { method: "tools/call" }])).toBe(2)
     expect(countToolCalls("not an envelope")).toBe(0)
+  })
+
+  // The batch cap has to bound the envelope: every element is dispatched and
+  // its answer buffered, whatever the method.
+  it("counts every message in an envelope for the batch cap", () => {
+    expect(countEnvelopeItems({ method: "tools/list" })).toBe(1)
+    expect(countEnvelopeItems([{ method: "tools/list" }, { method: "ping" }, { method: "tools/call" }])).toBe(3)
+    expect(countEnvelopeItems(undefined)).toBe(0)
+    expect(countEnvelopeItems("not an envelope")).toBe(0)
+  })
+
+  it("charges every method to the per-IP limiter except the unskippable handshake", () => {
+    expect(countRateLimitedItems({ method: "tools/call" })).toBe(1)
+    expect(countRateLimitedItems({ method: "tools/list" })).toBe(1)
+    expect(countRateLimitedItems({ method: "ping" })).toBe(1)
+    expect(countRateLimitedItems({ method: "initialize" })).toBe(0)
+    expect(countRateLimitedItems({ method: "notifications/initialized" })).toBe(0)
+    expect(countRateLimitedItems([{ method: "initialize" }, { method: "tools/list" }, { method: "tools/call" }])).toBe(2)
+    expect(countRateLimitedItems(undefined)).toBe(0)
   })
 })
 
@@ -213,6 +232,16 @@ describe("request bounds", () => {
     expect(JSON.parse(reply.body).error.message).toBe("Too many tool calls in one request (max 2).")
   })
 
+  // Counting only tools/call left an array of any other method unbounded: a
+  // 1,600-element tools/list batch fits in a 98KB body and answers with 26MB.
+  it("caps the messages one envelope carries whatever their method", async () => {
+    const port = await startTestServer({ MCP_MAX_BATCH_CALLS: "2" })
+    const batch = JSON.stringify([1, 2, 3].map((id) => JSON.parse(rpc("tools/list", {}, id)) as unknown))
+    const reply = await send(port, { method: "POST", path: "/mcp", headers: MCP_HEADERS, body: batch })
+    expect(reply.status).toBe(429)
+    expect(JSON.parse(reply.body).error.message).toBe("Too many messages in one request (max 2).")
+  })
+
   it("rate limits tool calls per IP with a Retry-After and a JSON-RPC body", async () => {
     const port = await startTestServer({ RATE_LIMIT_RPM: "1" })
     const first = await send(port, { method: "POST", path: "/mcp", headers: MCP_HEADERS, body: localCall(1) })
@@ -228,17 +257,31 @@ describe("request bounds", () => {
     expect(body.id).toBe(null)
   })
 
-  // The handshake must never be rate limited: a client that is refused
-  // tools/list has no tool list at all and reports the capability as missing.
-  it("never rate limits the handshake", async () => {
+  // The handshake a client cannot skip stays exempt: a 429 on initialize costs
+  // it the whole session, and connectors funnel many users through few IPs.
+  it("never rate limits initialize or a notification", async () => {
     const port = await startTestServer({ RATE_LIMIT_RPM: "1" })
-    for (const method of ["initialize", "tools/list", "tools/list"]) {
-      const body =
-        method === "initialize"
-          ? rpc("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "t", version: "0" } })
-          : rpc(method)
+    const initialize = rpc("initialize", {
+      protocolVersion: "2025-06-18",
+      capabilities: {},
+      clientInfo: { name: "t", version: "0" },
+    })
+    for (const body of [initialize, initialize, initialize]) {
       expect((await send(port, { method: "POST", path: "/mcp", headers: MCP_HEADERS, body })).status).toBe(200)
     }
+    const notification = JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })
+    const notified = await send(port, { method: "POST", path: "/mcp", headers: MCP_HEADERS, body: notification })
+    expect(notified.status).toBeLessThan(400)
+  })
+
+  // Everything else is charged. A tools/list still costs a serialised response,
+  // and leaving it free left an unmetered sink open to anyone reaching /mcp.
+  it("charges tools/list to the per-IP limiter", async () => {
+    const port = await startTestServer({ RATE_LIMIT_RPM: "1" })
+    expect((await send(port, { method: "POST", path: "/mcp", headers: MCP_HEADERS, body: rpc("tools/list") })).status).toBe(200)
+    const second = await send(port, { method: "POST", path: "/mcp", headers: MCP_HEADERS, body: rpc("tools/list", {}, 2) })
+    expect(second.status).toBe(429)
+    expect(JSON.parse(second.body).error.message).toMatch(/^Too many requests/)
   })
 
   it("refuses an oversized body without leaking a stack trace", async () => {
@@ -248,6 +291,23 @@ describe("request bounds", () => {
     expect(reply.status).toBe(413)
     const body = JSON.parse(reply.body)
     expect(body.error.message).toBe("Request entity too large.")
+    expect(reply.body).not.toMatch(/node_modules|at Object/)
+  })
+
+  // A truncated body is the client's syntax error. -32603 sends an operator
+  // debugging it into this server's logs instead of its own payload.
+  it("answers an unparseable body with the JSON-RPC parse-error code", async () => {
+    const port = await startTestServer()
+    const reply = await send(port, {
+      method: "POST",
+      path: "/mcp",
+      headers: MCP_HEADERS,
+      body: '{"jsonrpc": "2.0", "id": 1, "method": "tools/li',
+    })
+    expect(reply.status).toBe(400)
+    const body = JSON.parse(reply.body)
+    expect(body.error.code).toBe(-32700)
+    expect(body.error.message).toBe("Parse error")
     expect(reply.body).not.toMatch(/node_modules|at Object/)
   })
 
@@ -288,6 +348,23 @@ describe("MCP protocol over HTTP", () => {
     expect(tools).toHaveLength(V3_EXPOSED.size)
     expect(tools.map((tool) => tool.name).sort()).toEqual([...V3_EXPOSED].sort())
     expect(tools.every((tool) => typeof tool.inputSchema === "object")).toBe(true)
+  })
+
+  // `arguments` is optional in the MCP CallTool schema, so a spec-compliant
+  // client omits it for a tool advertised with `required: []`. Parsing
+  // `undefined` rejected every one of them with [INVALID_PARAMETER].
+  it("runs a no-required-argument tool when the client omits arguments entirely", async () => {
+    const port = await startTestServer()
+    const reply = await send(port, {
+      method: "POST",
+      path: "/mcp",
+      headers: MCP_HEADERS,
+      body: rpc("tools/call", { name: "get_law_abbreviations" }, 11),
+    })
+    expect(reply.status).toBe(200)
+    const result = JSON.parse(reply.body).result as { content: Array<{ text: string }>; isError?: boolean }
+    expect(result.isError).toBeFalsy()
+    expect(result.content[0].text).toContain("Statute abbreviations")
   })
 
   it("runs a tool through the registry against a stubbed upstream", async () => {

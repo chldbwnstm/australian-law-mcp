@@ -107,7 +107,50 @@ describe("the ladder", () => {
     } as unknown as AuApiClient
     const result = await run(broken, "Fair Work Regulations")
     // Falls through rather than throwing, and still refuses to claim absence.
+    // [NOT_FOUND] is the one label that permits reporting absence and nothing
+    // was successfully searched here, so it must not be the one used.
     expect(result.isError).toBe(true)
-    expect(result.content[0].text).toContain("Do not guess or invent results")
+    const text = result.content[0].text
+    expect(text).toContain("[UPSTREAM_NO_DATA]")
+    expect(text).not.toContain("[NOT_FOUND]")
+    expect(text).toContain("upstream refused")
+    expect(text).toContain("Do not report this as 'no such Act'")
+  })
+
+  it("does not tell a state-law question that the register 'was just searched' when it was not", async () => {
+    // The state rung's whole message rests on a completed Commonwealth search:
+    // "none of it is on the Commonwealth register that was just searched". With
+    // a dead register that sentence is an absence nobody established — but the
+    // state-law pointer is still the useful thing to say, so it survives.
+    const broken = {
+      searchTitles: async () => {
+        throw new Error("502 Bad Gateway")
+      },
+    } as unknown as AuApiClient
+    const result = await run(broken, "residential tenancy bond")
+    expect(result.isError).toBe(true)
+    const text = result.content[0].text
+    expect(text).toContain("[UPSTREAM_NO_DATA]")
+    expect(text).not.toContain("Nothing on the Federal Register matched")
+    expect(text).not.toContain("that was just searched")
+    expect(text).toContain("502 Bad Gateway")
+    expect(text).toContain('search_state_law(jurisdiction="QLD"')
+  })
+
+  it("prefers a rung's real hits over a sibling rung's failure", async () => {
+    // Partial data beats an error: the instrument rung failing does not hide
+    // the renamed Act the next rung found.
+    let call = 0
+    const flaky = {
+      searchTitles: async (p: { collection?: string }) => {
+        call += 1
+        if (p.collection === "LegislativeInstrument") throw new Error("instrument index down")
+        return { count: 1, titles: [TPA] }
+      },
+    } as unknown as AuApiClient
+    const result = await run(flaky, "Trade Practices Regulations")
+    expect(call).toBe(2)
+    expect(result.isError).toBeFalsy()
+    expect(result.content[0].text).toContain("Competition and Consumer Act 2010")
   })
 })

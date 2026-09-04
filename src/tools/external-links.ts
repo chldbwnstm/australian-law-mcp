@@ -12,6 +12,12 @@
  * have. Everything else is built from a verified grammar in
  * `external-links-map.ts`, or is a search URL — a query is honest about being
  * a query, a guessed document URL is not.
+ *
+ * The same rule applies to what the caller passes in: a register id or a
+ * compilation date of the wrong shape addresses nothing, and interpolated into
+ * `legislation.gov.au/{id}/{date}/text` it is indistinguishable from a real
+ * page. Both are shape-checked here, and a bad one gets the correction the
+ * fetching paths give rather than a confident dead link.
  */
 
 import { z } from "zod"
@@ -39,6 +45,10 @@ import { truncateResponse } from "../lib/schemas.js"
 import { formatRef, parseSectionRef } from "../lib/section-ref.js"
 import { getHostConfig } from "../lib/upstream-hosts.js"
 import type { LooseToolResponse } from "../lib/types.js"
+import { looksLikeRegisterId } from "./statute-helpers/title-lookup.js"
+
+/** Compilation dates address a point in time on the Register: `2015-06-30`. */
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 
 export const getExternalLinksSchema = z.object({
   law: z.string().optional().describe("Act name or alias, e.g. 'Competition and Consumer Act 2010', 'CCA', 'ACL'"),
@@ -76,11 +86,27 @@ function statuteLinks(input: GetExternalLinksInput): Section | null {
   // Prefer the caller's id; otherwise take one only when the alias is
   // unambiguous. A jurisdiction-ambiguous alias must not silently become the
   // Commonwealth Act.
-  const titleId = input.titleId ?? (resolution && !resolution.needsJurisdiction ? candidates[0]?.titleId : undefined)
+  const titleId = (input.titleId ?? (resolution && !resolution.needsJurisdiction ? candidates[0]?.titleId : undefined))?.trim()
   const officialName = candidates[0]?.official ?? input.law
+  const date = input.date?.trim()
 
-  if (titleId) {
-    lines.push(`Federal Register of Legislation (full text): ${frlHumanUrl(titleId, input.date)}`)
+  if (titleId && !looksLikeRegisterId(titleId)) {
+    // The one rule this tool has is that it does not make addresses up. An id
+    // of the wrong shape cannot address anything on the Register, and printed
+    // as a URL it is indistinguishable from a real one.
+    lines.push(
+      `[INVALID_PARAMETER] '${titleId}' is not a Federal Register title id, so no register link is built ` +
+      "from it — they look like C2004A00109 (Act) or F2011L00287 (instrument): one letter, four digits, " +
+      "one letter, then digits. Find the real id with search_law and pass that. This says nothing about " +
+      "whether the Act exists.",
+    )
+  } else if (titleId && date && !ISO_DATE.test(date)) {
+    lines.push(
+      `[INVALID_PARAMETER] date '${input.date}' is not a compilation date (YYYY-MM-DD), so it is not put ` +
+      `in a URL. The latest compilation is: ${frlHumanUrl(titleId)}`,
+    )
+  } else if (titleId) {
+    lines.push(`Federal Register of Legislation (full text): ${frlHumanUrl(titleId, date)}`)
   } else if (input.law) {
     lines.push(`No verified Federal Register id for '${input.law}' — resolve one with search_law before deep-linking. An alias miss is not evidence the Act does not exist.`)
   }

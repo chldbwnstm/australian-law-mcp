@@ -21,6 +21,9 @@ import {
   type ToolRegistry,
 } from "./cli-executor.js"
 import { routeQuery } from "./query-router.js"
+import { DEFAULT_EXECUTION_LIMITS, RequestExecutionBudget } from "./execution-limits.js"
+import { fetchWithRetry } from "./fetch-with-retry.js"
+import { requestContext, runWithRequestContext } from "./session-state.js"
 import type { AuApiClient } from "./api-client.js"
 import type { McpTool } from "./types.js"
 
@@ -121,6 +124,50 @@ describe("executeTool", () => {
   it("passes an error result through as an error", async () => {
     const result = await executeTool(client, "returns_error", {}, registry)
     expect(result.isError).toBe(true)
+  })
+})
+
+describe("the CLI runs inside a request budget", () => {
+  it("bounds a runaway query at the same upstream ceiling the MCP path enforces", async () => {
+    // `fetchWithRetry` charges the budget it finds in AsyncLocalStorage. With no
+    // context the charge is a no-op, so a chain on this front door could retry
+    // against a flapping host forever while the identical query over MCP could
+    // not.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("{}", { status: 200, headers: { "content-type": "application/json" } })),
+    )
+    const attempts = DEFAULT_EXECUTION_LIMITS.maxUpstreamRequests + 5
+    const runaway: ToolRegistry = [
+      tool("runaway", z.object({}), async () => {
+        for (let i = 0; i < attempts; i += 1) {
+          await fetchWithRetry("https://example.invalid/runaway", { retries: 0 })
+        }
+        return { content: [{ type: "text", text: "ran unbounded" }] }
+      }),
+    ]
+
+    const result = await executeTool(client, "runaway", {}, runaway)
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toContain("budget exceeded")
+    expect(vi.mocked(fetch).mock.calls.length).toBe(DEFAULT_EXECUTION_LIMITS.maxUpstreamRequests)
+    vi.unstubAllGlobals()
+  })
+
+  it("reuses a budget already in the context rather than minting a fresh allowance", async () => {
+    // One run, one allowance — a tool that opened its own would defeat the
+    // mechanism exactly as a fresh budget inside a chain step does.
+    const budget = new RequestExecutionBudget(DEFAULT_EXECUTION_LIMITS)
+    let seen: unknown
+    const peeking: ToolRegistry = [
+      tool("peek", z.object({}), async () => {
+        seen = requestContext.getStore()?.budget
+        return { content: [{ type: "text", text: "ok" }] }
+      }),
+    ]
+
+    await runWithRequestContext({ budget }, () => executeTool(client, "peek", {}, peeking))
+    expect(seen).toBe(budget)
   })
 })
 

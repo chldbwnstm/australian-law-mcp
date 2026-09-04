@@ -16,7 +16,7 @@
 import { z } from "zod"
 import type { AuApiClient } from "../lib/api-client.js"
 import { ARTICLE_CACHE_TTL, lawCache } from "../lib/cache.js"
-import { formatToolError } from "../lib/errors.js"
+import { ErrorCodes, LawApiError, formatToolError } from "../lib/errors.js"
 import { truncateResponse } from "../lib/schemas.js"
 import { formatRef } from "../lib/section-ref.js"
 import type { FrlTitle, NcxEntry, ToolResponse } from "../lib/types.js"
@@ -87,7 +87,22 @@ export async function getProvisionHistory(
       return ok(lines.join("\n"))
     }
 
-    const table = await amendmentTable(apiClient, title.id, date, entries, node)
+    let table: EndnoteEntry[]
+    try {
+      table = await amendmentTable(apiClient, title.id, date, entries, node)
+    } catch (error) {
+      // Only the shape failure is answered here; a transport error keeps its
+      // own label through `formatToolError`.
+      if (!(error instanceof LawApiError) || error.code !== ErrorCodes.PARSE_ERROR) throw error
+      lines.push(`[${ErrorCodes.PARSE_ERROR}] The amendment-history table could not be read: ${error.message}`)
+      lines.push("")
+      lines.push(
+        "⚠️ Not a finding that the provision was never amended — the table was never read at all. Retry; if it " +
+          "persists fall back to search_historical_law (compilation-level amendment reasons) or compare_old_new " +
+          "with this provision.",
+      )
+      return { content: [{ type: "text", text: truncateResponse(lines.join("\n")) }], isError: true }
+    }
     const rows = entriesForRef(table, ref)
 
     if (rows.length === 0) {
@@ -160,7 +175,21 @@ async function amendmentTable(
   const volume = /document_(\d+)/.exec(node.volumeDoc)
   const html = await apiClient.getVolumeHtml(titleId, volume ? Number(volume[1]) : 1, date)
   const slice = sliceSubtree(html, entries, node)
-  const parsed = slice === null ? [] : parseAmendmentHistory(slice)
+  if (slice === null) {
+    // The endnote is in the table of contents but its anchor is not in the
+    // volume the TOC points at — the same TOC/volume disagreement
+    // `AuApiClient.getProvision` raises PARSE_ERROR for. An empty table here
+    // would read as "this provision has never been amended", which is an
+    // absence nothing established; and it must not be cached, or that wrong
+    // answer is served for the whole TTL to every caller of this key.
+    throw new LawApiError(
+      `The NCX anchor for the amendment-history endnote (${node.anchor ?? "?"}) is missing from ` +
+        `${node.volumeDoc} of ${titleId}`,
+      ErrorCodes.PARSE_ERROR,
+      ["TOC and volume disagree upstream — retry, and report the register id if it persists."],
+    )
+  }
+  const parsed = parseAmendmentHistory(slice)
   lawCache.set(key, parsed, ARTICLE_CACHE_TTL)
   return parsed
 }

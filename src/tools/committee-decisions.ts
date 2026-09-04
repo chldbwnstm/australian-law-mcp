@@ -43,7 +43,20 @@ import {
   searchNacc,
 } from "../lib/sources/integrity-sources.js"
 import { renderDocument, renderSearch } from "../lib/sources/render.js"
+import type { SourceSearchResult } from "../lib/sources/types.js"
 import { searchCases } from "./precedents.js"
+
+/**
+ * `search_decisions` advertises `limit` for all eighteen domains, and these
+ * four sources publish a fixed-size index page the caller cannot resize. So
+ * `limit` means "show at most this many of the rows that were fetched": the
+ * upstream `total` is left alone, which keeps the rendered count line honest
+ * about the corpus, and `page` remains the way to move through it.
+ */
+function applyLimit(result: SourceSearchResult, limit?: number): SourceSearchResult {
+  if (limit === undefined || result.hits.length <= limit) return result
+  return { ...result, hits: result.hits.slice(0, limit) }
+}
 
 // ── workplace (Fair Work Commission) ──────────────────────────────────────
 
@@ -51,6 +64,9 @@ export const SearchWorkplaceSchema = z.object({
   query: z.string().min(1).describe("Keywords, e.g. 'genuine redundancy', 'small business unfair dismissal'."),
   benchType: z.enum(["full", "single"]).optional().describe("Restrict to Full Bench or single-member decisions."),
   page: z.number().min(1).default(1).optional().describe("1-based page; 25 rows per page."),
+  limit: z.number().min(1).max(50).optional().describe(
+    "Maximum hits to show from the fetched page (the page size itself is the FWC's, 25 rows — use `page` to move on).",
+  ),
 })
 
 export type SearchWorkplaceInput = z.infer<typeof SearchWorkplaceSchema>
@@ -66,10 +82,11 @@ export async function searchWorkplaceDecisions(
 
     const params: fwc.FwcSearchParams = { query: input.query, page: (input.page ?? 1) - 1 }
     if (input.benchType) params.benchType = input.benchType
-    const result = await fwc.search(client, params)
+    const fetched = await fwc.search(client, params)
     // The FWC pages from 0; this tool's `page` is 1-based, so report the number
     // the caller passed rather than the one that went on the wire.
-    result.page = input.page ?? 1
+    fetched.page = input.page ?? 1
+    const result = applyLimit(fetched, input.limit)
 
     const text = renderSearch(result, {
       heading: "Fair Work Commission decisions",
@@ -85,6 +102,7 @@ export async function searchWorkplaceDecisions(
 
 export const GetWorkplaceSchema = z.object({
   id: z.string().min(1).describe("Decision slug from the search results, e.g. 'werner-…-2014-fwc-3013'."),
+  full: z.boolean().optional().describe("true = reasons verbatim; omitted = long bodies shortened with the gap marked."),
 })
 
 export type GetWorkplaceInput = z.infer<typeof GetWorkplaceSchema>
@@ -95,7 +113,11 @@ export async function getWorkplaceDecisionText(
 ): Promise<LooseToolResponse> {
   try {
     const document = await fwc.getDecision(client, input.id)
-    return { content: [{ type: "text", text: renderDocument(document, { bodyHeading: "Reasons" }) }] }
+    return {
+      content: [
+        { type: "text", text: renderDocument(document, { bodyHeading: "Reasons", full: input.full === true }) },
+      ],
+    }
   } catch (error) {
     return formatToolError(error, "get_decision_text[workplace]")
   }
@@ -108,6 +130,9 @@ export const SearchPrivacySchema = z.object({
     "Keywords matched against the determination titles, catchwords and outcomes on the fetched page.",
   ),
   page: z.number().min(1).default(1).optional().describe("1-based index page; 10 determinations per page."),
+  limit: z.number().min(1).max(50).optional().describe(
+    "Maximum hits to show from the fetched index page (the page size itself is the OAIC's, 10 rows).",
+  ),
 })
 
 export type SearchPrivacyInput = z.infer<typeof SearchPrivacySchema>
@@ -124,7 +149,7 @@ export async function searchPrivacyDecisions(
     const params: Parameters<typeof oaic.searchDeterminations>[1] = {}
     if (input.query) params.query = input.query
     if (input.page) params.page = input.page
-    const result = await oaic.searchDeterminations(client, params)
+    const result = applyLimit(await oaic.searchDeterminations(client, params), input.limit)
 
     const text = renderSearch(result, {
       heading: "OAIC privacy determinations",
@@ -237,7 +262,14 @@ export async function searchCompetitionDecisions(
     ...(input.limit !== undefined ? { limit: input.limit } : {}),
   })
   const body = cases.content.map((entry) => entry.text).join("\n")
-  return { content: [{ type: "text", text: `${header}${body}` }] }
+  // The fallback IS this domain's only live result, so its failure is this
+  // tool's failure. Dropping `isError` here would hand a caller that keys on it
+  // — search_all's runFamily marks a failed family [NOT RETRIEVED] — a
+  // successful competition search that happened to find nothing.
+  return {
+    content: [{ type: "text", text: `${header}${body}` }],
+    ...(cases.isError ? { isError: true } : {}),
+  }
 }
 
 export const GetCompetitionSchema = z.object({
@@ -274,6 +306,9 @@ export async function getCompetitionDecisionText(
 
 export const SearchIntegritySchema = z.object({
   query: z.string().optional().describe("Keywords, e.g. 'border force', 'tobacco', or an operation name."),
+  limit: z.number().min(1).max(50).optional().describe(
+    "Maximum hits to show. The NACC index is a single page, so this only shortens the list, never the corpus.",
+  ),
 })
 
 export type SearchIntegrityInput = z.infer<typeof SearchIntegritySchema>
@@ -283,11 +318,11 @@ export async function searchIntegrityDecisions(
   input: SearchIntegrityInput,
 ): Promise<LooseToolResponse> {
   try {
-    const cacheKey = `integrity:${input.query ?? ""}`
+    const cacheKey = `integrity:${input.query ?? ""}:${input.limit ?? ""}`
     const cached = lawCache.get<string>(cacheKey)
     if (cached) return { content: [{ type: "text", text: cached }] }
 
-    const result = await searchNacc(client, input.query)
+    const result = applyLimit(await searchNacc(client, input.query), input.limit)
     const text = renderSearch(result, {
       heading: "NACC investigation reports and case studies",
       ...(input.query ? { query: input.query } : {}),
@@ -307,6 +342,9 @@ export async function searchIntegrityDecisions(
 
 export const GetIntegritySchema = z.object({
   id: z.string().min(1).describe("Operation anchor from the search results, e.g. 'operation-wilson'."),
+  full: z.boolean().optional().describe(
+    "true = the index entry verbatim; omitted = a long entry is shortened with the gap marked.",
+  ),
 })
 
 export type GetIntegrityInput = z.infer<typeof GetIntegritySchema>
@@ -343,7 +381,7 @@ export async function getIntegrityDecisionText(
                 "The investigation report itself is a PDF; the summary above is the NACC's own index entry. " +
                 "Download links are listed under Documents.",
             },
-            { bodyHeading: "Background" },
+            { bodyHeading: "Background", full: input.full === true },
           ),
         },
       ],
@@ -361,6 +399,9 @@ export const SearchPublicServiceSchema = z.object({
     "Drupal facet values, e.g. 'filter_by_code_of_conduct:18' or 'filter_by_employment_related_actions:…'.",
   ),
   page: z.number().min(1).default(1).optional().describe("1-based page; 20 case studies per page."),
+  limit: z.number().min(1).max(50).optional().describe(
+    "Maximum hits to show from the fetched page (the page size itself is the MPC's, 20 rows).",
+  ),
 })
 
 export type SearchPublicServiceInput = z.infer<typeof SearchPublicServiceSchema>
@@ -377,8 +418,9 @@ export async function searchPublicServiceDecisions(
     const params: Parameters<typeof searchMpc>[1] = { page: (input.page ?? 1) - 1 }
     if (input.query) params.query = input.query
     if (input.facets) params.facets = input.facets
-    const result = await searchMpc(client, params)
-    result.page = input.page ?? 1
+    const fetched = await searchMpc(client, params)
+    fetched.page = input.page ?? 1
+    const result = applyLimit(fetched, input.limit)
 
     const text = renderSearch(result, {
       heading: "Merit Protection Commissioner — case studies of merits review outcomes",
@@ -398,6 +440,9 @@ export async function searchPublicServiceDecisions(
 
 export const GetPublicServiceSchema = z.object({
   id: z.string().min(1).describe("Case-study slug from the search results, e.g. 'financial-penalty-too-harsh'."),
+  full: z.boolean().optional().describe(
+    "true = the case study verbatim; omitted = a long one is shortened with the gap marked.",
+  ),
 })
 
 export type GetPublicServiceInput = z.infer<typeof GetPublicServiceSchema>
@@ -422,7 +467,7 @@ export async function getPublicServiceDecisionText(
                 "A de-identified case study published by the Merit Protection Commissioner — not a " +
                 "tribunal decision, and it carries no citation.",
             },
-            { bodyHeading: "Background" },
+            { bodyHeading: "Background", full: input.full === true },
           ),
         },
       ],

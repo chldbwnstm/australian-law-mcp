@@ -100,7 +100,7 @@ export async function searchAll(apiClient: AuApiClient, input: SearchAllInput): 
         // indexes, and most of what an ordinary question is about is state law.
         run: async () => {
           const found = await searchLaw(apiClient, { query: input.query, limit })
-          if (!found.isError) return found
+          if (!isNoMatch(found)) return found
           return searchLawFallbacks(apiClient, { query: input.query, limit })
         },
       },
@@ -153,6 +153,25 @@ export async function searchAll(apiClient: AuApiClient, input: SearchAllInput): 
   } catch (error) {
     return formatToolError(error, "search_all")
   }
+}
+
+/**
+ * Did `search_law` actually complete and match nothing?
+ *
+ * `[NOT_FOUND]` is the only label that says so — it is the one the taxonomy
+ * permits for a source that authoritatively covers the record. An
+ * `[EXTERNAL_API_ERROR]`, an `[UPSTREAM_NO_DATA]` or the `[AMBIGUOUS]`
+ * "which jurisdiction did you mean" answer are different facts, and running the
+ * ladder over them prints its "nothing on the Federal Register matched … the
+ * Commonwealth register that was just searched" rung for a register that was
+ * never successfully searched. Those come back as the family's error instead,
+ * so the section renders `[NOT RETRIEVED]` with the real cause.
+ */
+function isNoMatch(result: LooseToolResponse): boolean {
+  if (!result.isError) return false
+  return (result.content ?? []).some(
+    (item) => typeof item.text === "string" && item.text.trimStart().startsWith("[NOT_FOUND]"),
+  )
 }
 
 async function runFamily(entry: {
