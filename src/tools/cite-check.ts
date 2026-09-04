@@ -35,7 +35,7 @@ import type { SourceHit } from "../lib/sources/types.js"
 import { truncateResponse } from "../lib/schemas.js"
 import type { ToolResponse } from "../lib/types.js"
 import { amendedAfter, provisionHistory, type DatedEffect } from "./analysis-helpers/amendment-lookup.js"
-import { backTrace, describeOutcomes, type BackTrace } from "./analysis-helpers/citing-search.js"
+import { backTrace, describeOutcomes, isCandidateOnly, type BackTrace } from "./analysis-helpers/citing-search.js"
 import { locateCase, type CaseLocation } from "./analysis-helpers/case-check.js"
 import { extractStatuteCitations } from "./analysis-helpers/statute-citations.js"
 import { hasOverrulingSignal, scanTreatment, type TreatmentScan } from "./analysis-helpers/treatment-scan.js"
@@ -245,7 +245,7 @@ export async function citeCheck(apiClient: AuApiClient, input: CiteCheckInput): 
 
     const override = tie ? await legislativeOverride(apiClient, tie, decisionYear) : undefined
     const overruling = scans.filter((result) => hasOverrulingSignal(result.scan))
-    const verdict = decide({ location, trace, citing, overruling, override })
+    const verdict = decide({ location, trace, citing, scans, overruling, override })
 
     return {
       content: [
@@ -262,10 +262,25 @@ export async function citeCheck(apiClient: AuApiClient, input: CiteCheckInput): 
   }
 }
 
+/**
+ * Rows that actually support "later judgments mention this case".
+ *
+ * A row from NSW Caselaw or Queensland Judgments does, because those searches
+ * match the phrase. A row from the High Court's listing does not — its keyword
+ * search matches any of the words (see `CANDIDATE_ONLY_SOURCES`) — unless the
+ * deep scan opened it and found the citation in the text.
+ */
+function confirmedCitings(p: { citing: readonly SourceHit[]; scans: readonly ScanResult[] }): number {
+  const fromSearch = p.citing.filter((hit) => !isCandidateOnly(hit.source)).length
+  const fromScan = p.scans.filter((result) => !result.error && result.scan.mentions > 0).length
+  return fromSearch + fromScan
+}
+
 function decide(p: {
   location: CaseLocation
   trace: BackTrace
   citing: readonly SourceHit[]
+  scans: readonly ScanResult[]
   overruling: readonly ScanResult[]
   override?: { effects: DatedEffect[] }
 }): Verdict {
@@ -275,7 +290,12 @@ function decide(p: {
   // blocked source or a failed one leaves the question open, and answering it
   // anyway is how a real authority gets advised out of existence.
   if (p.location.status === "absent" && p.trace.complete && p.citing.length === 0) return "not_found"
-  if (p.citing.length > 0) return "cited"
+  // `cited` is a claim about the text of later judgments, so it needs a row
+  // whose source matched the phrase, or a scan that read the citation. Taking
+  // any row answered `[2019] HCA 99` — a citation the Court's own complete 2019
+  // list does not contain, and which this tool had already marked ✗ two lines
+  // above — with "Verdict: cited" over twelve real, unrelated judgments.
+  if (confirmedCitings(p) > 0) return "cited"
   return "unverified_treatment"
 }
 
@@ -327,7 +347,9 @@ function render(p: {
   lines.push(`▶ Verdict: ${VERDICT_LINE[p.verdict]}`)
 
   lines.push("")
-  lines.push(`▶ Later cases mentioning ${p.shown} (${p.citing.length} found)`)
+  // Not "mentioning": some of these rows come from a search that matched any
+  // of the words. Which is which is on the per-source lines below.
+  lines.push(`▶ Later cases that may cite ${p.shown} — ${p.citing.length} row(s) across the sources`)
   for (const line of describeOutcomes(p.trace)) lines.push(line)
   if (p.citing.length === 0) {
     lines.push(

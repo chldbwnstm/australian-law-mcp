@@ -28,6 +28,7 @@ import {
   firstMnc,
   firstProvision,
   isBareTermQuery,
+  mentionForTitle,
   pointInTimeDate,
   primaryLawMention,
   provisionParam,
@@ -117,6 +118,41 @@ describe("provisions", () => {
   it("leaves a reference that already names a schedule alone", () => {
     const mention = primaryLawMention("ACL sch 2 s 18")
     expect(firstProvision("ACL sch 2 s 18", mention)).toBe("sch 2 s 18")
+  })
+
+  describe("mentionForTitle — the schedule belongs to one Act", () => {
+    it("keeps the mention when the words and the resolved title agree", () => {
+      const mention = primaryLawMention("ACL s 18")
+      expect(mentionForTitle(mention, "C2004A00109")).toBe(mention)
+    })
+
+    it("drops it when the resolved title is a different Act", () => {
+      // `{registerId:"C1914A00012", query:"ACL"}` is a real shape — a tool that
+      // takes both, and `chain_amendment_track` hands `compare_old_new` both.
+      // Applied blind, CCA sch 2 was asserted of the Crimes Act 1914.
+      expect(mentionForTitle(primaryLawMention("ACL s 18"), "C1914A00012")).toBeUndefined()
+    })
+
+    it("does not gate an alias the table never pinned to a register id", () => {
+      const mention = primaryLawMention("Residential Tenancies Act s 3")
+      expect(mention?.titleId).toBeUndefined()
+      expect(mentionForTitle(mention, "C1914A00012")).toBe(mention)
+    })
+
+    it("is a no-op when the caller holds no title", () => {
+      const mention = primaryLawMention("ACL s 18")
+      expect(mentionForTitle(mention, undefined)).toBe(mention)
+    })
+
+    it("scopeProvisionsToLaw applies it, so no call site can forget", () => {
+      const scoped = scopeProvisionsToLaw({ query: "ACL", provisions: ["s 18"], titleId: "C1914A00012" })
+      expect(scoped.provisions[0].provision).toBe("s 18")
+      expect(scoped.rewritten).toBe(false)
+      expect(scoped.note).toBeUndefined()
+      expect(scopeProvisionsToLaw({ query: "ACL", provisions: ["s 18"], titleId: "C2004A00109" }).provisions[0].provision).toBe(
+        "sch 2 s 18",
+      )
+    })
   })
 
   it("does not turn a hyphenated part number into a section", () => {
@@ -448,11 +484,6 @@ const KNOWN_GAPS: Record<string, string> = {
     "parses `provision` with parseSectionRef and never consults `query` — prints the alias note, then serves the body provision under it.",
   get_historical_law:
     "same shape: requireRef(input.provision) with no mention, so a point-in-time read of 'ACL s 18' is the body's s 18 as at that date.",
-  applicable_law:
-    "takes `lawName` + `provision` and fetches both the as-at text and the diff for the unscoped reference.",
-  impact_map:
-    "takes `lawName` + `provision`; its own description tells the caller to pass the schedule by hand instead.",
-  legal_analysis: "dispatcher — inherits impact_map's and applicable_law's gap; nothing to fix here separately.",
 }
 
 /** Zod object shape, defensively: the tests must not go quietly vacuous on a zod upgrade. */

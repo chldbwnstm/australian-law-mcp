@@ -171,6 +171,71 @@ describe("the alias decides which schedule a bare provision belongs to", () => {
     ).content[0].text
     expect(text).toContain('sch 2 s 18')
   })
+
+  it("does not claim the alias's schedule belongs to whatever title registerId resolved", async () => {
+    // The alias schedule is a fact about ONE Act. This tool takes `registerId`
+    // and `query` together and `chain_amendment_track` hands it both, so an
+    // alias for the CCA can arrive beside a title that is not the CCA. Live
+    // 2026-09-05 `{registerId:"C1914A00012", query:"ACL"}` printed `"ACL" is
+    // sch 2 of this Act` about the **Crimes Act 1914**, and with a provision it
+    // looked `sch 2 s 18` up there and reported it missing.
+    const { api, asked } = recording()
+    const crimes = {
+      ...api,
+      getTitle: async () => ({ id: "C1914A00012", name: "Crimes Act 1914", collection: "Act", status: "InForce" }),
+    } as unknown as AuApiClient
+    const text = (
+      await compareOldNew(crimes, {
+        registerId: "C1914A00012",
+        query: "ACL",
+        fromDate: "2026-01-15",
+        provision: "s 18",
+        context: 1,
+      } as never)
+    ).content[0].text
+    expect(asked).toEqual(["s 18", "s 18"])
+    expect(text).not.toContain("sch 2 of this Act")
+    expect(text).not.toContain("sch 2 s 18")
+  })
+})
+
+describe("a provision missing from a compilation is not a missing compilation", () => {
+  it("says the provision was not in it, not that the text is PDF-only", async () => {
+    // `getProvision` reports a provision miss as "sch 2 s 18 is not in the
+    // latest table of contents of …" — which contains the words "table of
+    // contents" and so matched the *document missing* branch. The response then
+    // printed "the COMPILATION's text is not available in machine-readable
+    // form (older compilations are often PDF/Word only)" one line under the
+    // message saying the opposite. The two mean opposite things and the caller
+    // is being shown exactly that distinction.
+    const api = {
+      ...client(),
+      getProvision: async (_id: string, provision: string, date?: string) => {
+        throw new LawApiError(
+          `${provision} is not in the ${date ?? "latest"} table of contents of Crimes Act 1914 [C1914A00012]`,
+          ErrorCodes.NOT_FOUND,
+        )
+      },
+    } as unknown as AuApiClient
+    const text = (
+      await compareOldNew(api, { registerId: "C2004A00109", fromDate: "2026-01-15", provision: "s 999", context: 1 } as never)
+    ).content[0].text
+    expect(text).toContain("The compilation was readable but the provision was not in it")
+    expect(text).not.toContain("machine-readable form")
+  })
+
+  it("still reports a genuinely missing compilation as one", async () => {
+    const api = {
+      ...client(),
+      getProvision: async () => {
+        throw new LawApiError("frlDocs returned 404 for .../OEBPS/document.ncx", ErrorCodes.NOT_FOUND)
+      },
+    } as unknown as AuApiClient
+    const text = (
+      await compareOldNew(api, { registerId: "C2004A00109", fromDate: "2026-01-15", provision: "s 45", context: 1 } as never)
+    ).content[0].text
+    expect(text).toContain("machine-readable form")
+  })
 })
 
 describe("local unified diff", () => {

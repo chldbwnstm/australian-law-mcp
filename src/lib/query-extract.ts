@@ -384,6 +384,33 @@ export function firstProvision(query: string, mention: LawMention | undefined): 
   return refs[0] ? provisionParam(refs[0], mention) : undefined
 }
 
+/**
+ * The mention, unless it names a **different Act** than the one this call
+ * resolved.
+ *
+ * The alias schedule is a fact about one title: `ACL` is schedule 2 *of the
+ * Competition and Consumer Act 2010*, and of nothing else. A tool that takes
+ * both a `registerId` and a `query` — `compare_old_new` inside
+ * `chain_amendment_track` does, and so does `get_law_text` — can end up holding
+ * an alias for one Act and a resolved title for another. Applied blind, the
+ * schedule then produces two wrong answers of its own: `compare_old_new
+ * {registerId:"C1914A00012", query:"ACL"}` printed *"ACL" is sch 2 of this Act*
+ * about the **Crimes Act 1914**, and `get_law_text` looked `s 18` up as
+ * `sch 2 s 18` in an Act that has no schedule 2 and returned `[LAW_NOT_FOUND]`
+ * for a section that exists.
+ *
+ * Only aliases the table has live-verified carry a `titleId`, and only three
+ * aliases carry a `sch` at all — so this gate fires exactly when the two
+ * disagree, and never on an alias whose title was never pinned.
+ */
+export function mentionForTitle(
+  mention: LawMention | undefined,
+  titleId: string | undefined,
+): LawMention | undefined {
+  if (!mention?.titleId || !titleId) return mention
+  return mention.titleId === titleId ? mention : undefined
+}
+
 // ──────────────────────────────────────────────────────────────────────────
 // The (law, provision) choke point
 // ──────────────────────────────────────────────────────────────────────────
@@ -453,9 +480,17 @@ export function scopeProvisionsToLaw(input: {
   query?: string | undefined
   /** The provisions asked for. Omit to read them out of `query`. */
   provisions?: readonly string[] | undefined
+  /**
+   * The register id this call actually resolved, when the tool holds one.
+   *
+   * Pass it whenever you have it. An alias's schedule belongs to one Act, and a
+   * tool that takes `registerId` *and* `query` can hold an alias for one and a
+   * title for another — see {@link mentionForTitle}.
+   */
+  titleId?: string | undefined
 }): LawScope {
   const query = input.query?.trim() ?? ""
-  const mention = query ? primaryLawMention(query) : undefined
+  const mention = mentionForTitle(query ? primaryLawMention(query) : undefined, input.titleId)
   const asked: Array<{ raw: string; ref: SectionRef | undefined }> =
     input.provisions === undefined
       ? extractProvisions(query).map((ref) => ({ raw: formatRef(ref), ref }))

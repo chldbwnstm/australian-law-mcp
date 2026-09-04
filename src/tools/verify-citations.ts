@@ -183,13 +183,22 @@ export async function verifyCitations(
     lines.push(`${banner} Citation check`)
     // The first number stays the number of lines printed below; "of N found"
     // is what the cap used to hide.
+    //
+    // The ⚠ column counts **every** citation this report does not stand behind,
+    // which is the checked-but-inconclusive ones *plus* the ones dropped at
+    // `maxCitations`. Counting only the first set printed `⚠ 0 not checked here`
+    // directly above two `⚠ … NOT checked` lines and a banner saying two were
+    // never looked at — a summary that contradicts its own body is read as the
+    // summary, which is the failure this column exists to prevent.
     lines.push(
       `Statute citations: ${statuteVerdicts.length} checked of ${foundCount(foundStatutes.length)} found | ` +
-        `✓ ${statuteTally.ok} verified | ✗ ${statuteTally.bad} cannot be right | ⚠ ${statuteTally.warn} not checked here`,
+        `✓ ${statuteTally.ok} verified | ✗ ${statuteTally.bad} cannot be right | ` +
+        `⚠ ${statuteTally.warn + skippedStatutes.length} not checked here`,
     )
     lines.push(
       `Case citations: ${caseVerdicts.length} checked of ${foundCount(foundCases.length)} found | ` +
-        `✓ ${caseTally.ok} verified | ✗ ${caseTally.bad} cannot be right | ⚠ ${caseTally.warn} not checked here`,
+        `✓ ${caseTally.ok} verified | ✗ ${caseTally.bad} cannot be right | ` +
+        `⚠ ${caseTally.warn + skippedCases.length} not checked here`,
     )
     if (skipped > 0) {
       lines.push(

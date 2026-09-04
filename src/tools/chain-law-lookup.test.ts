@@ -248,6 +248,38 @@ describe("resolveChainBaseLaw — the full-text rung", () => {
     expect(calls.fullText).toBe(1)
   })
 
+  it("reads an alias that sits inside a longer question, not only a bare one", async () => {
+    // `resolveLawAlias` matches a whole string: "ACL" resolves, "ACL s 18" does
+    // not. The rung fell through to full-text relevance, and live 2026-09-05
+    // `legal_research {query:"ACL s 18", task:"amendment_track"}` answered with
+    // the *Disability Care Load Assessment (Child) Determination 2020* — then
+    // printed `"ACL" is sch 2 of this Act` about it. `primaryLawMention` is the
+    // substring reading the alias-schedule choke point already uses, so the two
+    // now agree on which Act a sentence names.
+    const { client, calls } = stubClient({
+      nameSearch: {
+        "Competition and Consumer Act 2010": [principal("C2004A00109", "Competition and Consumer Act 2010")],
+      },
+      fullText: [principal("F2020L01025", "Disability Care Load Assessment (Child) Determination 2020")],
+    })
+    const result = await resolveChainBaseLaw(client, "ACL s 18", 3)
+
+    expect(result.laws[0]?.registerId).toBe("C2004A00109")
+    expect(result.searchedWith).toBe("Competition and Consumer Act 2010")
+    // The full-text rung is the expensive one; it never had to run.
+    expect(calls.fullText).toBe(0)
+  })
+
+  it("still resolves a bare alias through the whole-string reading", async () => {
+    const { client } = stubClient({
+      nameSearch: {
+        "Competition and Consumer Act 2010": [principal("C2004A00109", "Competition and Consumer Act 2010")],
+      },
+    })
+    const result = await resolveChainBaseLaw(client, "ACL", 3)
+    expect(result.laws[0]?.registerId).toBe("C2004A00109")
+  })
+
   it("leaves a relevance order that was already right alone", async () => {
     const { client } = stubClient({
       fullText: [

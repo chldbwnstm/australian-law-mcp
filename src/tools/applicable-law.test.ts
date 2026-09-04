@@ -251,6 +251,26 @@ describe("applicable_law — the provision", () => {
     expect(text).toContain("identical wording")
   })
 
+  it("reads a bare reference inside the schedule its alias names", async () => {
+    // This tool serves three coherent answers about one provision — the as-at
+    // text, a diff against today and an amendment history — so an unscoped read
+    // of "ACL s 18" produces three of them about "Meetings of Commission",
+    // under an alias note that says in terms that it is a different provision.
+    const asked: string[] = []
+    const api = {
+      ...client(),
+      getProvision: async (_id: string, provision: string, date?: string) => {
+        asked.push(provision)
+        return { ref: provision, heading: "", text: DEFAULT_NOW, volumeDoc: "document_4/document_4.html", breadcrumb: [] }
+      },
+    } as unknown as AuApiClient
+    const text = (await applicableLaw(api, { lawName: "ACL", date: "2010-12-15", provision: "s 18" } as never)).content[0].text
+    expect(asked.every((provision) => provision === "sch 2 s 18")).toBe(true)
+    expect(text).toContain("sch 2 s 18")
+    // Never silently: the caller asked about "s 18".
+    expect(text).toContain("body of the Act")
+  })
+
   it("does not let an unreadable provision look like a repealed one", async () => {
     const text = await run(
       { lawName: "CCA", date: "2010-12-15", provision: "s 52" },

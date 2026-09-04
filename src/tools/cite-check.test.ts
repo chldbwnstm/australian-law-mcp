@@ -111,9 +111,37 @@ describe("cite_check — verdicts", () => {
   })
 
   it("falls back to cited when the deep scan is turned off", async () => {
+    // NSW Caselaw's search matches the phrase, so its rows are mentions even
+    // with no scan to confirm them.
     const text = await run("[2010] NSWCCA 333", {}, { deepScan: false })
     expect(text).toContain("▶ Verdict: cited")
     expect(text).toContain("Treatment scan: skipped")
+  })
+
+  it("does not manufacture citing cases out of the High Court's any-word search", async () => {
+    // Live 2026-09-05, `[2019] HCA 99` — a citation the Court's own complete
+    // 2019 list does not contain, and which this tool marks ✗ two lines above —
+    // came back "Verdict: cited — later judgments mention this case" over
+    // twelve real, unrelated judgments. hcourt.gov.au's `keywords` matches ANY
+    // of the words, so "[2019] HCA 99" matches anything containing 2019, HCA or
+    // 99. Manufactured corroboration for an invented citation is the single
+    // worst answer this server can give.
+    // Only the High Court answers, so every row in hand is a candidate.
+    const text = await run(
+      "[2019] HCA 99",
+      { failing: ["nswCaselaw", "qldJudgments"], nswMnc: NSW_MNC.replace(/Displaying 1 - 1 of 1/g, "Displaying 0 - 0 of 0") },
+      { deepScan: false },
+    )
+    expect(text).not.toContain("▶ Verdict: cited")
+    expect(text).toContain("▶ Verdict: unverified_treatment")
+    expect(text).toContain("candidate row(s)")
+    expect(text).toContain("NOT confirmed mentions")
+  })
+
+  it("labels the High Court rows as candidates rather than mentions", async () => {
+    const text = await run("[2010] NSWCCA 333")
+    expect(text).toMatch(/High Court of Australia: \d+ candidate row/)
+    expect(text).toContain("matches ANY of the words")
   })
 
   it("does not claim not_found while a source is failing", async () => {
@@ -192,7 +220,7 @@ describe("cite_check — honesty about the source", () => {
 
   it("lists the later citing cases so a human can finish the job", async () => {
     const text = await run("[2010] NSWCCA 333")
-    expect(text).toContain("▶ Later cases mentioning [2010] NSWCCA 333")
+    expect(text).toContain("▶ Later cases that may cite [2010] NSWCCA 333")
     expect(text).toMatch(/NSW Caselaw: \d+ mention/)
   })
 

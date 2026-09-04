@@ -307,6 +307,28 @@ describe("verify_citations — the maxCitations cap", () => {
     expect(text).toContain("[VERIFIED]")
     expect(text).not.toContain("NOT CHECKED")
   })
+
+  it("counts the dropped citations in the ⚠ column, not only the checked ones", async () => {
+    // The summary line is what a caller reads first. Counting only the warns
+    // among *checked* verdicts printed `⚠ 0 not checked here` directly above
+    // two `⚠ … NOT checked` lines and a banner saying two were never looked at
+    // — a header that contradicts its own body, which is read as the header.
+    // 15 checked and inconclusive (the Federal Court is not fetched) + 5 never
+    // looked at = 20 citations this report does not stand behind.
+    const text = await run(TWENTY_CASES)
+    expect(text).toContain("Case citations: 15 checked of 20 found")
+    expect(text).toContain("⚠ 20 not checked here")
+  })
+
+  it("counts statute drops in the statute column", async () => {
+    const statutes = Array.from(
+      { length: 18 },
+      (_, index) => `Competition and Consumer Act 2010 (Cth) s ${index + 1} applies.`,
+    ).join("\n\n")
+    const text = await run(statutes)
+    expect(text).toContain("Statute citations: 15 checked of 18 found")
+    expect(text.split("\n")[1]).toContain("⚠ 3 not checked here")
+  })
 })
 
 describe("verify_citations — no citations", () => {

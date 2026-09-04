@@ -13,7 +13,7 @@ import { getInstrumentProvisions } from "../law-linkage.js"
 import { getLawText } from "../law-text.js"
 import { getLawTree } from "../law-tree.js"
 import { getProvisionHistory } from "../provision-history.js"
-import { locate, requireRef, sliceSubtree } from "./toc.js"
+import { descendantsOf, locate, requireRef, sliceSubtree, subtreeMembers } from "./toc.js"
 
 /*
  * Miniature of the *Commonwealth of Australia Constitution Act* TOC
@@ -73,6 +73,84 @@ describe("sliceSubtree", () => {
   it("says nothing extra when the number is used once", () => {
     const text = sliceSubtree(CONSTITUTION_HTML, CONSTITUTION, locate(ref("s 8"), CONSTITUTION)!)!
     expect(text).not.toContain("more than once")
+  })
+})
+
+/*
+ * ── A container whose contents FRL did not nest under it ──────────────────
+ *
+ * Miniature of the *Income Tax Assessment Act 1997* NCX around Subdivision
+ * 20-A, verbatim in shape from the live document read 2026-09-05. The
+ * subdivision, its "Guide to …" and its "What is an assessable recoupment?"
+ * group heading are all **siblings** at one depth; only the sections hang off
+ * the group headings. `descendantsOf` therefore returns nothing for the
+ * subdivision, `sliceSubtree` stopped at the first sibling, and `get_law_text
+ * {provision:"Subdiv 20-A"}` came back as the heading line and nothing else.
+ * 373 of the 941 Part/Division/Subdivision entries in that Act are shaped this
+ * way, and 7 in the CCA — one of them the ACL's *Division 1 — Consumer
+ * guarantees*.
+ */
+const ITAA = parseNcx(
+  "<ncx><navMap>" +
+    nav(
+      "Division 20&#8212;Amounts included to reverse the effect of past deductions",
+      "d20",
+      nav("Subdivision 20-A&#8212;Insurance, indemnity or other recoupment", "sub20a") +
+        nav("Guide to Subdivision 20-A", "g20a", nav("20-10 What this Subdivision is about", "s2010")) +
+        nav("What is an assessable recoupment?", "h20a", nav("20-20 Assessable recoupments", "s2020")) +
+        nav("Subdivision 20-B&#8212;Disposal of a car", "sub20b") +
+        nav("Guide to Subdivision 20-B", "g20b", nav("20-100 What this Subdivision is about", "s20100")),
+    ) +
+    "</navMap></ncx>",
+)
+
+const ITAA_HTML =
+  "<html><body>" +
+  '<p class="ActHead3"><a id="d20">Division 20—Amounts included to reverse the effect of past deductions</a></p>' +
+  '<p class="ActHead4"><a id="sub20a">Subdivision 20-A—Insurance, indemnity or other recoupment</a></p>' +
+  '<p class="ActHead5"><a id="g20a">Guide to Subdivision 20-A</a></p>' +
+  '<p class="ActHead5"><a id="s2010">20-10 What this Subdivision is about</a></p>' +
+  '<p class="subsection">An amount you have deducted may be included in assessable income.</p>' +
+  '<p class="ActHead5"><a id="h20a">What is an assessable recoupment?</a></p>' +
+  '<p class="ActHead5"><a id="s2020">20-20 Assessable recoupments</a></p>' +
+  '<p class="subsection">An amount you receive as recoupment of a loss is an assessable recoupment.</p>' +
+  '<p class="ActHead4"><a id="sub20b">Subdivision 20-B—Disposal of a car</a></p>' +
+  '<p class="ActHead5"><a id="g20b">Guide to Subdivision 20-B</a></p>' +
+  '<p class="ActHead5"><a id="s20100">20-100 What this Subdivision is about</a></p>' +
+  "</body></html>"
+
+const node = (label: RegExp) => ITAA.find((entry) => label.test(entry.label))!
+
+describe("subtreeMembers — FRL does not always nest a container's contents under it", () => {
+  it("takes the sibling run when the NCX nests nothing under the container", () => {
+    const members = subtreeMembers(ITAA, node(/^Subdivision 20-A/)).map((entry) => entry.label)
+    expect(descendantsOf(ITAA, node(/^Subdivision 20-A/))).toHaveLength(0)
+    expect(members).toEqual([
+      "Guide to Subdivision 20-A",
+      "20-10 What this Subdivision is about",
+      "What is an assessable recoupment?",
+      "20-20 Assessable recoupments",
+    ])
+  })
+
+  it("stops at the next container of the same rank, not at the first sibling", () => {
+    const members = subtreeMembers(ITAA, node(/^Subdivision 20-A/)).map((entry) => entry.label)
+    expect(members).not.toContain("Subdivision 20-B—Disposal of a car")
+  })
+
+  it("leaves a container the NCX did nest exactly as it was", () => {
+    const division = node(/^Division 20/)
+    expect(subtreeMembers(ITAA, division)).toEqual(descendantsOf(ITAA, division))
+  })
+
+  it("serves the whole subdivision, not just its heading", () => {
+    const text = sliceSubtree(ITAA_HTML, ITAA, node(/^Subdivision 20-A/))!
+    expect(text).toContain("20-10 What this Subdivision is about")
+    expect(text).toContain("20-20 Assessable recoupments")
+    expect(text).toContain("assessable recoupment")
+    // …and stops where the next subdivision starts.
+    expect(text).not.toContain("Subdivision 20-B")
+    expect(text).not.toContain("20-100")
   })
 })
 

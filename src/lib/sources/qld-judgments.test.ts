@@ -95,6 +95,33 @@ describe("parseJudgment — recorded [2020] QSC 100", () => {
       { label: "PDF", url: "https://www.queenslandjudgments.com.au/caselaw/qsc/2020/100/pdf" },
     ])
   })
+
+  it("says nothing extra when the reasons did come back", () => {
+    expect(document.note).toBeUndefined()
+  })
+})
+
+describe("a record served without reasons is not a short judgment", () => {
+  it("says the reasons were not received, rather than returning a bare PDF link", () => {
+    // Live 2026-09-05, `get_decision_text {domain:"cases", id:"qld:507327"}`
+    // ([2010] 2 Qd R 312) returned 223 characters: a title, a citation and a PDF
+    // link, with nothing saying the reasons were missing. `renderDocument`
+    // prints no body section at all when `text` is empty, so a missing document
+    // read as a short one. The FWC path already says this.
+    // Shape of the live record read 2026-09-05: `casename_print` and
+    // `citation_print` are present, `#report-view` is not, so there is no body
+    // and no coversheet to read.
+    const headnoteOnly =
+      "<html><body>" +
+      '<div class="casename_print">Lerinda Pty Ltd v Laertes Investments Pty Ltd</div>' +
+      '<div class="citation_print">[2010] 2 Qd R 312</div>' +
+      "</body></html>"
+    const document = parseJudgment(headnoteOnly, "https://www.queenslandjudgments.com.au/case/id/507327")
+    expect(document.text.trim()).toBe("")
+    expect(document.note).toContain("without reasons in HTML")
+    expect(document.note).toContain("The reasons exist")
+    expect(document.note).not.toMatch(/does not exist/i)
+  })
 })
 
 describe("shape failures", () => {

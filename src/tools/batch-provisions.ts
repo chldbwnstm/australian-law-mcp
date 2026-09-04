@@ -25,7 +25,7 @@ import type { AuApiClient } from "../lib/api-client.js"
 import { ErrorCodes, LawApiError, formatToolError } from "../lib/errors.js"
 import { ExecutionLimitError } from "../lib/execution-limits.js"
 import { htmlToText } from "../lib/provision-slicer.js"
-import { primaryLawMention, provisionParam } from "../lib/query-extract.js"
+import { mentionForTitle, primaryLawMention, provisionParam } from "../lib/query-extract.js"
 import { truncateResponse } from "../lib/schemas.js"
 import { formatRef, parseSectionRef } from "../lib/section-ref.js"
 import { getRequestSignal } from "../lib/session-state.js"
@@ -245,8 +245,12 @@ async function runTask(apiClient: AuApiClient, task: Task, maxChars: number): Pr
    * asked of it means sch 2 s 18, never the body's "Meetings of Commission".
    * Same rewrite as the CLI router (`query-extract.provisionParam`), so the
    * two paths cannot drift; an explicit `sch N` keeps its own.
+   *
+   * `mentionForTitle` bounds it to the Act the alias actually names: a task may
+   * carry `registerId` and `query` together, and CCA sch 2 is not a fact about
+   * whatever other title the id resolved to.
    */
-  const mention = task.query ? primaryLawMention(task.query) : undefined
+  const mention = mentionForTitle(task.query ? primaryLawMention(task.query) : undefined, titleId)
   let aliasScoped = 0
 
   for (const provision of task.provisions) {

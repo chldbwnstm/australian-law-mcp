@@ -17,7 +17,7 @@ import { z } from "zod"
 import type { AuApiClient } from "../lib/api-client.js"
 import { ARTICLE_CACHE_TTL, lawCache } from "../lib/cache.js"
 import { ErrorCodes, LawApiError, formatToolError } from "../lib/errors.js"
-import { primaryLawMention, provisionParam } from "../lib/query-extract.js"
+import { mentionForTitle, primaryLawMention, provisionParam } from "../lib/query-extract.js"
 import { truncateResponse } from "../lib/schemas.js"
 import { formatRef } from "../lib/section-ref.js"
 import type { FrlTitle, NcxEntry, ToolResponse } from "../lib/types.js"
@@ -76,7 +76,10 @@ export async function getProvisionHistory(
     // return the body section's history underneath it. Same rewrite as
     // get_law_text and get_batch_provisions (`query-extract.provisionParam`),
     // reused so the three cannot drift; an explicit `sch N` keeps its own.
-    const mention = input.query ? primaryLawMention(input.query) : undefined
+    // `mentionForTitle` is the other half: the schedule belongs to one Act, so
+    // an alias that names a different one than `registerId` resolved is dropped
+    // rather than asserted of the title in hand.
+    const mention = mentionForTitle(input.query ? primaryLawMention(input.query) : undefined, title.id)
     const scoped = provisionParam(asked, mention)
     const rewritten = scoped !== formatRef(asked)
     const ref = rewritten ? requireRef(scoped) : asked

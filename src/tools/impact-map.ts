@@ -31,6 +31,7 @@ import { austliiSearchUrl, frlHumanUrl } from "../lib/external-links-map.js"
 import { aliasesFor } from "../lib/law-alias.js"
 import { findNavPoint } from "../lib/provision-slicer.js"
 import { truncateResponse } from "../lib/schemas.js"
+import { mentionForTitle, primaryLawMention, provisionParam } from "../lib/query-extract.js"
 import { formatRef, parseSectionRef, type SectionRef } from "../lib/section-ref.js"
 import type { FrlTitle, ToolResponse } from "../lib/types.js"
 import { amendedAfter, provisionHistory } from "./analysis-helpers/amendment-lookup.js"
@@ -95,8 +96,8 @@ export function searchPhrases(title: FrlTitle, ref: SectionRef): string[] {
 
 export async function impactMap(apiClient: AuApiClient, input: ImpactMapInput): Promise<ToolResponse> {
   try {
-    const ref = parseSectionRef(input.provision)
-    if (!ref) {
+    const asked = parseSectionRef(input.provision)
+    if (!asked) {
       return {
         content: [
           {
@@ -112,6 +113,20 @@ export async function impactMap(apiClient: AuApiClient, input: ImpactMapInput): 
 
     const lookup = await resolveTitle(apiClient, { query: input.lawName })
     const title = lookup.title
+
+    // An alias can name a *schedule*, and this tool has no defence against
+    // getting it wrong: it reports the citing judgments, instruments and
+    // amendments of whatever provision it settled on, so a silent body-section
+    // read produces a whole page about the wrong section. Live 2026-09-05,
+    // `{lawName:"ACL", provision:"s 18"}` printed the alias note — which says in
+    // terms that ACL s 18 is NOT CCA s 18 (meetings of Commission) — and then
+    // `Provision: s 18 — "Meetings of Commission"` directly under it. Same
+    // rewrite as get_law_text and get_provision_history, bounded to the Act the
+    // alias actually names (`mentionForTitle`); an explicit `sch N` keeps its own.
+    const mention = mentionForTitle(primaryLawMention(input.lawName), title.id)
+    const scoped = provisionParam(asked, mention)
+    const rewritten = scoped !== formatRef(asked)
+    const ref = rewritten ? (parseSectionRef(scoped) ?? asked) : asked
     const pinpoint = formatRef(ref)
 
     // The provision's own heading, and proof it exists before anything is
@@ -147,13 +162,23 @@ export async function impactMap(apiClient: AuApiClient, input: ImpactMapInput): 
     const lines: string[] = []
     lines.push(`Impact map — ${title.name} ${pinpoint} [${title.id}]`)
     for (const note of lookup.notes) lines.push(note)
+    // Never silently: the caller asked about one number and is being shown the
+    // dependencies of another.
+    if (rewritten) {
+      lines.push(
+        `Read "${input.provision}" as "${scoped}": "${input.lawName}" names sch ${mention?.sch ?? "?"} of this Act, ` +
+          "so the bare reference would have mapped the body provision instead.",
+      )
+    }
     if (heading) lines.push(`Provision: ${pinpoint} — "${heading}"`)
     else lines.push(`⚠️ Provision heading unavailable: ${tocError ?? "unknown"}. The map below may be about a provision that does not exist under this reference.`)
     lines.push(`${frlHumanUrl(title.id)}`)
     lines.push("")
 
     // (a) citing cases
-    lines.push(`▶ Judgments mentioning this provision (searched: ${phrases.map((phrase) => `"${phrase}"`).join(", ")})`)
+    // Not "mentioning": the High Court listing matches any of the words, so its
+    // rows are candidates. `describeOutcomes` says which source is which.
+    lines.push(`▶ Judgments that may cite this provision (searched: ${phrases.map((phrase) => `"${phrase}"`).join(", ")})`)
     for (const line of describeOutcomes(trace)) lines.push(line)
     if (merged.length === 0) {
       lines.push(

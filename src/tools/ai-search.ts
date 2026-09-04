@@ -140,11 +140,22 @@ export async function searchAiLawStructured(
   // string), so this is also where the "sch 2" note comes from.
   const scope = scopeProvisionsToLaw({ query })
   const provisionRefs = scope.provisions.map((provision) => provision.provision)
+  /** The same references without the alias's schedule — what they mean for any *other* title. */
+  const askedRefs = scope.provisions.map((provision) => provision.asked)
   if (scope.note) notes.push(scope.note)
 
   const searches: Array<{ via: "query" | "alias"; text: string }> = [{ via: "query", text: query }]
   if (aliasHit && alias.searchText && alias.searchText !== query) {
     searches.push({ via: "alias", text: alias.searchText })
+  } else if (scope.mention && scope.mention.name !== query && !scope.mention.body && !scope.mention.needsJurisdiction) {
+    // `resolveLawAlias` matches a whole string, so it sees no alias in "ACL s 18
+    // misleading conduct" — while `scopeProvisionsToLaw` (which reads mentions
+    // anywhere in the sentence) resolves it to the CCA and prints
+    // `provision="sch 2 s 18"` on every hint. Without this second pass the tool
+    // pointed seven unrelated instruments at a schedule 2 they do not have and
+    // left out the one Act that does: live 2026-09-05, that query returned the
+    // National Environment Protection Measure 1999 first and the CCA not at all.
+    searches.push({ via: "alias", text: scope.mention.name })
   }
 
   const results = await Promise.all(
@@ -212,6 +223,8 @@ export async function searchAiLawStructured(
               notes,
               passes,
               provisionRefs,
+              askedRefs,
+              ...(scope.mention?.titleId ? { scheduleTitleId: scope.mention.titleId } : {}),
               provisionsScoped: scope.rewritten,
               everyPassFailed,
               input,
@@ -244,6 +257,10 @@ interface RenderArgs {
   /** One entry per search pass that answered, with the count that pass reported. */
   passes: Array<{ text: string; count: number }>
   provisionRefs: string[]
+  /** `provisionRefs` without the alias's schedule — what they mean for any other title. */
+  askedRefs: string[]
+  /** The one title the alias's schedule is a fact about, when the alias table pinned it. */
+  scheduleTitleId?: string
   /** A reference was moved into the schedule the named law *is* (ACL → sch 2). */
   provisionsScoped: boolean
   everyPassFailed: boolean
@@ -299,7 +316,7 @@ function render(args: RenderArgs): string {
     lines.push(`${index + 1}. ${title.name}`)
     lines.push(`   ${facts.join(" | ")}`)
     if (signal?.via === "alias") lines.push("   matched: via the abbreviation you used, not the words of the question")
-    if (args.input.provisionHints !== false) lines.push(`   ${followUp(title.id, args.provisionRefs)}`)
+    if (args.input.provisionHints !== false) lines.push(`   ${followUp(title.id, refsFor(args, title.id))}`)
     lines.push("")
   })
 
@@ -309,6 +326,16 @@ function render(args: RenderArgs): string {
         args.provisionsScoped ? ", inside the schedule the law you named is" : ""
       }: ${args.provisionRefs.join(", ")} — the hints above ask for those directly.`,
     )
+    // The schedule is a fact about one Act. Printed against every hit it becomes
+    // a false pointer — "sch 2 s 18" of an environment protection measure that
+    // has no schedule 2 — so the other hits get the plain reference and are told
+    // which title the schedule belonged to.
+    if (args.provisionsScoped && args.scheduleTitleId && args.ranked.some((t) => t.id !== args.scheduleTitleId)) {
+      lines.push(
+        `That schedule belongs to ${args.scheduleTitleId} only; every other hit above is asked for ` +
+          `${args.askedRefs.join(", ")} instead, because the schedule number is not theirs.`,
+      )
+    }
   }
   lines.push(
     "These are pointers, not an answer: open the provisions before relying on any of them. " +
@@ -334,6 +361,16 @@ function countLine(args: RenderArgs): string {
     `Matching titles upstream: ${each} — overlapping searches, so those counts do not add up to a ` +
     `corpus size. Showing ${args.ranked.length} after de-duplication.`
   )
+}
+
+/**
+ * Which reading of the question's provisions this particular hit should be
+ * asked for: the schedule-scoped one for the Act whose schedule it is, the
+ * plain one for everybody else.
+ */
+function refsFor(args: RenderArgs, registerId: string): string[] {
+  if (!args.provisionsScoped || !args.scheduleTitleId) return args.provisionRefs
+  return registerId === args.scheduleTitleId ? args.provisionRefs : args.askedRefs
 }
 
 function followUp(registerId: string, provisionRefs: string[]): string {

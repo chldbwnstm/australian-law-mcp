@@ -32,6 +32,7 @@ import { toIsoDate } from "../lib/au-dates.js"
 import { ErrorCodes, LawApiError, formatToolError, notFoundResponse } from "../lib/errors.js"
 import { frlHumanUrl } from "../lib/external-links-map.js"
 import { truncateResponse } from "../lib/schemas.js"
+import { scopeProvisionsToLaw } from "../lib/query-extract.js"
 import { formatRef, parseSectionRef } from "../lib/section-ref.js"
 import type { FrlVersion, ToolResponse } from "../lib/types.js"
 import {
@@ -88,6 +89,20 @@ export async function applicableLaw(apiClient: AuApiClient, input: ApplicableLaw
     const lookup = await resolveTitle(apiClient, { query: input.lawName })
     const title = lookup.title
     const today = new Date().toISOString().slice(0, 10)
+
+    // An alias can name a *schedule*. This tool serves the as-at text, a diff
+    // against today and an amendment history, so getting it wrong produces
+    // three coherent answers about the wrong section: `{lawName:"ACL",
+    // provision:"s 18"}` printed the alias note — which says in terms that ACL
+    // s 18 is NOT CCA s 18 — and then diffed "Meetings of Commission".
+    // Same rewrite as get_law_text and get_provision_history, bounded to the
+    // Act the alias actually names; an explicit `sch N` keeps its own.
+    const scope = scopeProvisionsToLaw({
+      query: input.lawName,
+      provisions: input.provision ? [input.provision] : [],
+      titleId: title.id,
+    })
+    const provision = scope.provisions[0]?.provision ?? input.provision
 
     const { versions, error: versionsError } = await safeVersions(apiClient, title.id)
     const found = await safeFindVersion(apiClient, title.id, date)
@@ -214,9 +229,12 @@ export async function applicableLaw(apiClient: AuApiClient, input: ApplicableLaw
       lines.push("")
       // Only a *confirmed* absence of a covering compilation justifies reading
       // the as-made text; a failed lookup must still ask for the date.
-      lines.push(...(await provisionSection(apiClient, title.id, input.provision, date, !asAt && !found.error)))
+      // Never silently: the caller asked about one number and is being shown
+      // the history of another.
+      if (scope.note) lines.push(scope.note)
+      lines.push(...(await provisionSection(apiClient, title.id, provision, date, !asAt && !found.error)))
       lines.push("")
-      lines.push(...(await amendmentSection(apiClient, title.id, input.provision, date)))
+      lines.push(...(await amendmentSection(apiClient, title.id, provision, date)))
     } else {
       lines.push("")
       lines.push(

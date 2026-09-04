@@ -118,11 +118,33 @@ describe("impact_map", () => {
     expect(text).toContain('Provision: sch 2 s 18 — "Misleading or deceptive conduct"')
   })
 
+  it("maps the ACL's s 18, not the body's, when the alias names a schedule", async () => {
+    // Live 2026-09-05 this printed the alias note — which says in terms that
+    // ACL s 18 is NOT CCA s 18 (meetings of Commission) — and then
+    // `Provision: s 18 — "Meetings of Commission"` directly under it, and built
+    // the whole map (citing judgments, enabling instruments, amendments) around
+    // the body section. Printing the trap and then walking into it is worse
+    // than not printing it, because the note reads as though it was applied.
+    const text = await run({ lawName: "ACL", provision: "s 18" })
+    expect(text).toContain('Provision: sch 2 s 18 — "Misleading or deceptive conduct"')
+    expect(text).not.toContain("Meetings of Commission")
+    // Never silently: the caller asked about "s 18".
+    expect(text).toContain('Read "s 18" as "sch 2 s 18"')
+  })
+
+  it("leaves an explicit schedule alone rather than double-prefixing it", async () => {
+    const text = await run({ lawName: "ACL", provision: "sch 2 s 18" })
+    expect(text).toContain('Provision: sch 2 s 18 — "Misleading or deceptive conduct"')
+    expect(text).not.toContain("sch 2 sch 2")
+  })
+
   it("lists the judgments that mention the provision, per source", async () => {
     const text = await run({ lawName: "CCA", provision: "s 18" })
-    expect(text).toContain("▶ Judgments mentioning this provision")
+    expect(text).toContain("▶ Judgments that may cite this provision")
     expect(text).toMatch(/NSW Caselaw: \d+ mention/)
-    expect(text).toMatch(/High Court of Australia: \d+ mention/)
+    // The High Court listing matches ANY of the words, so its rows are candidates.
+    expect(text).toMatch(/High Court of Australia: \d+ candidate row/)
+    expect(text).toContain("NOT confirmed mentions")
   })
 
   it("never reads a failed search as an absence of cases", async () => {

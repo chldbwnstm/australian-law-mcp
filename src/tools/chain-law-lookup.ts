@@ -11,6 +11,8 @@
  * tried (a caller who is not told the search terms cannot rephrase):
  *
  *  1. The **alias table** — "the ACL", "FW Act", "TPA" are how people write.
+ *     Read both as a whole string and as a mention *inside* a longer question
+ *     ("ACL s 18"), because both are how people write.
  *  2. A **statute-shaped phrase lifted out of the query** ("… Fair Work Act
  *     2009 …"), because a question usually contains the title it is about.
  *  3. The **query as given**, which works whenever the user typed a name.
@@ -49,6 +51,7 @@ import type { AuApiClient } from "../lib/api-client.js"
 import { ErrorCodes, LawApiError } from "../lib/errors.js"
 import { LAW_ALIAS_ENTRIES, resolveLawAlias } from "../lib/law-alias.js"
 import { LEGAL_TERM_ENTRIES } from "../lib/legal-terms-data.js"
+import { primaryLawMention } from "../lib/query-extract.js"
 import { SCENARIO_RULES } from "../lib/scenario-rules.js"
 import type { FrlTitle, ToolResponse } from "../lib/types.js"
 import { searchAiLawStructured } from "./ai-search.js"
@@ -492,10 +495,28 @@ export async function resolveChainBaseLaw(
   }
 
   // 1) Alias table.
+  //
+  //    Two readings, because `resolveLawAlias` only matches a *whole* string.
+  //    "ACL" resolves; "ACL s 18" does not, and the rung then fell through to
+  //    full-text relevance — which, live 2026-09-05, answered
+  //    `legal_research {query:"ACL s 18", task:"amendment_track"}` with the
+  //    *Disability Care Load Assessment (Child) Determination 2020* and then
+  //    printed `"ACL" is sch 2 of this Act` about it. `primaryLawMention` is the
+  //    substring-tolerant reading the rest of the server already uses for
+  //    exactly this (it is what the alias-schedule choke point resolves with),
+  //    so the two now agree on which Act a sentence names.
   const alias = resolveLawAlias(trimmed)
+  const aliasTerms: string[] = []
   if (!alias.needsJurisdiction && alias.searchText && alias.searchText !== trimmed) {
-    const hits = await byName(alias.searchText)
-    if (hits.length > 0) return answer({ laws: actsFirst(hits), searchedWith: alias.searchText, attempts })
+    aliasTerms.push(alias.searchText)
+  }
+  const mention = primaryLawMention(trimmed)
+  if (mention && !mention.body && !mention.needsJurisdiction && mention.name !== trimmed) {
+    aliasTerms.push(mention.name)
+  }
+  for (const term of aliasTerms) {
+    const hits = await byName(term)
+    if (hits.length > 0) return answer({ laws: actsFirst(hits), searchedWith: term, attempts })
   }
 
   // 2) A title-shaped phrase inside the question.

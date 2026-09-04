@@ -56,6 +56,38 @@ export interface BackTraceOptions {
 
 const DEFAULT_PER_SOURCE = 20
 
+/**
+ * Sources whose search returns **candidates**, not mentions.
+ *
+ * NSW Caselaw and Queensland Judgments run real full-text searches: a row they
+ * return contains the phrase. The High Court's own listing does not — its
+ * `keywords` parameter matches **any** of the words, and the rows come back in
+ * date order. Measured live 2026-09-05:
+ *
+ *  - `keywords=Competition and Consumer Act` → the site reports **1,421**
+ *    matches, out of a corpus of roughly 1,500 judgments;
+ *  - `keywords=[2019] HCA 99` → **35** matches, for a citation that does not
+ *    exist (the Court's own 2019 list stops well short of 99);
+ *  - `keywords=Calidad Seiko Epson` → **1**, the right one.
+ *
+ * So a distinctive phrase works there and a citation or a section reference
+ * does not, and taking the rows as mentions is how `cite_check` came to answer
+ * `[2019] HCA 99` with "Verdict: cited" over twelve real, unrelated judgments —
+ * manufactured corroboration for an invented citation, which is the single
+ * worst thing this server can do.
+ *
+ * Rows from these sources are still shown: they are worth opening, and hiding
+ * them would be its own kind of dishonesty. They are labelled, they do not by
+ * themselves support a "cited" verdict, and a deep scan that finds the citation
+ * in the text of one of them promotes it from candidate to mention.
+ */
+export const CANDIDATE_ONLY_SOURCES: ReadonlySet<SourceOutcome["source"]> = new Set(["High Court of Australia"])
+
+/** True when this source's search cannot confirm that a row mentions the phrase. */
+export function isCandidateOnly(source: string): boolean {
+  return CANDIDATE_ONLY_SOURCES.has(source as SourceOutcome["source"])
+}
+
 function normalise(value: string | undefined): string | undefined {
   if (!value) return undefined
   const match = /\[((?:1[89]|20)\d{2})\]\s*([A-Za-z]{2,14})\s*(\d{1,5})/.exec(value)
@@ -174,6 +206,14 @@ export function describeOutcomes(trace: BackTrace): string[] {
         outcome.total !== undefined && outcome.total !== outcome.hits.length
           ? ` (source reports ${outcome.total}${outcome.totalNote ? "; " + outcome.totalNote : ""})`
           : ""
+      // "mention(s)" is a claim about the text of each row. Only a source whose
+      // search actually matched the phrase can support it.
+      if (isCandidateOnly(outcome.source)) {
+        return (
+          `  ${outcome.source}: ${outcome.hits.length} candidate row(s)${total} — this site's keyword search ` +
+          "matches ANY of the words, so these are rows to open, NOT confirmed mentions."
+        )
+      }
       return `  ${outcome.source}: ${outcome.hits.length} mention(s)${total}`
     }
     if (outcome.status === "blocked") {

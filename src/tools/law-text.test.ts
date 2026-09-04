@@ -161,6 +161,22 @@ describe("get_law_text applies the schedule its alias names", () => {
     expect(text).toContain("Provision: s 18")
     expect(text).toContain("Meetings of Commission")
   })
+
+  it("drops the schedule when the alias names a different Act than registerId resolved", async () => {
+    // `registerId` decides the title; an alias for some *other* Act cannot
+    // carry its schedule across. Live 2026-09-05
+    // `{registerId:"C1914A00012", query:"ACL", provision:"s 18"}` looked
+    // `sch 2 s 18` up in the Crimes Act 1914 and returned `[LAW_NOT_FOUND]` for
+    // a section that exists — the schedule asserted of a title that has none.
+    const crimes: FrlTitle = { id: "C1914A00012", name: "Crimes Act 1914", collection: "Act", status: "InForce" }
+    const api = { ...client(), getTitle: async () => crimes } as unknown as AuApiClient
+    const text = (
+      await getLawText(api, { registerId: "C1914A00012", query: "ACL", provision: "s 18", maxChars: 20000 } as never)
+    ).content[0].text
+    expect(text).toContain("Provision: s 18")
+    expect(text).not.toContain("sch 2 s 18")
+    expect(text).not.toContain("names sch 2 of this Act")
+  })
 })
 
 describe("get_law_text misses", () => {

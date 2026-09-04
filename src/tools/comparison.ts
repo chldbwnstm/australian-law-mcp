@@ -117,9 +117,15 @@ export async function compareOldNew(apiClient: AuApiClient, input: CompareOldNew
     // beside this tool's body s 18 under one ACL heading. One call does the
     // whole rewrite (`query-extract.scopeProvisionsToLaw`), so this tool, the
     // history leg and the CLI router cannot drift apart again.
+    // `titleId` is what stops the schedule being asserted of the wrong Act: this
+    // tool takes `registerId` *and* `query`, and `chain_amendment_track` hands
+    // it both, so an alias for the CCA could arrive beside a title that is not
+    // the CCA. It printed `"ACL" is sch 2 of this Act` about the Crimes Act 1914
+    // until the resolved title was passed in.
     const scope = scopeProvisionsToLaw({
       query: input.query,
       provisions: input.provision ? [input.provision] : [],
+      titleId: title.id,
     })
     const scoped = scope.provisions[0]
 
@@ -246,8 +252,24 @@ async function safeProvision(
   }
 }
 
+/**
+ * `s 45 is not in the latest table of contents of …` — the table of contents
+ * was read, and the provision was not in it.
+ *
+ * The opposite fact from a missing compilation, and it contains the words
+ * "table of contents", so it has to be excluded before they are matched.
+ */
+const PROVISION_NOT_IN_TOC = /\bis not in the\b[^.]{0,80}\btable of contents\b/i
+
 /** A 404 on `document.ncx` is the whole compilation missing, not the provision. */
 function isDocumentMissing(message: string): boolean {
+  // Read the provision-level miss first. Without this, "sch 2 s 18 is not in the
+  // latest table of contents of F2020L01025" matched the `table of contents`
+  // branch and was reported as "the COMPILATION's text is not available in
+  // machine-readable form (older compilations are often PDF/Word only)" — the
+  // wrong half of the very distinction the caller is being shown, printed one
+  // line under the message that states the right one.
+  if (PROVISION_NOT_IN_TOC.test(message)) return false
   return /document\.ncx|table of contents/i.test(message) || /404/.test(message)
 }
 

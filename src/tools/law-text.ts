@@ -18,7 +18,7 @@
 import { z } from "zod"
 import type { AuApiClient } from "../lib/api-client.js"
 import { ErrorCodes, LawApiError, formatToolError } from "../lib/errors.js"
-import { primaryLawMention, provisionParam } from "../lib/query-extract.js"
+import { mentionForTitle, primaryLawMention, provisionParam } from "../lib/query-extract.js"
 import { truncateResponse } from "../lib/schemas.js"
 import { formatRef } from "../lib/section-ref.js"
 import type { NcxEntry, ToolResponse } from "../lib/types.js"
@@ -32,6 +32,7 @@ import {
   renderTree,
   requireRef,
   sliceSubtree,
+  subtreeMembers,
   tocSummary,
   volumeRoots,
 } from "./statute-helpers/toc.js"
@@ -98,8 +99,13 @@ export async function getLawText(apiClient: AuApiClient, input: GetLawTextInput)
     // not applying it. The rewrite itself is the router's own
     // (`query-extract.provisionParam`), reused so the MCP path and the CLI
     // cannot drift; an explicit `sch N` from the caller keeps its own, and an
-    // alias with no schedule changes nothing.
-    const mention = input.query ? primaryLawMention(input.query) : undefined
+    // alias with no schedule changes nothing — and neither does an alias for a
+    // *different* Act than the one this call resolved.
+    // `{registerId:"C1914A00012", query:"ACL", provision:"s 18"}` used to look
+    // `sch 2 s 18` up in the Crimes Act 1914 and report `[LAW_NOT_FOUND]` for a
+    // section that exists; `registerId` decides the title, so the alias's
+    // schedule has no business travelling with it.
+    const mention = mentionForTitle(input.query ? primaryLawMention(input.query) : undefined, title.id)
     const scoped = provisionParam(asked, mention)
     const rewritten = scoped !== formatRef(asked)
     const ref = rewritten ? requireRef(scoped) : asked
@@ -132,6 +138,10 @@ export async function getLawText(apiClient: AuApiClient, input: GetLawTextInput)
       )
     }
 
+    // What the slice will actually serve — `subtreeMembers`, not `descendantsOf`,
+    // so the count printed below matches the text below it. They differ only where
+    // FRL puts a container's contents in sibling headings (ITAA 1997 subdivisions).
+    const members = subtreeMembers(entries, node)
     const structural = isStructuralKind(ref.kind) || descendantsOf(entries, node).length > 0
     const body = structural
       ? await subtreeText(apiClient, title.id, date, entries, node)
@@ -145,7 +155,7 @@ export async function getLawText(apiClient: AuApiClient, input: GetLawTextInput)
       breadcrumb.length > 0 ? `In: ${breadcrumb.join(" › ")}` : "",
       `Source: ${node.volumeDoc}${node.anchor ? `#${node.anchor}` : ""} | ${frlHumanUrl(title.id, date)}`,
       structural
-        ? `(whole ${ref.kind} — ${descendantsOf(entries, node).length} table-of-contents entries below it)`
+        ? `(whole ${ref.kind} — ${members.length} table-of-contents entries below it)`
         : "",
       "",
       body,

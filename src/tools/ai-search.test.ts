@@ -20,6 +20,16 @@ const FW_REGS: FrlTitle = {
   status: "InForce",
   isPrincipal: true,
 }
+/** The Act the ACL's schedule 2 actually belongs to. */
+const CCA: FrlTitle = {
+  id: "C2004A00109",
+  name: "Competition and Consumer Act 2010",
+  collection: "Act",
+  status: "InForce",
+  isPrincipal: true,
+  year: 1974,
+  number: 51,
+}
 
 interface Call {
   path: string
@@ -163,14 +173,38 @@ describe("pointing, not answering", () => {
     // to tell they were sent to the wrong provision. `resolveLawAlias` above
     // matches a whole string and sees nothing in this sentence, which is why
     // the schedule has to come from the same reading the router uses.
-    const { api } = client([FW_ACT])
+    const { api } = client([CCA])
     const text = (await run(api, { query: "ACL s 18 misleading conduct" })).content[0].text
-    expect(text).toContain('provision="sch 2 s 18"')
-    expect(text).not.toContain('provision="s 18"')
+    expect(text).toContain('get_law_text(registerId="C2004A00109", provision="sch 2 s 18")')
     // And it says why, rather than silently substituting a different number.
     expect(text).toContain("sch 2")
     expect(text).toContain("Competition and Consumer Act 2010")
     expect(text).toContain("Provision reference(s) read out of your question")
+  })
+
+  it("searches the Act an alias inside a longer question names, not only a bare alias", async () => {
+    // `resolveLawAlias` matches a whole string, so it sees no alias in "ACL s 18
+    // misleading conduct" and ran one pass. The schedule note came from the
+    // substring reading and was printed anyway, so the tool advertised
+    // `provision="sch 2 s 18"` while never searching the one Act that has a
+    // schedule 2. Live 2026-09-05 that query returned seven unrelated
+    // instruments and no CCA at all.
+    const { api, calls } = client([CCA])
+    await run(api, { query: "ACL s 18 misleading conduct" })
+    expect(calls).toHaveLength(2)
+    expect(decodeURIComponent(calls[1].path).replace(/%20/g, " ")).toContain("Competition and Consumer Act 2010")
+  })
+
+  it("keeps the alias's schedule off every hit that is not that Act", async () => {
+    // "sch 2 s 18" is a fact about the CCA. Printed against a title that has no
+    // schedule 2 it is a follow-up call that cannot succeed, so the other hits
+    // get the plain reference and the response says which title the schedule
+    // belonged to.
+    const { api } = client([FW_ACT, CCA])
+    const text = (await run(api, { query: "ACL s 18 misleading conduct" })).content[0].text
+    expect(text).toContain('get_law_text(registerId="C2004A00109", provision="sch 2 s 18")')
+    expect(text).toContain('get_law_text(registerId="C2009A00028", provision="s 18")')
+    expect(text).toContain("That schedule belongs to C2004A00109 only")
   })
 
   it("leaves a reference that already names its schedule alone", async () => {

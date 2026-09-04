@@ -169,6 +169,17 @@ export function parseJudgment(html: string, url: string): SourceDocument {
     documents: [{ label: "PDF", url: `${url.replace(/\/$/, "")}/pdf` }],
   }
   if (citation) document.citation = citation
+  // Some Queensland records carry the headnote panel but no reasons in HTML —
+  // reported cases especially. `renderDocument` prints no body section at all
+  // when `text` is empty, so without this the caller gets a title, a citation
+  // and a PDF link with nothing saying the reasons were not returned, and a
+  // missing document reads as a short one. The FWC path already says this.
+  if (!body.trim()) {
+    document.note =
+      "Queensland Judgments served this record without reasons in HTML — the metadata above and the PDF link are " +
+      "the whole of what came back. The reasons exist; this server did not receive them as text. Open the PDF, or " +
+      "try the medium-neutral citation if this record is a reported (Qd R) one."
+  }
   return document
 }
 
