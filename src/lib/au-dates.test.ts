@@ -125,6 +125,37 @@ describe("a month and a year", () => {
     expect(result.rest).toBe("Competition and Consumer Act")
   })
 
+  // A question about a month is a question about the whole month. Reading it
+  // as the month's last day dropped the other twenty-nine: `amendment_track`
+  // sent 30 June 2019 as `fromDate` with no `toDate` and answered with every
+  // amendment from that day to today, and `get_law_history` swept one day of
+  // the month it was asked about.
+  it("reads a month with no lead-in as the whole month", () => {
+    const result = parseAuDateRange("amendments to the Privacy Act in June 2019", NOW)!
+    expect(result.range).toEqual({ from: "2019-06-01", to: "2019-06-30" })
+    expect(result.pattern).toBe("month-year-range")
+    expect(parseAuDateRange("register changes in February 2016", NOW)!.range).toEqual({
+      from: "2016-02-01",
+      to: "2016-02-29",
+    })
+  })
+
+  it("still answers a point-in-time question with one day", () => {
+    // The lead-in is what makes it a point in time, and the single-date match
+    // that carries it is wider than the window match inside it.
+    const result = extractQueryDates("Privacy Act as at June 2015", NOW)
+    expect(result.range).toBeUndefined()
+    expect(result.date?.iso).toBe("2015-06-30")
+    expect(extractQueryDates("in force at March 2019", NOW).date?.iso).toBe("2019-03-31")
+  })
+
+  it("leaves a day-bearing date and an open-ended period alone", () => {
+    // "1 July 2020" names a day, not a July-long window…
+    expect(parseAuDateRange("the law on 1 July 2020", NOW)).toBeNull()
+    // …and "since June 2019" names an open-ended period, not that month.
+    expect(parseAuDateRange("decisions since June 2019", NOW)).toBeNull()
+  })
+
   it("reads a month at each end of a range", () => {
     // The standard spelling of the 2020-21 financial year. Until a month-year
     // fragment resolved, both boundaries came back undefined, the from-to
@@ -160,6 +191,21 @@ describe("the Australian financial year", () => {
       expect(parseAuDateRange(input, NOW)!.range).toEqual({ from, to })
     })
   }
+
+  // A financial year is twelve months. A wider span carrying the same marker
+  // is a run of them, and answering it with the last one silently drops every
+  // year but the final twelve months of the period asked about.
+  it("does not shrink a multi-year span to its closing financial year", () => {
+    const cases: Array<[input: string, from: string, to: string]> = [
+      ["ATO rulings financial years 2019-2024", "2019-01-01", "2024-12-31"],
+      ["reports for financial years 2018-2022", "2018-01-01", "2022-12-31"],
+      ["the financial years 2010-2020", "2010-01-01", "2020-12-31"],
+      ["the 2018 to 2021 financial years", "2018-01-01", "2021-12-31"],
+    ]
+    for (const [input, from, to] of cases) {
+      expect({ input, ...parseAuDateRange(input, NOW)!.range }).toEqual({ input, from, to })
+    }
+  })
 
   it("leaves a calendar range alone", () => {
     // No marker, so this is not a financial year and must not be read as one.
@@ -287,3 +333,4 @@ describe("parseDateFragment", () => {
     expect(parseDateFragment("not a date", NOW)).toBeUndefined()
   })
 })
+

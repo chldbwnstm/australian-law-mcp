@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs"
 import { beforeEach, describe, expect, it } from "vitest"
 import type { AuApiClient } from "../lib/api-client.js"
 import { lawCache } from "../lib/cache.js"
+import { ErrorCodes, LawApiError } from "../lib/errors.js"
 import { parseNcx } from "../lib/ncx-parser.js"
 import type { FrlTitle } from "../lib/types.js"
 import {
@@ -96,25 +97,99 @@ describe("get_batch_provisions results", () => {
   })
 
   it("marks a title that could not be resolved without abandoning the rest", async () => {
+    // What `getTitle` really raises when the Register answered and its Titles
+    // collection had no such row: authoritative absence.
     const api = {
       getTitle: async (id: string) => {
-        if (id === "C9999X99999") throw new Error("FRL reports no title with id C9999X99999")
+        if (id === "C9999X99999") {
+          throw new LawApiError(`FRL reports no title with id ${id}`, ErrorCodes.NOT_FOUND)
+        }
         return CCA
       },
       getToc: async () => ENTRIES,
       getVolumeHtml: async () => VOL1,
     } as unknown as AuApiClient
-    const text = (
-      await getBatchProvisions(api, {
-        laws: [
-          { registerId: "C9999X99999", provisions: ["s 1"] },
-          { registerId: "C2004A00109", provisions: ["s 18"] },
-        ],
-        maxCharsPerProvision: 2500,
-      } as never)
-    ).content[0].text
-    expect(text).toContain("[UNRESOLVED]")
+    const result = await getBatchProvisions(api, {
+      laws: [
+        { registerId: "C9999X99999", provisions: ["s 1"] },
+        { registerId: "C2004A00109", provisions: ["s 18"] },
+      ],
+      maxCharsPerProvision: 2500,
+    } as never)
+    const text = result.content[0].text
+    expect(text).toContain("[NOT_FOUND]")
     expect(text).toContain("Meetings of Commission")
+    // The Register said so, so this one really is an absence: no upstream
+    // label, and a batch that kept its other title is not an error.
+    expect(text).not.toContain("[UPSTREAM_NO_DATA]")
+    expect(result.isError).toBeFalsy()
+  })
+
+  it("a title lookup that failed upstream is not a list of absences", async () => {
+    // The counter on this path was hard-coded to 0, so an outage in the title
+    // lookup printed "3 requested, 0 retrieved, 3 not found" with no label and
+    // no flag — and `chains.ts` secOrSkip rendered the block as data instead
+    // of [NOT RETRIEVED].
+    const api = {
+      getTitle: async () => {
+        throw new LawApiError("frlTitles upstream server error (500)", ErrorCodes.API_ERROR)
+      },
+      searchTitles: async () => {
+        throw new LawApiError("frlTitles upstream server error (500)", ErrorCodes.API_ERROR)
+      },
+      getToc: async () => ENTRIES,
+      getVolumeHtml: async () => VOL1,
+    } as unknown as AuApiClient
+
+    const result = await getBatchProvisions(api, {
+      registerId: "C2004A00109",
+      provisions: ["s 18", "s 45", "sch 2 s 18"],
+      maxCharsPerProvision: 2500,
+    } as never)
+    const text = result.content[0].text
+
+    expect(result.isError).toBe(true)
+    expect(text).toContain("[UPSTREAM_NO_DATA] 3 of them failed")
+    expect(text).toContain("not evidence the provision is absent")
+    expect(text).toContain("[UPSTREAM_NO_DATA] frlTitles upstream server error (500)")
+    expect(text).not.toContain("[NOT_FOUND]")
+  })
+
+  it("counts a table of contents that would not load as an upstream loss too", async () => {
+    // The title resolved; the compilation's TOC did not. Same block, same
+    // hard-coded zero.
+    const api = {
+      getTitle: async () => CCA,
+      getToc: async () => {
+        throw new Error("frlDocs upstream server error (500)")
+      },
+      getVolumeHtml: async () => VOL1,
+    } as unknown as AuApiClient
+
+    const result = await getBatchProvisions(api, {
+      registerId: "C2004A00109",
+      provisions: ["s 18"],
+      maxCharsPerProvision: 2500,
+    } as never)
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toContain("[UPSTREAM_NO_DATA] 1 of them failed")
+  })
+
+  it("does not label an ambiguous query as an upstream failure", async () => {
+    // "Evidence Act" names Acts in several jurisdictions. Nothing was asked of
+    // the Register, so neither absence nor "retry shortly" is true.
+    const { api } = client()
+    const result = await getBatchProvisions(api, {
+      query: "Evidence Act",
+      provisions: ["s 1"],
+      maxCharsPerProvision: 2500,
+    } as never)
+    const text = result.content[0].text
+
+    expect(text).toContain("[INVALID_PARAMETER]")
+    expect(text).not.toContain("[UPSTREAM_NO_DATA]")
+    expect(result.isError).toBeFalsy()
   })
 
   it("marks the provisions of a dead volume and keeps everything already retrieved", async () => {

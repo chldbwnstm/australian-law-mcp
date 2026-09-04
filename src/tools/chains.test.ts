@@ -160,6 +160,20 @@ describe("chain_law_system", () => {
     await chainLawSystem(client, { query: "CCA", provisions: ["s 18"] })
     expect(getBatchProvisions).toHaveBeenCalledWith(client, {
       registerId: "C2004A00109",
+      query: "CCA",
+      provisions: ["s 18"],
+    })
+  })
+
+  it("carries the alias into get_batch_provisions, which is where the schedule rewrite lives", async () => {
+    // "ACL" *is* CCA sch 2, and get_batch_provisions reads that off its own
+    // `query`. Sending only the registerId drops the rewrite, and the chain
+    // answers "s 18" with the body section — "Meetings of Commission" — under
+    // a heading about the Australian Consumer Law.
+    await chainLawSystem(client, { query: "ACL", provisions: ["s 18"] })
+    expect(getBatchProvisions).toHaveBeenCalledWith(client, {
+      registerId: "C2004A00109",
+      query: "ACL",
       provisions: ["s 18"],
     })
   })
@@ -242,13 +256,38 @@ describe("chain_amendment_track", () => {
     expect(text).toContain("Pass `provision`")
 
     await chainAmendmentTrack(client, { query: "CCA", provision: "s 45" })
-    expect(getProvisionHistory).toHaveBeenCalledWith(client, { registerId: "C2004A00109", provision: "s 45" })
+    expect(getProvisionHistory).toHaveBeenCalledWith(client, {
+      registerId: "C2004A00109",
+      query: "CCA",
+      provision: "s 45",
+    })
+  })
+
+  it("carries the alias into the history and the comparison, so a schedule alias survives", async () => {
+    // get_provision_history rewrites "s 18" to "sch 2 s 18" from its own
+    // `query` (the ACL trap: sch 2 s 18 was inserted in 2010, the body's s 18
+    // was amended in 1986/1995/2007). Passing the registerId alone drops the
+    // alias and the chain prints the wrong section's history. compare_old_new
+    // takes the same pair for the same reason — the id decides which title is
+    // read, the alias decides which schedule a bare "s 18" belongs to.
+    await chainAmendmentTrack(client, { query: "ACL", provision: "s 18" })
+    expect(getProvisionHistory).toHaveBeenCalledWith(client, {
+      registerId: "C2004A00109",
+      query: "ACL",
+      provision: "s 18",
+    })
+    expect(compareOldNew).toHaveBeenCalledWith(client, {
+      registerId: "C2004A00109",
+      query: "ACL",
+      provision: "s 18",
+    })
   })
 
   it("passes the dates through to the comparison", async () => {
     await chainAmendmentTrack(client, { query: "CCA", fromDate: "2019-01-01", toDate: "2024-01-01" })
     expect(compareOldNew).toHaveBeenCalledWith(client, {
       registerId: "C2004A00109",
+      query: "CCA",
       fromDate: "2019-01-01",
       toDate: "2024-01-01",
     })

@@ -210,6 +210,23 @@ describe("statutes whose name is, or ends in, a suffix word", () => {
     expect(away.lawName).toBeUndefined()
   })
 
+  // A mandatory title body in front of `Law` blocks the bare word and nothing
+  // else: "this Law" and "Australian Law" both satisfy it, and a statute the
+  // author never named costs a live title lookup and one of `maxCitations`.
+  it("does not read a prose phrase that merely ends in Law as a statute", () => {
+    const [demonstrative] = extractStatuteCitations("Under this Law s 5 the tribunal may act.", 20)
+    expect(demonstrative.lawName).toBeUndefined()
+    expect(demonstrative.attachedBy).toBe("none")
+
+    const [adjectival] = extractStatuteCitations("a matter of Australian Law s 5 requires notice.", 20)
+    expect(adjectival.lawName).toBeUndefined()
+    expect(adjectival.attachedBy).toBe("none")
+
+    const [leading] = extractStatuteCitations("The answer is s 5 of the Australian Law, broadly.", 20)
+    expect(leading.lawName).toBeUndefined()
+    expect(leading.attachedBy).toBe("none")
+  })
+
   it("reads a plural ITAA pinpoint as the section it names, not an impossible range", () => {
     const [cite] = extractStatuteCitations(
       "Income Tax Assessment Act 1997 (Cth) ss 355-25, 355-30 apply.",
@@ -218,6 +235,41 @@ describe("statutes whose name is, or ends in, a suffix word", () => {
     expect(cite.ref.number).toBe("355-25")
     expect(cite.ref.rangeEnd).toBeUndefined()
     expect(cite.pinpoint).toBe("ss 355-25")
+  })
+})
+
+// `ROMAN_NUMBER` is also the tail of half the abbreviations an Australian
+// lawyer writes. Read without an edge guard, `SIS` is `s IS` — and sitting
+// after a real citation it inherits that Act, so `verify_citations` reports a
+// section the Act does not have and calls correct prose a hallucination.
+describe("all-caps abbreviations are not roman pinpoints", () => {
+  it("does not turn an acronym after a full citation into an impossible pinpoint", () => {
+    const cites = extractStatuteCitations(
+      "Under the Superannuation Industry (Supervision) Act 1993 (Cth) SIS trustees owe covenants under s 52.",
+      15,
+    )
+    expect(cites.map((cite) => cite.pinpoint)).toEqual(["s 52"])
+  })
+
+  it("does not read the other everyday abbreviations as pinpoints", () => {
+    expect(extractStatuteCitations("The SDA and the RDA were both considered.", 15)).toEqual([])
+    expect(extractStatuteCitations("Chapter SIX of the report deals with it.", 15)).toEqual([])
+    expect(extractStatuteCitations("SCHEDULE 2 s 18 of the CCA applies.", 15).map((cite) => cite.pinpoint)).toEqual([
+      "s 18",
+    ])
+  })
+
+  it("does not let phantoms spend the maxCitations budget", () => {
+    const cites = extractStatuteCitations(
+      "SIS SDA RDA. Competition and Consumer Act 2010 (Cth) s 18 and s 45 and s 46.",
+      3,
+    )
+    expect(cites.map((cite) => cite.pinpoint)).toEqual(["s 18", "s 45", "s 46"])
+  })
+
+  it("still reads the roman pinpoints AGLC actually writes", () => {
+    const cites = extractStatuteCitations("Constitution s 51(xx), pt IVA and s IV all apply.", 15)
+    expect(cites.map((cite) => cite.pinpoint)).toEqual(["s 51(xx)", "pt IVA", "s IV"])
   })
 })
 

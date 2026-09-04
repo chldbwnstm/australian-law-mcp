@@ -106,10 +106,19 @@ export function parseAuDateRange(query: string, now?: Date): RangeParseResult | 
   return null
 }
 
-/** Does `outer` (as found in `query`) fully contain the span of `match`? */
+/**
+ * Does `outer` (as found in `query`) contain the span of `match` *and* say
+ * more than it?
+ *
+ * Equal spans are not a fragment being re-read: "June 2019" is one phrase both
+ * tables recognise in full, and there the window is the reading that answers
+ * the question. Only a strictly wider single-date match — "as at June 2015",
+ * "as at 30 June 2015" — is the point-in-time phrase this veto exists for.
+ */
 function containsSpan(query: string, outer: string, match: RegExpMatchArray): boolean {
   const start = query.indexOf(outer)
   if (start < 0 || match.index === undefined) return false
+  if (match[0].length >= outer.length) return false
   return match.index >= start && match.index + match[0].length <= start + outer.length
 }
 

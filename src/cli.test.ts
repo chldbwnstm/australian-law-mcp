@@ -335,6 +335,28 @@ describe("@tool direct calls", () => {
       query: "privacy",
       searchText: true,
     })
+    expect(parseDirectCall("@search_law query=privacy searchText=false").params.searchText).toBe(false)
+    expect(parseDirectCall("@search_law query=privacy searchText=0").params.searchText).toBe(false)
+    expect(parseDirectCall("@search_law query=privacy searchText=TRUE").params.searchText).toBe(true)
+  })
+
+  it("hands a boolean spelling it does not know to the schema, rather than guessing false", () => {
+    // Every spelling but `true`/`1` used to come back `false`, and Zod accepts
+    // a boolean, so the REPL ran the opposite of what was typed: repealed
+    // titles included with nothing in the output saying so.
+    const { toolName, params } = parseDirectCall("@suggest_law_names partial=Trade inForceOnly=yes")
+    expect(params).toEqual({ partial: "Trade", inForceOnly: "yes" })
+
+    const tool = allTools.find((entry) => entry.name === toolName)!
+    const parsed = tool.schema.safeParse(params)
+    expect(parsed.success).toBe(false)
+    expect(JSON.stringify(parsed)).toContain("inForceOnly")
+
+    for (const spelling of ["on", "Y", "no", "off", "maybe"]) {
+      expect(parseDirectCall(`@suggest_law_names partial=Trade inForceOnly=${spelling}`).params.inForceOnly).toBe(
+        spelling,
+      )
+    }
   })
 
   it("still reads a JSON body, and a bare name", () => {

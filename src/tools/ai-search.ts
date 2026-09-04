@@ -29,8 +29,9 @@ import { z } from "zod"
 import type { AuApiClient } from "../lib/api-client.js"
 import { formatToolError } from "../lib/errors.js"
 import { resolveLawAlias } from "../lib/law-alias.js"
+import { extractProvisions } from "../lib/query-extract.js"
 import { truncateResponse } from "../lib/schemas.js"
-import { extractSectionRefs, formatRef } from "../lib/section-ref.js"
+import { formatRef } from "../lib/section-ref.js"
 import { frlSearchUrl, searchTitlesMatching } from "../lib/sources/frl-search.js"
 import type { FrlTitle, ToolResponse } from "../lib/types.js"
 import { collectionLabel } from "./statute-helpers/format.js"
@@ -145,7 +146,16 @@ export async function searchAiLawStructured(
     }),
   )
 
-  const provisionRefs = extractSectionRefs(query).map(formatRef)
+  // The *guarded* extractor, not the raw document scanner. `section-ref`'s
+  // scanner is case-insensitive, so its roman-numeral branch reads ordinary
+  // words as provisions — "small business" → s MA, "sections mix" → ss MIX,
+  // "applies" → app LIE. Here that phantom is printed back as "the provision
+  // reference read out of your question" and handed on as the next call, which
+  // sends the caller to look up a section nobody wrote. `extractProvisions`
+  // masks the statute's own title and drops both fragments and un-capitalised
+  // roman numbers (`query-extract.ts`), and is the same reading the router
+  // uses — so the two cannot disagree about what the question cited.
+  const provisionRefs = extractProvisions(query).map(formatRef)
 
   // De-duplicate across the two passes, keeping the first attribution: a title
   // the question itself named should not be relabelled as an alias hit.

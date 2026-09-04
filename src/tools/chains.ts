@@ -342,8 +342,15 @@ export async function chainLawSystem(
     const [threeTier, provisions, schedules] = await Promise.all([
       callTool(getThreeTier as Handler, apiClient, { registerId: law.registerId }),
       input.provisions?.length
-        ? callTool(getBatchProvisions as Handler, apiClient, {
+        ? // The query goes with the id, not instead of it: `resolveTitle`
+          // prefers the registerId, so the title is still the one this chain
+          // picked, while `get_batch_provisions` reads the alias off `query`
+          // to scope a bare provision to the schedule the alias names. "ACL"
+          // *is* CCA sch 2, so dropping it answers "s 18" with the body's
+          // "Meetings of Commission" under an Australian-Consumer-Law heading.
+          callTool(getBatchProvisions as Handler, apiClient, {
             registerId: law.registerId,
+            query: input.query,
             provisions: input.provisions,
           })
         : Promise.resolve(null),
@@ -606,9 +613,14 @@ export async function chainAmendmentTrack(
     const law = base.laws[0]
     const parts = [`═══ Amendment tracking: ${law.name} ═══`, baseLawHeader(law, base.notes)]
 
+    // Both legs take the id *and* the words the caller used, for the reason
+    // chain_law_system does: the id fixes the title, the alias is what tells a
+    // bare "s 18" which schedule it belongs to (ACL = CCA sch 2, whose s 18 has
+    // an entirely different amendment history from the body's).
     const [diff, history] = await Promise.all([
       callTool(compareOldNew as Handler, apiClient, {
         registerId: law.registerId,
+        query: input.query,
         ...(input.fromDate ? { fromDate: input.fromDate } : {}),
         ...(input.toDate ? { toDate: input.toDate } : {}),
         ...(input.provision ? { provision: input.provision } : {}),
@@ -616,6 +628,7 @@ export async function chainAmendmentTrack(
       input.provision
         ? callTool(getProvisionHistory as Handler, apiClient, {
             registerId: law.registerId,
+            query: input.query,
             provision: input.provision,
           })
         : Promise.resolve(null),

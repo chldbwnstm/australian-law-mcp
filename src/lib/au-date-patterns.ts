@@ -286,6 +286,13 @@ export const RANGE_PATTERNS: readonly RangePattern[] = [
     // to appear on one side or the other: a bare "2015-2019" is a calendar
     // range and belongs to `year-to-year` below, which is why this cannot
     // simply be folded into it.
+    //
+    // One financial year spans two calendar years and no more, so the closing
+    // year has to be the opening one plus one. Without that check the marker
+    // alone was enough to swallow a multi-year request: "financial years
+    // 2019-2024" resolved to the twelve months ending 30 June 2024 and the
+    // other five years asked about were dropped in silence. Anything wider
+    // falls through to `year-to-year`, which keeps the whole span.
     name: "financial-year-span",
     regex: new RegExp(
       `\\b(?:FY|financial\\s+years?)\\s*${YEAR}\\s*[-/–—]\\s*${SPAN_END}\\b` +
@@ -294,7 +301,8 @@ export const RANGE_PATTERNS: readonly RangePattern[] = [
     ),
     resolve: (m) => {
       const start = Number(m[1] ?? m[3])
-      return financialYear(spanEndYear(start, m[2] ?? m[4]))
+      const end = spanEndYear(start, m[2] ?? m[4])
+      return end === start + 1 ? financialYear(end) : undefined
     },
   },
   {
@@ -333,6 +341,38 @@ export const RANGE_PATTERNS: readonly RangePattern[] = [
     name: "last-n-months",
     regex: new RegExp(`\\b(?:last|past)\\s+(${COUNT_ALTERNATION})\\s+months?\\b`, "i"),
     resolve: (m, { now }) => ({ from: isoOf(shift(now, 0, -countValue(m[1]))), to: isoOf(now) }),
+  },
+  {
+    // "June 2019" as a **window**. A month names a period, and a question
+    // about what happened during one asks about all of it: before this entry
+    // existed the phrase fell through to `bare-year` and produced the whole
+    // calendar year; with only the single-date reading of it, the same
+    // question collapsed to the month's last day and the other twenty-nine
+    // were never swept.
+    //
+    // Which reading a caller meant is settled in `parseAuDateRange`: a
+    // point-in-time phrase carries a lead-in ("as at June 2015"), so its
+    // single-date match is strictly wider than this one and this match is
+    // discarded as a fragment of it. A bare "in June 2019" matches both
+    // exactly, and there the window is the answer to the question asked.
+    //
+    // The lookbehinds are guards, not decoration: a directional word in front
+    // names an open-ended period rather than that month ("since June 2019"),
+    // and a day already written is a day the caller meant ("1 July 2020" is
+    // not a July-long window).
+    name: "month-year-range",
+    regex: new RegExp(
+      `(?<!(?:since|after|before|until|through|to)\\s{1,3})` +
+      `(?<!\\d(?:st|nd|rd|th)?\\s{0,3})\\b(${MONTH_ALTERNATION})\\.?,?\\s+${YEAR}\\b`,
+      "i",
+    ),
+    resolve: (m) => {
+      const month = monthNumber(m[1])!
+      const year = Number(m[2])
+      const from = toIso(year, month, 1)
+      const to = toIso(year, month, lastDayOfMonth(year, month))
+      return from && to ? { from, to } : undefined
+    },
   },
   {
     // Bare year, last so the combining patterns above win. Anchored against a

@@ -144,6 +144,18 @@ describe("pointing, not answering", () => {
     expect(text).toContain('provision="s 524"')
   })
 
+  it("does not read a provision out of an ordinary English word", async () => {
+    // The document scanner is case-insensitive, so its roman-numeral branch
+    // matches lower-case letters: "small" is section MA, "applies" appendix
+    // LIE. Printed back as "the provision you cited" and offered as the next
+    // call, that sends the caller to look up a section nobody wrote.
+    const { api } = client([FW_ACT])
+    const text = (await run(api, { query: "does the ACL cover services supplied to a small business" })).content[0].text
+    expect(text).not.toContain("Provision reference(s) read out of your question")
+    expect(text).not.toContain("s ma")
+    expect(text).toContain('get_law_text(registerId="C2009A00028")')
+  })
+
   it("says these are pointers rather than an answer", async () => {
     const { api } = client([FW_ACT])
     expect((await run(api)).content[0].text).toContain("pointers, not an answer")
@@ -183,6 +195,18 @@ describe("the structured form chains use", () => {
       provisionHints: false,
     } as never)
     expect(structured.titleSignals[0]).toMatchObject({ registerId: "C2009A00028", via: "query" })
+    expect(structured.provisionRefs).toEqual([])
+  })
+
+  it("hands chains no phantom provision built out of a lower-case word", async () => {
+    // Same guard as the router's `extractProvisions`: a chain that takes this
+    // list feeds it straight to get_law_text.
+    const { api } = client([FW_ACT])
+    const structured = await searchAiLawStructured(api, {
+      query: "which sections mix civil and criminal liability",
+      limit: 10,
+      provisionHints: false,
+    } as never)
     expect(structured.provisionRefs).toEqual([])
   })
 

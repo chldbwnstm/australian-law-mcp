@@ -260,6 +260,25 @@ async function runInteractive(): Promise<void> {
 }
 
 /**
+ * The spellings of a boolean a REPL line may use. Anything else is left as the
+ * string it was typed as, so the schema rejects it *by name*.
+ *
+ * `coerceValue`'s boolean arm is `value === "true" || value === "1"`, which is
+ * the right reading for a generated `--flag` (commander hands that path a real
+ * boolean) but not for a value a person typed: `inForceOnly=yes` became
+ * `false`, the schema accepted it, and the REPL quietly ran the opposite of
+ * the request — repealed titles included, with nothing in the output saying
+ * so. Guessing is the failure here; `[INVALID_PARAMETER] inForceOnly: expected
+ * boolean, received string` is not.
+ */
+const BOOLEAN_WORDS = new Map<string, boolean>([
+  ["true", true],
+  ["1", true],
+  ["false", false],
+  ["0", false],
+])
+
+/**
  * Read `@tool_name {"json": true}` or `@tool_name key=value key2=value2`.
  *
  * Exported for the test: the typing of a `key=value` value is the whole
@@ -287,7 +306,10 @@ export function parseDirectCall(input: string): { toolName: string; params: Reco
       const eq = pair.indexOf("=")
       if (eq <= 0) continue
       const key = pair.slice(0, eq)
-      params[key] = coerceValue(pair.slice(eq + 1).replace(/^["']|["']$/g, ""), types.get(key) ?? "string")
+      const value = pair.slice(eq + 1).replace(/^["']|["']$/g, "")
+      const type = types.get(key) ?? "string"
+      params[key] =
+        type === "boolean" ? BOOLEAN_WORDS.get(value.toLowerCase()) ?? value : coerceValue(value, type)
     }
     return { toolName, params }
   }

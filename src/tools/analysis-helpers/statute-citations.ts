@@ -74,10 +74,11 @@ const JURISDICTION_TOKENS = "Cth|NSW|Vic|Qld|SA|WA|Tas|ACT|NT"
  * law rather than Acts and are cited by name; without it the one trap this
  * module exists for — ACL s 18 is CCA sch 2 s 18 — was never even attributed.
  *
- * It is guarded by the two properties every pattern below already has: the
+ * It is guarded by the two properties every pattern below already has — the
  * match is **case sensitive**, so "the law s 5 says" is ordinary prose and
  * stays prose, and a preceding title body is **mandatory**, so a bare `Law`
- * cannot be a statute name on its own.
+ * cannot be a statute name on its own — and by `isTitleReading`, because a
+ * mandatory title body still admits "this Law" and "Australian Law".
  */
 const STATUTE_SUFFIX = "Acts?|Code|Constitution|Regulations|Regulation|Rules|Rule|Ordinance|Instrument|Determination|Bill|Law"
 
@@ -97,9 +98,34 @@ const STANDALONE_TITLE_ONLY = new RegExp(`^${STANDALONE_TITLE}$`)
  * stays the authority on meaning, and anything this scanner matches that it
  * rejects is simply dropped.
  */
-const NUMBER = `(?:${ROMAN_NUMBER}|\\d{1,4}(?:[.\\-]\\d{1,4}){0,3}[A-Za-z]{0,4})`
+const ARABIC_NUMBER = `\\d{1,4}(?:[.\\-]\\d{1,4}){0,3}[A-Za-z]{0,4}`
+const NUMBER = `(?:${ROMAN_NUMBER}|${ARABIC_NUMBER})`
 const SUBSECTIONS = `(?:\\s?\\(${SUBDIVISION_TOKEN}\\)){0,6}`
 const SCHEDULE_WORD = `(?:[Ss]chedules|[Ss]chedule|[Ss]chs|[Ss]ch)`
+
+/**
+ * The number as it may follow a designation — the roman branch guarded on
+ * **both** edges.
+ *
+ * `ROMAN_NUMBER` is `[IVXLCDM]+[A-Z]?`, which is also the tail of a great many
+ * all-caps Australian abbreviations, and the designation letter in front of it
+ * is a designation spelling: `SIS` reads as `s IS`, `SDA` as `s DA`, `RDA` as
+ * `r DA`, `SIX` as `s IX`, `SCHEDULE` as `s CH`. Each phantom then inherits
+ * whatever Act the sentence already cited and is reported as a provision that
+ * Act does not have — `verify_citations` accusing correct prose of inventing a
+ * section, which is the one answer this server must never give. They also
+ * spend the `maxCitations` budget, pushing the real citations out.
+ *
+ * So a roman pinpoint must be **separated** from its designation (AGLC r 3.1.4
+ * writes a space: `pt IVA`, `s IV`, never `sIV`) and must not run on into a
+ * word (`SCH` inside `SCHEDULE`). `lib/query-extract.ts` guards the same
+ * grammar the same way — `romanNumbersAreCapitalised` plus `isWholeWordRef` —
+ * for queries; this is the document-scanner half of it.
+ *
+ * Arabic numbers keep both liberties on purpose: `s18` is written that way,
+ * and `s 10AA` legitimately ends in letters.
+ */
+const PINPOINT_NUMBER = `(?:(?<=\\s)${ROMAN_NUMBER}(?![A-Za-z])|${ARABIC_NUMBER})`
 
 /**
  * Designation spellings accepting either case of the first letter, and **only**
@@ -117,7 +143,8 @@ const SPELLINGS = SPELLING_ALTERNATION.split("|")
   .join("|")
 
 /**
- * A pinpoint anywhere in prose. The lookbehind keeps the `s` of "Acts" out.
+ * A pinpoint anywhere in prose. The lookbehind keeps the `s` of "Acts" out,
+ * and `PINPOINT_NUMBER` keeps an all-caps acronym from becoming a roman one.
  * The second branch is the bracketed form (`sub-s (2)`, `para (a)`), which has
  * no number of its own — without it those references are never extracted, and
  * an unextracted citation is one the report silently claims to have checked.
@@ -125,7 +152,7 @@ const SPELLINGS = SPELLING_ALTERNATION.split("|")
 const PINPOINT = new RegExp(
   `(?<![A-Za-z])(?:` +
     `(?:${SCHEDULE_WORD}\\s*${NUMBER}\\s*[,\\-]?\\s*)?` +
-    `(${SPELLINGS})\\s*(${NUMBER})` +
+    `(${SPELLINGS})\\s*(${PINPOINT_NUMBER})` +
     `(?:\\s*[-–]\\s*${NUMBER})?` +
     SUBSECTIONS +
     `|(${SPELLINGS})\\s?\\(${SUBDIVISION_TOKEN}\\)` +
@@ -231,18 +258,44 @@ export function statuteNameCandidates(name: string): string[] {
 /**
  * Drop leading prose words. Never touches `A`/`An`.
  *
- * How far it may trim depends on the last word. A one-word result is allowed
- * only for a title that stands alone — "under the Constitution" is exactly
- * that, and stopping a word early left "the Constitution", which resolves to
- * nothing. Everything else keeps two words, so "Under this Law s 5" cannot be
- * trimmed down to a statute called `Law`.
+ * It trims down to a single word and lets `isTitleReading` judge the result. A
+ * floor cannot do that judging: stopping two words early leaves the filler word
+ * standing *inside* the name, so "Under this Law s 5" became a statute called
+ * `this Law` — blocking the bare word `Law` while admitting every prose phrase
+ * that ends in it.
  */
 function trimLeadingFiller(name: string): string {
   const words = name.trim().split(/\s+/).filter(Boolean)
-  const floor = STANDALONE_TITLE_ONLY.test(words[words.length - 1] ?? "") ? 1 : 2
   let start = 0
-  while (start < words.length - floor && LEADING_FILLER.has(words[start].toLowerCase().replace(/[^a-z.]/g, ""))) start++
+  while (start < words.length - 1 && LEADING_FILLER.has(words[start].toLowerCase().replace(/[^a-z.]/g, ""))) start++
   return words.slice(start).join(" ")
+}
+
+/**
+ * Is this reading a short title, or prose that happens to end in a suffix word?
+ *
+ * Two readings are refused:
+ *
+ *  - **One word**, unless it is the title that stands alone (r 3.6, "the
+ *    Constitution"). `Act`, `Code` and `Law` on their own are English.
+ *  - **Two words ending in `Law`**, unless `law-alias.ts` vouches for them.
+ *    `Law` is the only suffix in `STATUTE_SUFFIX` that announces no enactment
+ *    of its own, so "Australian Law" and "this Law" are exactly as good a
+ *    match for it as a real body of law is. The *Australian Consumer Law* —
+ *    the reason `Law` is a suffix at all, because its s 18 is CCA sch 2 s 18 —
+ *    is three words and passes on its own, and any shorter body of law passes
+ *    by being in the alias table. That is the right place to teach this module
+ *    a new one; widening a regex here brings the prose back with it.
+ *
+ * A refused reading is not an error: the caller falls through to the other
+ * attachments and, failing those, reports that no statute was named.
+ */
+function isTitleReading(name: string): boolean {
+  const words = name.split(/\s+/).filter(Boolean)
+  if (words.length === 0) return false
+  if (words.length === 1) return STANDALONE_TITLE_ONLY.test(words[0])
+  if (words.length === 2 && words[1] === "Law") return isKnownAlias(name)
+  return true
 }
 
 /**
@@ -379,6 +432,7 @@ function attribute(
     }
     if (leading[1]) {
       const name = preferredStatuteName(leading[1].trim())
+      if (!isTitleReading(name)) return { attachedBy: "none", citeStart: pinpointStart }
       return {
         lawName: name,
         ...(leading[2] ? { year: Number(leading[2]) } : {}),
@@ -427,12 +481,16 @@ function attribute(
       }
     }
     const name = preferredStatuteName(captured)
-    return {
-      lawName: name,
-      ...(bare[2] ? { year: Number(bare[2]) } : {}),
-      attachedBy: "bare-name",
-      citeStart: lookbackStart + capturedAt + (captured.length - name.length),
-      ...(aliasSchedule(name) ? { schedule: aliasSchedule(name) } : {}),
+    // A refused reading falls through rather than returning: "Under this Law"
+    // is prose, but the abbreviation below may still name a statute.
+    if (isTitleReading(name)) {
+      return {
+        lawName: name,
+        ...(bare[2] ? { year: Number(bare[2]) } : {}),
+        attachedBy: "bare-name",
+        citeStart: lookbackStart + capturedAt + (captured.length - name.length),
+        ...(aliasSchedule(name) ? { schedule: aliasSchedule(name) } : {}),
+      }
     }
   }
 
