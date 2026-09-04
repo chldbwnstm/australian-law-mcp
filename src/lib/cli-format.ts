@@ -105,10 +105,13 @@ export function getCategory(tool: McpTool): string {
  * source-agnostic core and must not depend on which tools happen to be
  * registered.
  */
-export function printToolList(tools: readonly McpTool[]) {
+export function printToolList(
+  tools: readonly McpTool[],
+  categoryOf: (tool: McpTool) => string = getCategory,
+) {
   const grouped = new Map<string, McpTool[]>()
   for (const tool of tools) {
-    const cat = getCategory(tool)
+    const cat = categoryOf(tool)
     if (!grouped.has(cat)) grouped.set(cat, [])
     grouped.get(cat)!.push(tool)
   }

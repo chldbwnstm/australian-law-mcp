@@ -137,7 +137,7 @@ async function runInteractive(): Promise<void> {
       return
     }
     if (input === "tools" || input === "list") {
-      printToolList(allTools)
+      printToolList(allTools, (tool) => categoriesOf(tool.name)[0] ?? "other")
       rl.prompt()
       return
     }
