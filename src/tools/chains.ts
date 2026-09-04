@@ -37,7 +37,7 @@ import {
   type ChainDeadline,
   type LegOutcome,
 } from "./chain-deadline.js"
-import { resolveChainBaseLaw, type ChainBaseLaw } from "./chain-law-lookup.js"
+import { resolveChainBaseLaw, type ChainBaseLaw, type ChainBaseLawResult } from "./chain-law-lookup.js"
 import { fetchSearchDetailChain } from "./search-detail-chain.js"
 
 // Tool handlers — reused, never re-implemented.
@@ -251,11 +251,20 @@ function wantsSchedules(expansions: Expansion[]): boolean {
   return expansions.some((expansion) => expansion.startsWith("schedule_"))
 }
 
-function baseLawHeader(law: ChainBaseLaw): string {
+/**
+ * The `Base law:` line, plus how it was chosen when that is not obvious.
+ *
+ * The notes come from the resolver's full-text rung, which re-ranks the
+ * Register's relevance order and says so. Printing them here rather than
+ * burying them is the point: a base law picked on body-text relevance alone
+ * may be the wrong Act, and the reader has to be able to see that from the
+ * answer itself.
+ */
+function baseLawHeader(law: ChainBaseLaw, notes: readonly string[] = []): string {
   const facts = [`registerId: ${law.registerId}`]
   if (law.collection) facts.push(law.collection)
   if (law.status) facts.push(law.status)
-  return `Base law: ${law.name} (${facts.join(" | ")})`
+  return [`Base law: ${law.name} (${facts.join(" | ")})`, ...notes.map((note) => `  note: ${note}`)].join("\n")
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -286,7 +295,7 @@ export async function chainLawSystem(
     if (base.laws.length === 0) return noBaseLaw(input.query, base.attempts)
 
     const law = base.laws[0]
-    const parts = [`═══ Legislative structure: ${law.name} ═══`, baseLawHeader(law)]
+    const parts = [`═══ Legislative structure: ${law.name} ═══`, baseLawHeader(law, base.notes)]
 
     const wanted = detectExpansions(input.query)
     const [threeTier, provisions, schedules] = await Promise.all([
@@ -357,7 +366,7 @@ export async function chainActionBasis(
       }
 
       const law = baseO.value.laws[0]
-      parts.push(baseLawHeader(law))
+      parts.push(baseLawHeader(law, baseO.value.notes))
 
       const wanted = detectExpansions(input.query)
       const needSchedules = wantsSchedules(wanted)
@@ -554,7 +563,7 @@ export async function chainAmendmentTrack(
     if (base.laws.length === 0) return noBaseLaw(input.query, base.attempts)
 
     const law = base.laws[0]
-    const parts = [`═══ Amendment tracking: ${law.name} ═══`, baseLawHeader(law)]
+    const parts = [`═══ Amendment tracking: ${law.name} ═══`, baseLawHeader(law, base.notes)]
 
     const [diff, history] = await Promise.all([
       callTool(compareOldNew as Handler, apiClient, {
@@ -627,7 +636,7 @@ export async function chainStateLawCompare(
     const base = await resolveChainBaseLaw(apiClient, input.query, 1)
     if (base.laws.length > 0) {
       const law = base.laws[0]
-      parts.push(baseLawHeader(law))
+      parts.push(baseLawHeader(law, base.notes))
       const threeTier = await callTool(getThreeTier as Handler, apiClient, { registerId: law.registerId })
       parts.push(secOrSkip("Commonwealth Act and what is made under it", threeTier))
     } else {
@@ -701,7 +710,9 @@ export async function chainFullResearch(
         dl,
         Promise.all([
           callTool(searchAiLaw as Handler, apiClient, { query: input.query, limit: 8 }),
-          resolveChainBaseLaw(apiClient, input.query, 2).catch(() => ({ laws: [], attempts: [] })),
+          resolveChainBaseLaw(apiClient, input.query, 2).catch(
+            (): ChainBaseLawResult => ({ laws: [], attempts: [] }),
+          ),
         ]),
       )
       if (!step1.ok) return expiredChainResult(parts)
@@ -712,7 +723,7 @@ export async function chainFullResearch(
 
       const law = base.laws[0]
       if (law) {
-        parts.push(baseLawHeader(law))
+        parts.push(baseLawHeader(law, base.notes))
         const textO = await raceDeadline(
           dl,
           callTool(getLawText as Handler, apiClient, { registerId: law.registerId, maxChars: 8000 }),
@@ -782,7 +793,7 @@ export async function chainProcedureDetail(
     if (base.laws.length === 0) return noBaseLaw(input.query, base.attempts)
 
     const law = base.laws[0]
-    const parts = [`═══ Procedure, fees and forms: ${input.query} ═══`, baseLawHeader(law)]
+    const parts = [`═══ Procedure, fees and forms: ${input.query} ═══`, baseLawHeader(law, base.notes)]
 
     const filter = input.scheduleFilter ? { titleContains: input.scheduleFilter } : {}
     const [actSchedules, instruments] = await Promise.all([
