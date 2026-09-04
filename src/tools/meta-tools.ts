@@ -2,10 +2,11 @@
  * The two-hop layer: `discover_tools` finds an unadvertised tool, then
  * `execute_tool` runs it.
  *
- * Sixty tools cannot all be advertised — every ListTools entry is context every
- * client pays for on every request, and a model choosing between sixty
+ * Eighty-one tools cannot all be advertised — every ListTools entry is context
+ * every client pays for on every request, and a model choosing between eighty
  * near-synonyms chooses badly. Ten are advertised (`V3_EXPOSED`) and the rest
- * live behind these two.
+ * live behind these two. The count the two descriptions quote is derived below,
+ * never typed in.
  *
  * Which vocabulary reaches which category is `lib/tool-discovery`'s decision;
  * this file only shapes the answer and proxies the call.
@@ -31,6 +32,24 @@ export function setAllToolsRef(tools: McpTool<AuApiClient>[]): void {
   toolIndex = new Map(tools.map((tool) => [tool.name, tool]))
 }
 
+/**
+ * How many tools are reachable but not advertised — the figure both
+ * descriptions below quote to a model.
+ *
+ * Derived, not written down: the registry's own invariants hold every
+ * registered tool to being either advertised or in a `TOOL_CATEGORIES` entry,
+ * and no category names a tool that is not registered, so the categories minus
+ * `V3_EXPOSED` *is* the unadvertised set. `TOOL_COUNTS` says the same thing
+ * more directly, but reading it here would import `tool-registry`, which is
+ * the cycle this module is injected to avoid — and `toolIndex` is empty at
+ * module load, when these descriptions are built. The hard-coded "~50" this
+ * replaces was understating a surface of 71 by thirty per cent, which makes a
+ * model likelier to conclude a capability is missing than to search again.
+ */
+const UNADVERTISED_TOOL_COUNT = [...new Set(Object.values(TOOL_CATEGORIES).flat())].filter(
+  (name) => !V3_EXPOSED.has(name),
+).length
+
 // ── discover_tools ─────────────────────────────────────────────────────────
 
 export const DiscoverToolsSchema = z.object({
@@ -47,7 +66,7 @@ export const DiscoverToolsSchema = z.object({
 })
 
 export const discoverToolsDescription =
-  "Find the specialist tool for a task. This server exposes ten tools directly and keeps around fifty more — " +
+  `Find the specialist tool for a task. This server exposes ten tools directly and keeps ${UNADVERTISED_TOOL_COUNT} more — ` +
   "state and territory registers, tribunals, tax rulings, treaties, explanatory memoranda, point-in-time " +
   "compilations, terminology, citation checking — behind this lookup. Give it an intent or an area of law and it " +
   "returns the matching tools by category, saying which can be called directly and which go through execute_tool. " +
@@ -128,7 +147,7 @@ export const ExecuteToolSchema = z.object({
 })
 
 export const executeToolDescription =
-  "Run any tool on this server by name, including the ~50 that are not advertised in the tool list. " +
+  `Run any tool on this server by name, including the ${UNADVERTISED_TOOL_COUNT} that are not advertised in the tool list. ` +
   "Pair it with discover_tools: that returns the name, this runs it. Parameters are checked against the target " +
   "tool's schema first — a name it does not have is named back to you with the accepted list, never dropped — and " +
   "a malformed value comes back as that tool's own error.";

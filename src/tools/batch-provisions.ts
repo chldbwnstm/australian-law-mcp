@@ -12,12 +12,18 @@
  * provisions are reported individually and never silently dropped — a caller
  * comparing "what I asked for" against "what I got" must be able to see the
  * gap.
+ *
+ * A provision lost to a volume the Register would not hand over is counted
+ * apart from one that is simply not in the table of contents: the first is an
+ * upstream failure, is labelled as one, and when *nothing* survived it makes
+ * the whole response an error rather than a tidy list of absences.
  */
 
 import { z } from "zod"
 import type { AuApiClient } from "../lib/api-client.js"
-import { formatToolError } from "../lib/errors.js"
+import { ErrorCodes, formatToolError } from "../lib/errors.js"
 import { htmlToText } from "../lib/provision-slicer.js"
+import { primaryLawMention, provisionParam } from "../lib/query-extract.js"
 import { truncateResponse } from "../lib/schemas.js"
 import { formatRef, parseSectionRef } from "../lib/section-ref.js"
 import { getRequestSignal } from "../lib/session-state.js"
@@ -126,19 +132,35 @@ export async function getBatchProvisions(
     const sections: string[] = []
     let found = 0
     let missed = 0
+    let upstream = 0
 
     for (const task of tasks) {
       const block = await runTask(apiClient, task, input.maxCharsPerProvision)
       found += block.found
       missed += block.missed
+      upstream += block.upstream
       sections.push(block.text)
     }
 
     const head =
       `Batch provisions: ${tasks.length} title(s), ${found + missed} requested, ${found} retrieved, ${missed} not found.` +
-      (missed > 0 ? "\n⚠️ Some provisions were not retrieved — they are listed below. Do not fill the gaps from memory." : "")
+      (missed > 0 ? "\n⚠️ Some provisions were not retrieved — they are listed below. Do not fill the gaps from memory." : "") +
+      // A volume the Register would not hand over is not a provision that does
+      // not exist. Without this line the two are one number in the summary.
+      (upstream > 0
+        ? `\n[${ErrorCodes.UPSTREAM_NO_DATA}] ${upstream} of them failed because the Federal Register did not return the ` +
+          "volume text — an upstream failure, not evidence the provision is absent. Retry before concluding anything."
+        : "")
 
-    return { content: [{ type: "text", text: truncateResponse([head, "", ...sections].join("\n")) }] }
+    return {
+      content: [{ type: "text", text: truncateResponse([head, "", ...sections].join("\n")) }],
+      // Nothing was retrieved and the reason was upstream: this is a failed
+      // call, and the flag is what a chain reads (`chains.ts` secOrSkip) to
+      // print [NOT RETRIEVED] instead of rendering the block as data. A batch
+      // that kept some text stays a normal result — a partial answer is an
+      // answer — and carries the label above instead.
+      ...(upstream > 0 && found === 0 ? { isError: true } : {}),
+    }
   } catch (error) {
     return formatToolError(error, "get_batch_provisions")
   }
@@ -148,7 +170,7 @@ async function runTask(
   apiClient: AuApiClient,
   task: Task,
   maxChars: number,
-): Promise<{ text: string; found: number; missed: number }> {
+): Promise<{ text: string; found: number; missed: number; upstream: number }> {
   const label = task.registerId ?? task.query ?? "(unspecified title)"
   let titleId: string
   let titleName: string
@@ -167,6 +189,7 @@ async function runTask(
       text: `▶ ${label}\n[UNRESOLVED] ${message}\n(${task.provisions.length} provision(s) skipped for this title.)`,
       found: 0,
       missed: task.provisions.length,
+      upstream: 0,
     }
   }
 
@@ -177,13 +200,26 @@ async function runTask(
   /** Volumes whose fetch failed, so thirty sections of one dead volume cost one attempt. */
   const volumeErrors = new Map<string, string>()
   let found = 0
+  /** Provisions lost to a volume the Register would not hand over — not absences. */
+  let upstream = 0
+  /**
+   * The alias may name a *schedule*: "ACL" **is** CCA sch 2, so a bare "s 18"
+   * asked of it means sch 2 s 18, never the body's "Meetings of Commission".
+   * Same rewrite as the CLI router (`query-extract.provisionParam`), so the
+   * two paths cannot drift; an explicit `sch N` keeps its own.
+   */
+  const mention = task.query ? primaryLawMention(task.query) : undefined
+  let aliasScoped = 0
 
   for (const provision of task.provisions) {
-    const ref = parseSectionRef(provision)
-    if (!ref) {
+    const asked = parseSectionRef(provision)
+    if (!asked) {
       misses.push(`${provision} — not a recognisable provision reference`)
       continue
     }
+    const scoped = provisionParam(asked, mention)
+    const ref = scoped === formatRef(asked) ? asked : parseSectionRef(scoped) ?? asked
+    if (ref !== asked) aliasScoped++
     const node = locate(ref, entries)
     if (!node) {
       misses.push(`${formatRef(ref)} — not in this compilation's table of contents`)
@@ -194,6 +230,7 @@ async function runTask(
       const alreadyFailed = volumeErrors.get(node.volumeDoc)
       if (alreadyFailed !== undefined) {
         misses.push(`${formatRef(ref)} — ${node.volumeDoc} could not be read: ${alreadyFailed}`)
+        upstream++
         continue
       }
       const volume = /document_(\d+)/.exec(node.volumeDoc)
@@ -210,10 +247,15 @@ async function runTask(
         // opposite of this tool's "misses are reported individually and never
         // silently dropped". Cancellation is the exception: an aborted request
         // has no consumer, so it is re-thrown rather than answered.
+        //
+        // It is still counted apart from a table-of-contents miss: swallowing
+        // the throw must not turn an outage into "this provision is not in
+        // the Act". The caller reads that distinction off `upstream`.
         if (getRequestSignal()?.aborted) throw error
         const message = error instanceof Error ? error.message : String(error)
         volumeErrors.set(node.volumeDoc, message)
         misses.push(`${formatRef(ref)} — ${node.volumeDoc} could not be read: ${message}`)
+        upstream++
         continue
       }
       volumes.set(node.volumeDoc, html)
@@ -229,6 +271,16 @@ async function runTask(
     lines.push(text.length > maxChars ? `${text.slice(0, maxChars)}\n… (provision shortened to ${maxChars} characters)` : text)
   }
 
+  if (aliasScoped > 0) {
+    // Directly under the title line: the rewrite has to be visible above the
+    // text it produced, or the reader cannot tell which s 18 they are holding.
+    lines.splice(
+      1,
+      0,
+      `Alias "${task.query}" names sch ${mention?.sch ?? "?"} of this Act — ` +
+        `${aliasScoped} bare reference(s) were read inside that schedule.`,
+    )
+  }
   if (misses.length > 0) {
     lines.push("")
     lines.push(`Not retrieved (${misses.length}):`)
@@ -236,7 +288,7 @@ async function runTask(
     lines.push("  Try another `date`, or check the reference with get_law_tree / parse_section_ref.")
   }
   lines.push(`(volumes read for this title: ${volumes.size})`)
-  return { text: lines.join("\n"), found, missed: misses.length }
+  return { text: lines.join("\n"), found, missed: misses.length, upstream }
 }
 
 /** Slice one provision: this anchor to the next anchor of the same volume. */

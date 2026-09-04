@@ -35,6 +35,8 @@ interface Options {
   /** NSW exact medium-neutral lookup body. */
   nswMnc?: string
   decision?: string
+  /** Make the compilation volume read fail, to exercise the unread-endnote path. */
+  volumeError?: string
 }
 
 function client(options: Options = {}): AuApiClient {
@@ -47,7 +49,10 @@ function client(options: Options = {}): AuApiClient {
     },
     getTitle: async () => CCA,
     getToc: async () => ENTRIES,
-    getVolumeHtml: async () => ENDNOTE,
+    getVolumeHtml: async () => {
+      if (options.volumeError) throw new LawApiError(options.volumeError, ErrorCodes.API_ERROR)
+      return ENDNOTE
+    },
     fetchHtml: async (host: string, path: string) => {
       if (failing.has(host)) throw new LawApiError(`${host} upstream server error (503)`, ErrorCodes.API_ERROR)
       if (host === "nswCaselaw" && path.startsWith("search/advanced")) return options.nswMnc ?? NSW_MNC
@@ -143,6 +148,30 @@ describe("cite_check — legislative override", () => {
     const text = await run("[2010] NSWCCA 333")
     expect(text).toContain("Legislative override: not checked")
     expect(text).toContain("no provision was named")
+  })
+
+  it("does not turn an unread endnote table into 'no amending Act'", async () => {
+    // The volume the endnote lives in never arrived, so the table shows
+    // nothing — least of all that s 18 has never been amended.
+    const text = await run("Is [2010] NSWCCA 333 on s 18 of the Competition and Consumer Act 2010 (Cth) still good law?", {
+      failing: ["nswCaselaw", "qldJudgments", "hcourt"],
+      volumeError: "frlDocs upstream server error (503)",
+    })
+    expect(text).not.toContain("shows no amending Act")
+    expect(text).toContain("Legislative override: could not be checked")
+    expect(text).toContain("[UPSTREAM_NO_DATA]")
+    expect(text).toContain("frlDocs upstream server error (503)")
+    expect(text).toContain("nothing here says the provision was never amended")
+  })
+
+  it("still reports a read-but-empty endnote result as no amending Act", async () => {
+    // The table was read; no Act numbered that late appears against s 18. That
+    // is a real observation and keeps its wording — and no error label.
+    const text = await run("Is [2099] NSWCCA 1 on s 18 of the Competition and Consumer Act 2010 (Cth) still good law?", {
+      failing: ["nswCaselaw", "qldJudgments", "hcourt"],
+    })
+    expect(text).toContain("shows no amending Act numbered 2099 or later")
+    expect(text).not.toContain("[UPSTREAM_NO_DATA]")
   })
 
   it("explains that the endnote compares years, not commencement dates", async () => {

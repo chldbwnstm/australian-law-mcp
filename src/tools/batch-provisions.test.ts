@@ -21,6 +21,8 @@ const CCA: FrlTitle = { id: "C2004A00109", name: "Competition and Consumer Act 2
 function client(counters = { toc: 0, volumes: [] as number[] }): { api: AuApiClient; counters: typeof counters } {
   const api = {
     getTitle: async () => CCA,
+    // The alias path: "ACL" is searched as "Competition and Consumer Act 2010".
+    searchTitles: async () => ({ count: 1, titles: [CCA] }),
     getToc: async () => {
       counters.toc++
       return ENTRIES
@@ -77,17 +79,20 @@ describe("get_batch_provisions results", () => {
 
   it("lists misses explicitly and counts them, rather than dropping them", async () => {
     const { api } = client()
-    const text = (
-      await getBatchProvisions(api, {
-        registerId: "C2004A00109",
-        provisions: ["s 18", "s 9999", "not a reference"],
-        maxCharsPerProvision: 2500,
-      } as never)
-    ).content[0].text
+    const result = await getBatchProvisions(api, {
+      registerId: "C2004A00109",
+      provisions: ["s 18", "s 9999", "not a reference"],
+      maxCharsPerProvision: 2500,
+    } as never)
+    const text = result.content[0].text
     expect(text).toContain("3 requested, 1 retrieved, 2 not found")
     expect(text).toContain("✗ s 9999")
     expect(text).toContain("not a recognisable provision reference")
     expect(text).toContain("Do not fill the gaps from memory")
+    // Nothing upstream failed here: these are real table-of-contents misses,
+    // so the upstream label must not appear.
+    expect(text).not.toContain("[UPSTREAM_NO_DATA]")
+    expect(result.isError).toBeFalsy()
   })
 
   it("marks a title that could not be resolved without abandoning the rest", async () => {
@@ -138,6 +143,55 @@ describe("get_batch_provisions results", () => {
     expect(text).toContain("could not be read: frlDocs upstream server error (500)")
     // A failed volume is not a missing provision — the reason travels with it.
     expect(text).not.toContain("not in this compilation's table of contents")
+    // …and the summary itself says which kind of gap this is, so a partial
+    // batch is distinguishable from one where everything was retrieved.
+    expect(text).toContain("[UPSTREAM_NO_DATA] 1 of them failed")
+    expect(text).toContain("not evidence the provision is absent")
+  })
+
+  it("a batch that lost everything to an upstream failure is an error, not a list of absences", async () => {
+    // Swallowing the volume throw kept the partial data but also dropped the
+    // response's error flag; a chain then rendered an outage as a completed
+    // section instead of [NOT RETRIEVED].
+    const api = {
+      getTitle: async () => CCA,
+      getToc: async () => ENTRIES,
+      getVolumeHtml: async () => {
+        throw new Error("frlDocs upstream server error (500)")
+      },
+    } as unknown as AuApiClient
+
+    const result = await getBatchProvisions(api, {
+      registerId: "C2004A00109",
+      provisions: ["s 18", "sch 2 s 18"],
+      maxCharsPerProvision: 2500,
+    } as never)
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toContain("[UPSTREAM_NO_DATA] 2 of them failed")
+  })
+
+  it("still keeps its data when only some provisions were lost upstream", async () => {
+    const api = {
+      getTitle: async () => CCA,
+      getToc: async () => ENTRIES,
+      getVolumeHtml: async (_id: string, volume: number) => {
+        if (volume === 4) throw new Error("frlDocs upstream server error (500)")
+        return VOL1
+      },
+    } as unknown as AuApiClient
+
+    const result = await getBatchProvisions(api, {
+      registerId: "C2004A00109",
+      provisions: ["s 18", "sch 2 s 18"],
+      maxCharsPerProvision: 2500,
+    } as never)
+
+    // A partial answer is an answer: the flag stays clear so a chain prints
+    // the text it did get, and the label carries the warning.
+    expect(result.isError).toBeFalsy()
+    expect(result.content[0].text).toContain("Meetings of Commission")
+    expect(result.content[0].text).toContain("[UPSTREAM_NO_DATA]")
   })
 
   it("does not re-fetch a volume that already failed once in the same batch", async () => {
@@ -174,6 +228,40 @@ describe("get_batch_provisions results", () => {
       } as never)
     ).content[0].text
     expect(text).toContain("(provision shortened to 200 characters)")
+  })
+})
+
+describe("get_batch_provisions applies the schedule its alias names", () => {
+  // Worse than get_law_text's version of the same trap: this tool prints no
+  // alias note at all, so the body's s 18 came back with nothing to catch it.
+  const byQuery = (query: string, provisions: string[]) =>
+    getBatchProvisions(client().api, { query, provisions, maxCharsPerProvision: 2500 } as never)
+
+  it('query "ACL" + "s 18" returns the ACL section, not CCA s 18', async () => {
+    const text = (await byQuery("ACL", ["s 18"])).content[0].text
+    expect(text).toContain("sch 2 s 18 —")
+    expect(text).toContain("Misleading or deceptive conduct")
+    // "quorum" appears only in the body provision (18 Meetings of Commission).
+    expect(text).not.toContain("quorum")
+    expect(text).toContain("1 requested, 1 retrieved, 0 not found")
+  })
+
+  it("says it read the reference inside the schedule", async () => {
+    const text = (await byQuery("ACL", ["s 18"])).content[0].text
+    expect(text).toContain('Alias "ACL" names sch 2 of this Act')
+  })
+
+  it("does not double-prefix a schedule the caller wrote out", async () => {
+    const text = (await byQuery("ACL", ["sch 2 s 18"])).content[0].text
+    expect(text).not.toContain("sch 2 sch 2")
+    expect(text).toContain("Misleading or deceptive conduct")
+    expect(text).toContain("1 requested, 1 retrieved, 0 not found")
+  })
+
+  it("leaves an alias that names no schedule alone", async () => {
+    const text = (await byQuery("CCA", ["s 18"])).content[0].text
+    expect(text).toContain("Meetings of Commission")
+    expect(text).not.toContain("names sch")
   })
 })
 

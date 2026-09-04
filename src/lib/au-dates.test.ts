@@ -93,6 +93,87 @@ describe("relative dates", () => {
   })
 })
 
+describe("a month and a year", () => {
+  // Without a month-year entry the phrase fell through to the bare-year rule
+  // and resolved to 31 December — six months late, and on the far side of the
+  // 1 July commencement date most Commonwealth amendments take, so the
+  // compilation handed back contained amendments that were not yet in force.
+  it("resolves to the end of the month, not the end of the year", () => {
+    expect(toIsoDate("as at June 2015", NOW)).toBe("2015-06-30")
+    expect(toIsoDate("in force at March 2019", NOW)).toBe("2019-03-31")
+    expect(parseAuDate("as at June 2015", NOW)!.pattern).toBe("month-year")
+  })
+
+  it("counts the days of the month it was given", () => {
+    expect(toIsoDate("February 2016", NOW)).toBe("2016-02-29")
+    expect(toIsoDate("February 2015", NOW)).toBe("2015-02-28")
+    expect(toIsoDate("Sept 2021", NOW)).toBe("2021-09-30")
+  })
+
+  it("does not steal a date that names its day", () => {
+    expect(parseAuDate("30 June 2015", NOW)!.pattern).toBe("day-month-year")
+    expect(parseAuDate("June 30, 2015", NOW)!.pattern).toBe("month-day-year")
+    // And it must not rescue an impossible one: "31 February 2019" stays null
+    // rather than quietly becoming the 28th.
+    expect(toIsoDate("31 February 2019", NOW)).toBeNull()
+  })
+
+  it("consumes the lead-in, so the search text is not left holding it", () => {
+    const result = extractQueryDates("Competition and Consumer Act as at June 2015", NOW)
+    expect(result.date?.iso).toBe("2015-06-30")
+    expect(result.range).toBeUndefined()
+    expect(result.rest).toBe("Competition and Consumer Act")
+  })
+
+  it("reads a month at each end of a range", () => {
+    // The standard spelling of the 2020-21 financial year. Until a month-year
+    // fragment resolved, both boundaries came back undefined, the from-to
+    // match was abandoned, and the query collapsed to calendar 2020.
+    expect(parseAuDateRange("amendments from July 2020 to June 2021", NOW)!.range).toEqual({
+      from: "2020-07-01",
+      to: "2021-06-30",
+    })
+    expect(parseAuDateRange("between June 2015 and June 2019", NOW)!.range).toEqual({
+      from: "2015-06-01",
+      to: "2019-06-30",
+    })
+  })
+})
+
+describe("the Australian financial year", () => {
+  // 1 July to 30 June, named by the year it ends in.
+  const cases: Array<[input: string, from: string, to: string]> = [
+    ["FY21", "2020-07-01", "2021-06-30"],
+    ["FY 2021", "2020-07-01", "2021-06-30"],
+    ["FY2020-21", "2020-07-01", "2021-06-30"],
+    ["what changed in the 2020-21 financial year", "2020-07-01", "2021-06-30"],
+    ["the 2020/21 financial year", "2020-07-01", "2021-06-30"],
+    ["the 2020-2021 financial year", "2020-07-01", "2021-06-30"],
+    ["financial year 2021", "2020-07-01", "2021-06-30"],
+    ["the 2021 financial year", "2020-07-01", "2021-06-30"],
+    ["FY99", "1998-07-01", "1999-06-30"],
+    ["financial year 1999-00", "1999-07-01", "2000-06-30"],
+  ]
+
+  for (const [input, from, to] of cases) {
+    it(`reads ${JSON.stringify(input)}`, () => {
+      expect(parseAuDateRange(input, NOW)!.range).toEqual({ from, to })
+    })
+  }
+
+  it("leaves a calendar range alone", () => {
+    // No marker, so this is not a financial year and must not be read as one.
+    expect(parseAuDateRange("amendments 2015-2019", NOW)!.range).toEqual({
+      from: "2015-01-01",
+      to: "2019-12-31",
+    })
+    expect(parseAuDateRange("amendments in 2019", NOW)!.range).toEqual({
+      from: "2019-01-01",
+      to: "2019-12-31",
+    })
+  })
+})
+
 describe("ranges", () => {
   it("reads a bare-year range to the end of the closing year", () => {
     expect(parseAuDateRange("between 2015 and 2019", NOW)!.range).toEqual({

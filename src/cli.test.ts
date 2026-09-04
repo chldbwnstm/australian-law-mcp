@@ -11,10 +11,22 @@
  *    silently left the CLI.
  */
 
-import { describe, expect, it } from "vitest"
-import { categoriesOf, createProgram, headingFor, knownCommands, separateFlags, toolsInCategory } from "./cli.js"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import {
+  categoriesOf,
+  cliOptionsFor,
+  createProgram,
+  headingFor,
+  knownCommands,
+  parseDirectCall,
+  separateFlags,
+  toolsInCategory,
+  unknownParamError,
+} from "./cli.js"
 import { allTools } from "./tool-registry.js"
 import { extractOptionsFromSchema } from "./lib/cli-format.js"
+import { requestContext } from "./lib/session-state.js"
+import type { AuApiClient } from "./lib/api-client.js"
 
 describe("importing the CLI does not run it", () => {
   it("reached this test, which means no REPL was started", () => {
@@ -54,17 +66,38 @@ describe("generated subcommands", () => {
     }
   })
 
-  it("turns each schema field into a flag", () => {
+  it("turns each advertised schema field into a flag", () => {
     // Spot-checked on the tools whose parameters the corpus exercises, rather
     // than all eighty: the generation is one loop, so a few prove it runs.
     for (const name of ["get_law_text", "search_decisions", "cite_check", "legal_research"]) {
       const tool = allTools.find((entry) => entry.name === name)!
       const command = createProgram().commands.find((entry) => entry.name() === name)!
       const flags = new Set(command.options.map((option) => option.long))
-      for (const option of extractOptionsFromSchema(tool.schema)) {
+      for (const option of cliOptionsFor(tool)) {
         expect([name, option.name, flags.has(`--${option.name}`)]).toEqual([name, option.name, true])
       }
     }
+  })
+
+  it("offers no flag for an internal field the advertised schema deletes", () => {
+    // `__taskWas` is set by legal_research's own preprocess step to explain a
+    // correction it made. Generated from the raw schema it became a flag, and
+    // `--__taskWas foo` made the answer open with a correction of a task the
+    // caller never supplied.
+    const research = allTools.find((entry) => entry.name === "legal_research")!
+    const raw = extractOptionsFromSchema(research.schema).map((option) => option.name)
+    expect(raw, "the raw schema is still the one with the internal field").toContain("__taskWas")
+
+    expect(cliOptionsFor(research).map((option) => option.name)).not.toContain("__taskWas")
+    const command = createProgram().commands.find((entry) => entry.name() === "legal_research")!
+    expect(command.options.map((option) => option.long)).not.toContain("--__taskWas")
+  })
+
+  it("gives a boolean parameter both spellings, so it can be turned off", () => {
+    const command = createProgram().commands.find((entry) => entry.name() === "suggest_law_names")!
+    const flags = command.options.map((option) => option.long)
+    expect(flags).toContain("--inForceOnly")
+    expect(flags).toContain("--no-inForceOnly")
   })
 
   it("declares no parameter as commander-mandatory", () => {
@@ -168,5 +201,147 @@ describe("separateFlags", () => {
 
   it("returns nothing when there was nothing but flags", () => {
     expect(separateFlags(["--json"]).words).toEqual([])
+  })
+})
+
+// ──────────────────────────────────────────────────────────────────────────
+// Running a generated subcommand
+//
+// Nothing reaches the network: the target tool's handler is replaced, which is
+// also how the input it was finally given — and the request context it ran in —
+// can be read at all.
+// ──────────────────────────────────────────────────────────────────────────
+
+describe("running a generated subcommand", () => {
+  let errors: string[] = []
+
+  /** One tool's handler, replaced by a recorder. Returns what it was called with. */
+  function record(name: string): { calls: Record<string, unknown>[]; budgets: boolean[] } {
+    const tool = allTools.find((entry) => entry.name === name)!
+    const seen = { calls: [] as Record<string, unknown>[], budgets: [] as boolean[] }
+    vi.spyOn(tool, "handler").mockImplementation(async (_client: AuApiClient, input: Record<string, unknown>) => {
+      seen.calls.push(input)
+      seen.budgets.push(requestContext.getStore()?.budget !== undefined)
+      return { content: [{ type: "text" as const, text: "recorded" }] }
+    })
+    return seen
+  }
+
+  beforeEach(() => {
+    errors = []
+    vi.spyOn(console, "log").mockImplementation(() => {})
+    vi.spyOn(console, "error").mockImplementation((line: unknown) => {
+      errors.push(String(line))
+    })
+    // Commander exits the process on an unknown option. Turned into a throw so
+    // a regression fails this test instead of killing the test worker.
+    vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+      throw new Error(`process.exit(${code})`)
+    }) as never)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    process.exitCode = 0
+  })
+
+  it("charges the run to an execution budget, with or without --json", async () => {
+    // `fetchWithRetry` and `readResponseBytes` read the budget out of
+    // AsyncLocalStorage through an optional chain, so a run outside a request
+    // context has no attempt ceiling and no byte ceiling at all — it is not
+    // unlimited by design, it is unmetered by accident.
+    const seen = record("parse_section_ref")
+    await createProgram().parseAsync(["parse_section_ref", "--text", "s 18"], { from: "user" })
+    await createProgram().parseAsync(["parse_section_ref", "--text", "s 18", "--json"], { from: "user" })
+    expect(seen.budgets).toEqual([true, true])
+  })
+
+  it("can turn off a parameter whose schema default is true", async () => {
+    // `suggest_law_names.inForceOnly` filters out every repealed title, so with
+    // no way to say false the CLI could never surface the Trade Practices Act
+    // 1974 while the same tool over MCP returns it.
+    const seen = record("suggest_law_names")
+    await createProgram().parseAsync(["suggest_law_names", "--partial", "Trade Practices", "--no-inForceOnly"], { from: "user" })
+    await createProgram().parseAsync(["suggest_law_names", "--partial", "Trade Practices", "--inForceOnly"], { from: "user" })
+    // Neither flag: the schema's own default is the one that applies.
+    await createProgram().parseAsync(["suggest_law_names", "--partial", "Trade Practices"], { from: "user" })
+    expect(seen.calls.map((call) => call.inForceOnly)).toEqual([false, true, true])
+  })
+
+  it("accepts JSON for an object-valued parameter", async () => {
+    const seen = record("search_decisions")
+    await createProgram().parseAsync(
+      ["search_decisions", "--domain", "cases", "--query", "misleading conduct", "--options", '{"court":"HCA"}'],
+      { from: "user" },
+    )
+    expect(seen.calls[0]?.options).toEqual({ court: "HCA" })
+  })
+
+  it("says what an object-valued parameter wanted instead of 'expected record, received string'", async () => {
+    const seen = record("search_decisions")
+    await createProgram().parseAsync(["search_decisions", "--domain", "cases", "--options", "court=HCA"], { from: "user" })
+    expect(seen.calls).toEqual([])
+    expect(errors.join("\n")).toContain("--options")
+    expect(errors.join("\n")).toContain("JSON object")
+  })
+
+  it("names a --json-input parameter the tool does not have instead of dropping it", async () => {
+    // get_law_text's parameter is `date`. Stripped in silence, `asAt` returns
+    // the current compilation presented as the law at a date the caller named.
+    const seen = record("get_law_text")
+    await createProgram().parseAsync(
+      ["get_law_text", "--json-input", '{"query":"Privacy Act 1988","asAt":"2001-01-01"}'],
+      { from: "user" },
+    )
+    expect(seen.calls).toEqual([])
+    expect(errors.join("\n")).toContain("[INVALID_PARAMETER]")
+    expect(errors.join("\n")).toContain("asAt")
+  })
+})
+
+describe("unknownParamError", () => {
+  it("answers an unsupported name the way execute_tool does over MCP", () => {
+    const message = unknownParamError("get_law_text", { query: "Privacy Act 1988", asAt: "2001-01-01" })
+    expect(message).toContain("[INVALID_PARAMETER]")
+    expect(message).toContain('get_law_text has no parameter named "asAt"')
+    expect(message).toContain("Tool: get_law_text")
+    expect(message).toContain("date")
+    expect(message).toContain("NOT applied and NOT dropped silently")
+  })
+
+  it("says nothing about a parameter the tool accepts, or one it defaults", () => {
+    expect(unknownParamError("get_law_text", { query: "Privacy Act 1988", date: "2001-01-01" })).toBeUndefined()
+    expect(unknownParamError("get_law_text", {})).toBeUndefined()
+  })
+
+  it("leaves an unknown tool to the executor's own message", () => {
+    expect(unknownParamError("no_such_tool", { anything: 1 })).toBeUndefined()
+  })
+})
+
+describe("@tool direct calls", () => {
+  it("types a key=value from the tool's schema", () => {
+    // Every value as a string means `limit=5` is rejected outright — "expected
+    // number, received string" — rather than searching.
+    const { toolName, params } = parseDirectCall("@search_law query=privacy limit=5")
+    expect(toolName).toBe("search_law")
+    expect(params).toEqual({ query: "privacy", limit: 5 })
+    const tool = allTools.find((entry) => entry.name === "search_law")!
+    expect(tool.schema.safeParse(params).success).toBe(true)
+  })
+
+  it("types a boolean the same way", () => {
+    expect(parseDirectCall("@search_law query=privacy searchText=true").params).toEqual({
+      query: "privacy",
+      searchText: true,
+    })
+  })
+
+  it("still reads a JSON body, and a bare name", () => {
+    expect(parseDirectCall('@get_law_text {"query":"CCA","provision":"s 18"}')).toEqual({
+      toolName: "get_law_text",
+      params: { query: "CCA", provision: "s 18" },
+    })
+    expect(parseDirectCall("@list_categories")).toEqual({ toolName: "list_categories", params: {} })
   })
 })

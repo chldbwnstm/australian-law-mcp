@@ -10,12 +10,15 @@
  * `sch 2 s 18` vs `s 18` is handled by the lib (`findNavPoint`), but the
  * distinction is repeated in the output: ACL s 18 is misleading or deceptive
  * conduct, CCA s 18 is meetings of the Commission, and a reader who cannot see
- * which one they got has no way to catch the error.
+ * which one they got has no way to catch the error. When the query names the
+ * schedule — `query:"ACL"` — that schedule is *applied* to the reference, not
+ * merely mentioned: an alias is a statement about which law was asked for.
  */
 
 import { z } from "zod"
 import type { AuApiClient } from "../lib/api-client.js"
 import { ErrorCodes, LawApiError, formatToolError } from "../lib/errors.js"
+import { primaryLawMention, provisionParam } from "../lib/query-extract.js"
 import { truncateResponse } from "../lib/schemas.js"
 import { formatRef } from "../lib/section-ref.js"
 import type { NcxEntry, ToolResponse } from "../lib/types.js"
@@ -87,7 +90,26 @@ export async function getLawText(apiClient: AuApiClient, input: GetLawTextInput)
       return ok([...header, "", ...overview(entries, title.id, date)].join("\n"), input.maxChars)
     }
 
-    const ref = requireRef(input.provision)
+    const asked = requireRef(input.provision)
+    // An alias can name a *schedule*, and dropping it is this project's
+    // flagship wrong answer: the ACL **is** sch 2 of the CCA, so "s 18" asked
+    // of the ACL means sch 2 s 18 — the body's s 18 is "Meetings of
+    // Commission". Printing the schedule as a note (what this did before) is
+    // not applying it. The rewrite itself is the router's own
+    // (`query-extract.provisionParam`), reused so the MCP path and the CLI
+    // cannot drift; an explicit `sch N` from the caller keeps its own, and an
+    // alias with no schedule changes nothing.
+    const mention = input.query ? primaryLawMention(input.query) : undefined
+    const scoped = provisionParam(asked, mention)
+    const rewritten = scoped !== formatRef(asked)
+    const ref = rewritten ? requireRef(scoped) : asked
+    const provision = rewritten ? scoped : input.provision
+    if (rewritten) {
+      header.push(
+        `Read "${input.provision}" as "${scoped}": "${input.query}" names sch ${mention?.sch ?? "?"} of this Act, ` +
+          "so the bare reference would have returned the body provision instead.",
+      )
+    }
     const node = locate(ref, entries)
     if (!node) {
       throw new LawApiError(
@@ -95,6 +117,13 @@ export async function getLawText(apiClient: AuApiClient, input: GetLawTextInput)
         ErrorCodes.NOT_FOUND,
         [
           "The provision may exist in another compilation — try `date`, or list versions with search_historical_law.",
+          // Say why a caller who typed "s 18" is being told about a schedule.
+          ...(rewritten
+            ? [
+                `"${input.query}" names sch ${mention?.sch ?? "?"}, so "${input.provision}" was looked up as ` +
+                  `"${scoped}". Give registerId instead to read the Act's own ${formatRef(asked)}.`,
+              ]
+            : []),
           ref.schedule
             ? "Schedule provisions only match inside their schedule; check the schedule number with get_schedules."
             : 'If you meant a schedule provision (e.g. the ACL), prefix it: "sch 2 s 18".',
@@ -106,7 +135,7 @@ export async function getLawText(apiClient: AuApiClient, input: GetLawTextInput)
     const structural = isStructuralKind(ref.kind) || descendantsOf(entries, node).length > 0
     const body = structural
       ? await subtreeText(apiClient, title.id, date, entries, node)
-      : (await apiClient.getProvision(title.id, input.provision, date)).text
+      : (await apiClient.getProvision(title.id, provision, date)).text
 
     const breadcrumb = ancestorLabels(node)
     const lines = [

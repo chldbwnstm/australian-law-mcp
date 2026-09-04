@@ -25,6 +25,7 @@ import * as readline from "node:readline"
 import { z } from "zod"
 import { AuApiClient } from "./lib/api-client.js"
 import {
+  type CliOption,
   coerceValue,
   extractOptionsFromSchema,
   fmt,
@@ -39,11 +40,13 @@ import {
   executeNaturalQueryJson,
   executeTool,
   getApiClient,
+  unsupportedParams,
 } from "./lib/cli-executor.js"
+import { ErrorCodes, LawApiError, formatToolError } from "./lib/errors.js"
 import { explainRoute, routeQuery } from "./lib/query-router.js"
 import { TOOL_CATEGORIES } from "./lib/tool-profiles.js"
 import type { McpTool } from "./lib/types.js"
-import { allTools } from "./tool-registry.js"
+import { allTools, toMcpInputSchema } from "./tool-registry.js"
 import { VERSION } from "./version.js"
 
 const BIN = "australian-law"
@@ -83,6 +86,62 @@ export function categoriesOf(name: string): string[] {
  */
 export function headingFor(tool: McpTool): string {
   return categoriesOf(tool.name)[0] ?? "other"
+}
+
+/**
+ * The parameters one tool advertises, as CLI options.
+ *
+ * `toMcpInputSchema` is the projection ListTools publishes, and it deletes the
+ * fields that are never a caller's parameter: `legal_research.__taskWas` is set
+ * by that tool's own preprocess step to explain a correction it made, so a
+ * `--__taskWas` flag — which generating from the raw schema produced — makes
+ * the answer open with a correction the caller never triggered. The flag set
+ * is therefore the projection's, while the descriptions stay the raw schema's:
+ * the projection clips those to fit the ListTools context budget, which is a
+ * constraint the terminal does not have.
+ *
+ * A schema the projection cannot read is advertised as accepting anything, so
+ * the raw options are the honest fallback rather than no flags at all.
+ */
+export function cliOptionsFor(tool: McpTool): CliOption[] {
+  const options = extractOptionsFromSchema(tool.schema)
+  const advertised = (toMcpInputSchema(tool.schema) as { properties?: Record<string, unknown> }).properties
+  if (!advertised || Object.keys(advertised).length === 0) return options
+  return options.filter((option) => option.name in advertised)
+}
+
+/**
+ * The `[INVALID_PARAMETER]` answer for parameter names the target tool has no
+ * field for, or `undefined` when every key is one it accepts.
+ *
+ * Zod strips an unknown key in silence, so `--json-input
+ * '{"query":"Privacy Act 1988","asAt":"2001-01-01"}'` on get_law_text (whose
+ * parameter is `date`) returns the current compilation presented as the law at
+ * a date the caller named. `execute_tool` refuses exactly this over MCP
+ * (`rejectUnknownParams` in `tools/meta-tools.ts`) and the two direct CLI
+ * paths — `--json-input` and the REPL's `@tool {...}` — are the same hazard,
+ * so they get the same answer. The flag path cannot reach it: its keys are
+ * generated from the schema.
+ */
+export function unknownParamError(toolName: string, params: Record<string, unknown>): string | undefined {
+  const unknown = unsupportedParams(toolName, params)
+  if (unknown.length === 0) return undefined
+
+  const tool = allTools.find((entry) => entry.name === toolName)
+  const accepted = tool ? cliOptionsFor(tool).map((option) => option.name) : []
+  const suggestions = [
+    `${toolName} accepts: ${accepted.join(", ")}.`,
+    "The value was NOT applied and NOT dropped silently — re-run with a supported name. Do not report the " +
+      "result as if this parameter had been honoured.",
+  ]
+  return formatToolError(
+    new LawApiError(
+      `${toolName} has no parameter named ${unknown.map((key) => `"${key}"`).join(", ")}.`,
+      ErrorCodes.INVALID_PARAM,
+      suggestions,
+    ),
+    toolName,
+  ).content[0].text
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -200,24 +259,48 @@ async function runInteractive(): Promise<void> {
   })
 }
 
-/** `@tool_name {"json": true}` or `@tool_name key=value key2=value2`. */
-async function handleDirectCall(apiClient: AuApiClient, input: string): Promise<void> {
+/**
+ * Read `@tool_name {"json": true}` or `@tool_name key=value key2=value2`.
+ *
+ * Exported for the test: the typing of a `key=value` value is the whole
+ * behaviour, and it is not observable from the printed output of a tool run.
+ */
+export function parseDirectCall(input: string): { toolName: string; params: Record<string, unknown> } {
   const space = input.indexOf(" ")
   const toolName = space > 0 ? input.slice(1, space) : input.slice(1)
   const rest = space > 0 ? input.slice(space + 1).trim() : ""
 
-  let params: Record<string, unknown> = {}
-  if (rest) {
-    try {
-      params = JSON.parse(rest) as Record<string, unknown>
-    } catch {
-      // Not JSON. `key=value` is what people type when the JSON quoting is
-      // more trouble than the call is worth.
-      for (const pair of rest.split(/\s+/)) {
-        const eq = pair.indexOf("=")
-        if (eq > 0) params[pair.slice(0, eq)] = pair.slice(eq + 1).replace(/^["']|["']$/g, "")
-      }
+  const params: Record<string, unknown> = {}
+  if (!rest) return { toolName, params }
+
+  try {
+    return { toolName, params: JSON.parse(rest) as Record<string, unknown> }
+  } catch {
+    // Not JSON. `key=value` is what people type when the JSON quoting is
+    // more trouble than the call is worth — so it has to reach the same
+    // schema. Typed from the tool's own parameters, because a bare string for
+    // every value means `limit=5` is rejected outright ("expected number,
+    // received string") rather than searching.
+    const tool = allTools.find((entry) => entry.name === toolName)
+    const types = new Map((tool ? cliOptionsFor(tool) : []).map((option) => [option.name, option.type]))
+    for (const pair of rest.split(/\s+/)) {
+      const eq = pair.indexOf("=")
+      if (eq <= 0) continue
+      const key = pair.slice(0, eq)
+      params[key] = coerceValue(pair.slice(eq + 1).replace(/^["']|["']$/g, ""), types.get(key) ?? "string")
     }
+    return { toolName, params }
+  }
+}
+
+async function handleDirectCall(apiClient: AuApiClient, input: string): Promise<void> {
+  const { toolName, params } = parseDirectCall(input)
+
+  const rejection = unknownParamError(toolName, params)
+  if (rejection) {
+    console.error(fmt.red(rejection))
+    process.exitCode = 1
+    return
   }
 
   await executeDirect(apiClient, toolName, params)
@@ -312,7 +395,7 @@ export function createProgram(): Command {
         return
       }
 
-      const options = extractOptionsFromSchema(tool.schema)
+      const options = cliOptionsFor(tool)
       console.log()
       console.log(fmt.bold(tool.name))
       console.log("─".repeat(tool.name.length))
@@ -324,14 +407,17 @@ export function createProgram(): Command {
         for (const option of options) {
           const required = option.required ? fmt.red("(required)") : fmt.dim("(optional)")
           const fallback = option.defaultValue !== undefined ? fmt.dim(` [default: ${String(option.defaultValue)}]`) : ""
-          console.log(`  --${fmt.cyan(option.name.padEnd(20))} ${required} ${option.description}${fallback}`)
+          // A boolean is settable both ways, and printing only `--flag` beside
+          // `[default: true]` advertises a parameter that cannot be changed.
+          const label = option.type === "boolean" ? `--${option.name} / --no-${option.name}` : `--${option.name}`
+          console.log(`  ${fmt.cyan(label.padEnd(22))} ${required} ${option.description}${fallback}`)
         }
         console.log()
       }
 
       const example = options
         .filter((option) => option.required)
-        .map((option) => `--${option.name} "<value>"`)
+        .map((option) => (option.type === "object" ? `--${option.name} '{"key":"value"}'` : `--${option.name} "<value>"`))
         .join(" ")
       console.log(fmt.dim(`Example: ${BIN} ${tool.name} ${example}`))
       console.log()
@@ -340,13 +426,27 @@ export function createProgram(): Command {
   // ── one subcommand per tool, generated from its schema ──
   for (const tool of allTools) {
     const command = program.command(tool.name).description(tool.description)
-    const options = extractOptionsFromSchema(tool.schema)
+    const options = cliOptionsFor(tool)
 
     for (const option of options) {
-      const flag = option.type === "boolean" ? `--${option.name}` : `--${option.name} <value>`
       // Nothing is declared `requiredOption`: commander would reject the call
       // before the schema could, and the schema's message names the parameter
       // and says what it wants. One error path, and it is the better one.
+      if (option.type === "boolean") {
+        // Both spellings, and no commander default for either. A bare presence
+        // flag can only ever set true, so the eight parameters whose schema
+        // default is true — `inForceOnly`, `includeMermaid`, … — could not be
+        // turned off from the CLI at all, while the same tool over MCP takes
+        // false. Leaving the value undefined when neither flag is given lets
+        // the schema's default apply, which is where it is written down once.
+        command.option(`--${option.name}`, option.description)
+        command.option(
+          `--no-${option.name}`,
+          `set ${option.name} to false${option.defaultValue === true ? " (it defaults to true)" : ""}`,
+        )
+        continue
+      }
+      const flag = `--${option.name} <value>`
       if (option.defaultValue !== undefined) command.option(flag, option.description, String(option.defaultValue))
       else command.option(flag, option.description)
     }
@@ -358,6 +458,14 @@ export function createProgram(): Command {
       const apiClient = new AuApiClient()
 
       let input: Record<string, unknown> = {}
+      const asJson = cmdOptions.json === true
+      /** One refusal, in whichever shape the caller asked for. */
+      const refuse = (text: string): void => {
+        if (asJson) console.log(JSON.stringify({ tool: tool.name, params: input, result: text, isError: true }, null, 2))
+        else console.error(fmt.red(text))
+        process.exitCode = 1
+      }
+
       const jsonInput = cmdOptions.jsonInput
       if (typeof jsonInput === "string") {
         try {
@@ -367,15 +475,32 @@ export function createProgram(): Command {
           process.exitCode = 1
           return
         }
+        // Only this path can carry a name the tool has no field for; the flags
+        // are generated from its schema. Zod would strip it in silence and the
+        // answer would come back looking as though the parameter was honoured.
+        const rejection = unknownParamError(tool.name, input)
+        if (rejection) {
+          refuse(rejection)
+          return
+        }
       } else {
         for (const option of options) {
           const value = cmdOptions[option.name]
           if (value === undefined) continue
-          input[option.name] = typeof value === "string" ? coerceValue(value, option.type) : value
+          if (typeof value !== "string") {
+            input[option.name] = value
+            continue
+          }
+          try {
+            input[option.name] = coerceValue(value, option.type)
+          } catch (error) {
+            refuse(`--${option.name}: ${error instanceof Error ? error.message : String(error)}`)
+            return
+          }
         }
       }
 
-      if (cmdOptions.json === true) {
+      if (asJson) {
         const result = await executeTool(apiClient, tool.name, input)
         console.log(
           JSON.stringify(
@@ -389,10 +514,10 @@ export function createProgram(): Command {
       }
 
       try {
-        const parsed = tool.schema.parse(input)
-        const result = await tool.handler(apiClient, parsed)
-        for (const part of result.content) console.log(formatOutput(part.text))
-        if (result.isError) process.exitCode = 1
+        // Validated here so a rejected parameter still gets the message that
+        // names it and says what it wants, which is the reason this path did
+        // not go through cli-executor in the first place.
+        tool.schema.parse(input)
       } catch (error) {
         if (error instanceof z.ZodError) {
           console.error(fmt.red("These parameters are not right:"))
@@ -402,7 +527,18 @@ export function createProgram(): Command {
           console.error(fmt.red(error instanceof Error ? error.message : String(error)))
         }
         process.exitCode = 1
+        return
       }
+
+      // The run itself goes through cli-executor, like the `--json` path above:
+      // `withRequestBudget` lives there, and the upstream ceilings read the
+      // budget out of AsyncLocalStorage through an optional chain. Calling
+      // `tool.handler` from here left them all silent no-ops, so the same
+      // command with and without `--json` had different upstream limits — one
+      // metered, one unbounded.
+      const result = await executeTool(apiClient, tool.name, input)
+      for (const part of result.content) console.log(formatOutput(part.text))
+      if (result.isError) process.exitCode = 1
     })
   }
 

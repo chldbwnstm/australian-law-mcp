@@ -79,6 +79,11 @@ export function isoOf(date: Date): IsoDate {
   return toIso(date.getFullYear(), date.getMonth() + 1, date.getDate())!
 }
 
+/** Last calendar day of a month, leap years included: day 0 of the next one. */
+function lastDayOfMonth(year: number, month: number): number {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate()
+}
+
 function shift(base: Date, years = 0, months = 0, days = 0): Date {
   const date = new Date(base.getFullYear(), base.getMonth(), base.getDate())
   date.setFullYear(date.getFullYear() + years)
@@ -130,6 +135,28 @@ export const DATE_PATTERNS: readonly DatePattern[] = [
     name: "numeric-day-first",
     regex: new RegExp(`${LEAD_IN}\\b(\\d{1,2})[/.\\-](\\d{1,2})[/.\\-](\\d{4})\\b`, "i"),
     resolve: (m) => toIso(Number(m[3]), Number(m[2]), Number(m[1])),
+  },
+  {
+    // "June 2015" — a month names a period, and a point-in-time question about
+    // one wants the compilation in force at the **end** of it, the same
+    // convention `last-year` and the bare-year range use. Without this entry
+    // the phrase fell through to the bare year and "as at June 2015" resolved
+    // to 31 December 2015 — six months late, and past the 1 July commencement
+    // date most Commonwealth amendments take, so the compilation returned
+    // contains amendments that were not in force when the caller asked about.
+    // Placed after the day-bearing forms, and the lookbehind is what keeps it
+    // from *rescuing* one: "31 February 2019" must stay null, not quietly
+    // become 28 February. A day already written is a day the caller meant.
+    name: "month-year",
+    regex: new RegExp(
+      `${LEAD_IN}(?<!\\d(?:st|nd|rd|th)?\\s{0,3})\\b(${MONTH_ALTERNATION})\\.?,?\\s+((?:1[89]|20)\\d{2})\\b`,
+      "i",
+    ),
+    resolve: (m) => {
+      const month = monthNumber(m[1])!
+      const year = Number(m[2])
+      return toIso(year, month, lastDayOfMonth(year, month))
+    },
   },
   {
     name: "today",
@@ -200,6 +227,36 @@ export interface RangePattern {
 }
 
 const YEAR = "((?:1[89]|20)\\d{2})"
+/** The closing year of a span, written in full or as a two-digit tail. */
+const SPAN_END = "((?:1[89]|20)\\d{2}|\\d{2})"
+
+/**
+ * The Australian financial year: 1 July to 30 June, named by the year it
+ * **ends** in. FY21 is 1 July 2020 to 30 June 2021.
+ *
+ * Reading it as a calendar year moves the window six months in the direction
+ * that matters most — 1 July is when the bulk of Commonwealth amendments
+ * commence, so a calendar reading of "FY21" both loses half the year asked
+ * about and adds half a year that was not.
+ */
+function financialYear(endYear: number): DateRange {
+  return { from: `${endYear - 1}-07-01`, to: `${endYear}-06-30` }
+}
+
+/** "2020-21" -> 2021, "1999-00" -> 2000: a two-digit tail carries the century. */
+function spanEndYear(startYear: number, tail: string): number {
+  const value = Number(tail)
+  if (tail.length === 4) return value
+  const carried = Math.floor(startYear / 100) * 100 + value
+  return carried > startYear ? carried : carried + 100
+}
+
+/** A financial year written on its own: "FY21" -> 2021, "FY99" -> 1999. */
+function namedYear(token: string): number {
+  const value = Number(token)
+  if (token.length === 4) return value
+  return value >= 70 ? 1900 + value : 2000 + value
+}
 
 /** Range patterns, most specific first. */
 export const RANGE_PATTERNS: readonly RangePattern[] = [
@@ -223,6 +280,34 @@ export const RANGE_PATTERNS: readonly RangePattern[] = [
       const to = resolveBoundary(m[2], context, "end")
       return from && to ? { from, to } : undefined
     },
+  },
+  {
+    // "FY2020-21", "the 2020-21 financial year", "2020/21 FY". The marker has
+    // to appear on one side or the other: a bare "2015-2019" is a calendar
+    // range and belongs to `year-to-year` below, which is why this cannot
+    // simply be folded into it.
+    name: "financial-year-span",
+    regex: new RegExp(
+      `\\b(?:FY|financial\\s+years?)\\s*${YEAR}\\s*[-/–—]\\s*${SPAN_END}\\b` +
+      `|\\b${YEAR}\\s*[-/–—]\\s*${SPAN_END}\\s+(?:financial\\s+year|FY)\\b`,
+      "i",
+    ),
+    resolve: (m) => {
+      const start = Number(m[1] ?? m[3])
+      return financialYear(spanEndYear(start, m[2] ?? m[4]))
+    },
+  },
+  {
+    // "FY21", "the 2021 financial year". Both name the year the period ends
+    // in, so the span is still July-to-June.
+    name: "financial-year",
+    regex: new RegExp(
+      `\\bFY\\s?((?:1[89]|20)\\d{2}|\\d{2})\\b` +
+      `|\\b${YEAR}\\s+financial\\s+year\\b` +
+      `|\\bfinancial\\s+year\\s+${YEAR}\\b`,
+      "i",
+    ),
+    resolve: (m) => financialYear(namedYear(m[1] ?? m[2] ?? m[3])),
   },
   {
     name: "year-to-year",
@@ -276,13 +361,21 @@ export function resolveSingle(fragment: string, context: DateContext): IsoDate |
   return year ? `${year[0]}-01-01` : undefined
 }
 
+/** `June 2015` standing alone as one end of a range. */
+const MONTH_YEAR_ONLY = new RegExp(`^(${MONTH_ALTERNATION})\\.?,?\\s+((?:1[89]|20)\\d{2})$`, "i")
+
 /**
  * Resolve a range endpoint.
  *
- * A bare year means the whole year, so which end of it is meant depends on
- * which end of the range it sits at: "between 2015 and 2019" runs to 31
- * December 2019, not to 1 January. Collapsing that would silently drop
- * eleven months of the requested window.
+ * A bare year — or a bare month — means the whole period, so which end of it
+ * is meant depends on which end of the range it sits at: "between 2015 and
+ * 2019" runs to 31 December 2019, not to 1 January. Collapsing that would
+ * silently drop eleven months of the requested window.
+ *
+ * The month case is how an Australian financial year is usually spelled out:
+ * "from July 2020 to June 2021" has to open on 1 July and close on 30 June,
+ * and until a month-year fragment resolved at all the whole from-to match was
+ * abandoned and the query fell back to a single calendar year.
  */
 export function resolveBoundary(
   fragment: string,
@@ -292,5 +385,11 @@ export function resolveBoundary(
   const text = fragment.trim()
   const bareYear = /^(?:1[89]|20)\d{2}$/.exec(text)
   if (bareYear) return edge === "start" ? `${bareYear[0]}-01-01` : `${bareYear[0]}-12-31`
+  const monthYear = MONTH_YEAR_ONLY.exec(text)
+  if (monthYear) {
+    const month = monthNumber(monthYear[1])!
+    const year = Number(monthYear[2])
+    return edge === "start" ? toIso(year, month, 1) : toIso(year, month, lastDayOfMonth(year, month))
+  }
   return resolveSingle(text, context)
 }

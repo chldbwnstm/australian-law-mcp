@@ -121,6 +121,95 @@ describe("schedule is part of the reference", () => {
   })
 })
 
+// U+2011 NON-BREAKING HYPHEN is how the Federal Register and Word print the
+// hyphen inside an ITAA-style section number; `provision-slicer.ts` folds the
+// same character for the same reason. Reading it as a range dash turned a real
+// provision into an impossible one and the caller reported it as NOT_FOUND.
+describe("a typographic hyphen is not a range dash", () => {
+  it("keeps U+2011 inside an ITAA section number", () => {
+    const ref = parseSectionRef("s 355\u201125")!
+    expect(ref.number).toBe("355-25")
+    expect(ref.rangeEnd).toBeUndefined()
+    expect(formatRef(ref)).toBe("s 355-25")
+  })
+
+  it("keeps U+2010 inside an ITAA section number", () => {
+    expect(normaliseRef("s 8\u20101")).toBe("s 8-1")
+  })
+
+  it("keeps a spaced U+2011 inside the number too", () => {
+    expect(parseSectionRef("s 355\u2011 25")!.number).toBe("355-25")
+  })
+
+  it("still reads en, em, figure, horizontal-bar and minus as ranges", () => {
+    for (const dash of ["\u2013", "\u2014", "\u2012", "\u2015", "\u2212"]) {
+      expect(normaliseRef(`s 5${dash}6`), dash).toBe("ss 5\u20136")
+    }
+  })
+})
+
+// `ss 355-25, 355-30` is the ITAA cited as a list: the plural belongs to the
+// list, not to a range. "Sections 355 to 25" cannot be looked up, and the
+// caller reports the failure as the provision not existing.
+describe("a pair that runs backwards is not a range", () => {
+  it("reads ss 355-25 as the single ITAA section", () => {
+    const ref = parseSectionRef("ss 355-25")!
+    expect(ref.number).toBe("355-25")
+    expect(ref.rangeEnd).toBeUndefined()
+    expect(ref.plural).toBe(true)
+  })
+
+  it("applies the same reading to the spaced form", () => {
+    expect(parseSectionRef("ss 355 - 25")!.number).toBe("355-25")
+    expect(parseSectionRef("ss 355 - 25")!.rangeEnd).toBeUndefined()
+  })
+
+  it("applies it to a long dash as well, so Part 2-1 of the ACL survives", () => {
+    const ref = parseSectionRef("pt 2\u20131")!
+    expect(ref.number).toBe("2-1")
+    expect(ref.rangeEnd).toBeUndefined()
+  })
+
+  // Documented choice: a backwards typo in a real range reads as one number.
+  // `s 20-15` either exists upstream or comes back honestly as not in the
+  // table of contents; sections 20 to 15 is guaranteed nonsense reported as
+  // an absence.
+  it("reads a backwards typo as a section number rather than an impossible range", () => {
+    expect(parseSectionRef("ss 20-15")!.number).toBe("20-15")
+    expect(parseSectionRef("ss 20-15")!.rangeEnd).toBeUndefined()
+  })
+
+  it("leaves an ascending range alone", () => {
+    expect(normaliseRef("ss 5-6")).toBe("ss 5\u20136")
+    expect(normaliseRef("ss 20-22")).toBe("ss 20\u201322")
+    expect(normaliseRef("s 5\u20136")).toBe("ss 5\u20136")
+  })
+})
+
+// The Constitution's heads of power run to s 51(xxxix); (xxxvii), the referral
+// power, is seven characters. A four-character cap parsed `s 51(xxxvii)` as
+// null and, in prose, silently echoed the citation back as plain `s 51`.
+describe("long roman placita", () => {
+  for (const placitum of ["xxxvi", "xxxvii", "xxxviii", "xxxix", "xxxi", "xx"]) {
+    it(`parses s 51(${placitum})`, () => {
+      const ref = parseSectionRef(`s 51(${placitum})`)
+      expect(ref, `s 51(${placitum}) did not parse`).not.toBeNull()
+      expect(ref!.subsections).toEqual([placitum])
+      expect(formatRef(ref!)).toBe(`s 51(${placitum})`)
+    })
+  }
+
+  it("does not let bracketed prose become a subsection", () => {
+    expect(parseSectionRef("s 5(civil)")).toBeNull()
+    expect(parseSectionRef("s 5(interest)")).toBeNull()
+  })
+
+  it("finds a placitum in prose instead of dropping it", () => {
+    expect(extractSectionRefs("Australian Constitution s 51(xxxvii) is the referral power.").map(formatRef))
+      .toEqual(["s 51(xxxvii)"])
+  })
+})
+
 describe("refToNcxLabelPattern", () => {
   const match = (input: string, label: string) =>
     refToNcxLabelPattern(parseSectionRef(input)!).test(label)

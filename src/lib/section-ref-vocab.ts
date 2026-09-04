@@ -122,6 +122,20 @@ export const SPELLING_ALTERNATION = [...spellingToKind.keys()]
 /** Uppercase roman numeral, optionally with a trailing letter: `IV`, `IVA`, `XI`. */
 export const ROMAN_NUMBER = "[IVXLCDM]+[A-Z]?"
 
+/**
+ * One bracketed subdivision token: `(2)`, `(a)`, `(ii)` — or a longer roman
+ * numeral.
+ *
+ * Four characters used to be the whole rule, which silently deleted the
+ * Constitution's longer heads of power from any citation that named one: s 51
+ * runs to placitum (xxxix) and (xxxvii), the referral power, is seven
+ * characters. The long branch is a real roman-numeral shape rather than
+ * `[ivxlcdm]{5,8}`, so bracketed prose whose letters happen to be roman
+ * ("(civil)", "(mild)") still cannot become a subsection.
+ */
+export const SUBDIVISION_TOKEN =
+  "(?:[A-Za-z0-9]{1,4}|[lL]?[xX]{1,3}(?:[iI][xX]|[iI][vV]|[vV]?[iI]{0,3}))"
+
 export function isRomanNumber(value: string): boolean {
   return new RegExp(`^${ROMAN_NUMBER}$`).test(value)
 }

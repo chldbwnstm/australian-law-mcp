@@ -2,7 +2,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { z } from "zod"
 import type { AuApiClient } from "../lib/api-client.js"
 import type { McpTool } from "../lib/types.js"
-import { DiscoverToolsSchema, discoverTools, executeTool, setAllToolsRef } from "./meta-tools.js"
+import {
+  DiscoverToolsSchema,
+  discoverTools,
+  discoverToolsDescription,
+  executeTool,
+  executeToolDescription,
+  setAllToolsRef,
+} from "./meta-tools.js"
+// The registry is imported for its derived counts only. It calls
+// `setAllToolsRef(allTools)` at load; every test here sets its own index in
+// `beforeEach`, so the real one is never the one under test.
+import { TOOL_COUNTS } from "../tool-registry.js"
 
 const handler = vi.fn(async () => ({ content: [{ type: "text" as const, text: "ran" }] }))
 
@@ -177,5 +188,31 @@ describe("execute_tool parameter checking", () => {
     const rejected = await executeTool(client, { tool_name: "wrapped_tool", params: { querry: "x" } })
     expect(rejected.isError).toBe(true)
     expect(rejected.content[0].text).toContain('has no parameter named "querry"')
+  })
+})
+
+describe("what the two descriptions tell a model", () => {
+  // These are the only two places the size of the unadvertised surface is
+  // quoted to a caller, and the figures were left at "~50"/"around fifty" while
+  // the registry grew to 81 with 10 advertised. Under-stating it by thirty per
+  // cent makes a model likelier to decide a capability is missing than to run
+  // another discover_tools query.
+  const unadvertised = TOOL_COUNTS.total - TOOL_COUNTS.exposed
+
+  it("counts the unadvertised tools the registry actually holds", () => {
+    expect(executeToolDescription).toContain(`${unadvertised} that are not advertised`)
+    expect(discoverToolsDescription).toContain(`keeps ${unadvertised} more`)
+  })
+
+  it("quotes no stale figure", () => {
+    for (const description of [executeToolDescription, discoverToolsDescription]) {
+      expect(description).not.toContain("~50")
+      expect(description).not.toContain("fifty")
+    }
+  })
+
+  it("still says how many are advertised", () => {
+    expect(discoverToolsDescription).toContain("ten tools directly")
+    expect(TOOL_COUNTS.exposed).toBe(10)
   })
 })

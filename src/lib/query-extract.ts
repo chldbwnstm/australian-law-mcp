@@ -28,6 +28,7 @@ import { escapeRegex } from "./escape-regex.js"
 import { extractQueryDates, type QueryDates } from "./au-dates.js"
 import { LAW_ALIAS_ENTRIES, resolveLawAlias, type AliasJurisdiction, type LawAliasEntry } from "./law-alias.js"
 import { extractSectionRefs, formatRef, type SectionRef } from "./section-ref.js"
+import { isRomanNumber } from "./section-ref-vocab.js"
 
 // ──────────────────────────────────────────────────────────────────────────
 // Statute names
@@ -305,6 +306,32 @@ function isWholeWordRef(source: string, ref: SectionRef): boolean {
 }
 
 /**
+ * Reject a roman number the source did not write in capitals.
+ *
+ * The word-fragment guard only catches a reference glued to the rest of a
+ * word; a designation followed by a *whole* lower-case word built from roman
+ * letters passes it cleanly — "which sections mix …" is section MIX, "div id
+ * attribute" is division ID, "the item is" is item IS. Each then routes to a
+ * provision lookup that answers `[NOT_FOUND]` for a section nobody cited,
+ * instead of running the search that was asked for.
+ *
+ * AGLC r 3.1.4 writes roman pinpoints in capitals (`pt IVA`), so case is the
+ * signal, and `statute-citations.ts` settled the same question the same way —
+ * it keeps `ROMAN_NUMBER` case-sensitive rather than lower-casing the whole
+ * pattern. `isRomanNumber` is that case-sensitive grammar, so a number that
+ * only becomes roman once upper-cased is one the writer never wrote as a
+ * numeral. Lower-case subsections (`s 51(xx)`) are untouched: a subsection is
+ * not the number.
+ */
+function romanNumbersAreCapitalised(ref: SectionRef): boolean {
+  for (const part of [ref.number, ref.schedule, ref.rangeEnd]) {
+    if (!part || part === part.toUpperCase()) continue
+    if (isRomanNumber(part.toUpperCase())) return false
+  }
+  return true
+}
+
+/**
  * Every provision reference in the query, in order.
  *
  * The grammar belongs to `section-ref`; this adds the two context guards that
@@ -315,7 +342,9 @@ export function extractProvisions(query: string): SectionRef[] {
   const source = query ?? ""
   if (!source) return []
   const masked = maskLawNames(source)
-  return extractSectionRefs(masked).filter((ref) => isWholeWordRef(masked, ref))
+  return extractSectionRefs(masked).filter(
+    (ref) => isWholeWordRef(masked, ref) && romanNumbersAreCapitalised(ref),
+  )
 }
 
 /**

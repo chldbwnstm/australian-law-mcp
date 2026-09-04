@@ -768,8 +768,16 @@ export async function chainFullResearch(
         dl,
         Promise.all([
           callTool(searchAiLaw as Handler, apiClient, { query: input.query, limit: 8 }),
+          // A rejection here is a lookup that never ran, so it is kept as a
+          // failure rather than flattened to an empty result: an empty result
+          // is what "the Register was searched and holds no such title" looks
+          // like, and the section below reads the two differently.
           resolveChainBaseLaw(apiClient, input.query, 2).catch(
-            (): ChainBaseLawResult => ({ laws: [], attempts: [] }),
+            (error): ChainBaseLawResult => ({
+              laws: [],
+              attempts: [input.query],
+              failures: [{ term: input.query, message: error instanceof Error ? error.message : String(error) }],
+            }),
           ),
         ]),
       )
@@ -805,14 +813,37 @@ export async function chainFullResearch(
       detailLeg(parts, "Ruling in full", rulings.detailO, "get_ruling_text")
 
       if (!law) {
-        parts.push(
-          sec(
-            "No single Act was identified",
-            "The full-text search above is the whole legislative answer this chain found. If the subject is " +
-              "tenancy, crime, land, or most consumer-facing licensing, it is state law — try " +
-              "legal_research(task=\"state_law_compare\").",
-          ),
-        )
+        // "No single Act" and "the Register never answered" are different
+        // facts, and only the first supports the state-law nudge — routing a
+        // 503 to it turns an outage into a federal/state conclusion. The
+        // full-text half above is real data, so this is a marked gap rather
+        // than a failed chain.
+        if ((base.failures ?? []).length > 0) {
+          parts.push(
+            sec(
+              "No Act was identified [NOT RETRIEVED]",
+              `[${ErrorCodes.API_ERROR}] The base-law lookup could not be completed — ` +
+                `${(base.failures ?? []).length} of the Federal Register lookups failed, so no title was matched` +
+                (base.attempts.length > 0
+                  ? ` (tried ${base.attempts.map((attempt) => `"${attempt}"`).join(" → ")})`
+                  : "") +
+                "." +
+                failureLines(base).join("\n") +
+                "\n\n⚠️ This is an upstream failure, NOT a finding that no Commonwealth Act covers the question. Do " +
+                "not tell the user there is no such Act, do not invent one, and do not conclude that the subject is " +
+                "state law — re-run once the Register responds.",
+            ),
+          )
+        } else {
+          parts.push(
+            sec(
+              "No single Act was identified",
+              "The full-text search above is the whole legislative answer this chain found. If the subject is " +
+                "tenancy, crime, land, or most consumer-facing licensing, it is state law — try " +
+                "legal_research(task=\"state_law_compare\").",
+            ),
+          )
+        }
       }
       return wrapResult(parts.join("\n"))
     })

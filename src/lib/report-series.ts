@@ -54,7 +54,11 @@ export const REPORT_SERIES: readonly ReportSeries[] = [
   { abbrev: "ALJR", name: "Australian Law Journal Reports", bracket: "round", rank: 2, scope: "High Court of Australia" },
   { abbrev: "FLR", name: "Federal Law Reports", bracket: "round", rank: 2, scope: "Federal and territory courts" },
   { abbrev: "ACTLR", name: "Australian Capital Territory Law Reports", bracket: "round", rank: 2, scope: "Australian Capital Territory" },
-  { abbrev: "NSWR", name: "New South Wales Reports", bracket: "round", rank: 2, scope: "New South Wales (historical)" },
+  // The 1960–1970 series, *not* its successor NSWLR (1971– ). The year is the
+  // volume — "Barton v Armstrong [1969] 2 NSWR 451" — so it takes square
+  // brackets even though the round-bracket NSWLR that replaced it does not.
+  // Copying NSWLR's bracket here warns about correctly formatted citations.
+  { abbrev: "NSWR", name: "New South Wales Reports", bracket: "square", rank: 2, scope: "New South Wales (1960–1970)" },
 
   // ── Rank 3: subject-specific unauthorised ──────────────────────────────
   { abbrev: "A Crim R", name: "Australian Criminal Reports", bracket: "round", rank: 3, scope: "Criminal law" },

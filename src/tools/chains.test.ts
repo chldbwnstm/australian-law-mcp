@@ -308,7 +308,40 @@ describe("chain_full_research", () => {
     const text = result.content[0].text
     expect(text).toContain("Fair Work Act 2009")
     expect(text).toContain("No single Act was identified")
+    // Every rung ran and matched nothing, so no error label belongs here.
+    expect(text).not.toContain("[EXTERNAL_API_ERROR]")
     expect(getLawText).not.toHaveBeenCalled()
+  })
+
+  it("does not read an unreachable Register as 'no single Act was identified'", async () => {
+    // The Register never answered, so the state-law nudge — a federal/state
+    // conclusion — has nothing behind it.
+    resolveChainBaseLaw.mockResolvedValue({
+      laws: [],
+      attempts: ["residential tenancy bond", "residential tenancy bond (full text)"],
+      failures: [{ term: "residential tenancy bond", message: "frlApi upstream server error (503)" }],
+    })
+    searchAiLaw.mockResolvedValue(ok("no legislation matched"))
+    const result = await chainFullResearch(client, { query: "residential tenancy bond" })
+    const text = result.content[0].text
+
+    expect(text).toContain("[EXTERNAL_API_ERROR]")
+    expect(text).toContain("[NOT RETRIEVED]")
+    expect(text).toContain('"residential tenancy bond": frlApi upstream server error (503)')
+    expect(text).toContain("NOT a finding that no Commonwealth Act covers the question")
+    expect(text).not.toContain("No single Act was identified")
+    expect(text).not.toContain("state_law_compare")
+    // The full-text half is real data and still runs — a marked gap, not a dead chain.
+    expect(text).toContain("no legislation matched")
+  })
+
+  it("keeps a rejected base-law lookup as a failure instead of an empty result", async () => {
+    resolveChainBaseLaw.mockRejectedValue(new Error("frlApi request timed out"))
+    const text = (await chainFullResearch(client, { query: "stood down without pay" })).content[0].text
+
+    expect(text).toContain("[EXTERNAL_API_ERROR]")
+    expect(text).toContain("frlApi request timed out")
+    expect(text).not.toContain("No single Act was identified")
   })
 
   it("fetches the Act's structure when one was picked", async () => {

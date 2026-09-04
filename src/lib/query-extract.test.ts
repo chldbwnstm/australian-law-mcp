@@ -128,6 +128,24 @@ describe("provisions", () => {
     expect(extractProvisions("dispute prep: ACCC vs a merger")).toHaveLength(0)
   })
 
+  it("rejects a designation followed by a whole lower-case roman-letter word", () => {
+    // The word-fragment guard passes these — "mix", "id", "is" and "civil"
+    // are whole words with clean edges — but every one of them is an ordinary
+    // English word the case-insensitive roman branch read as a number. Routed
+    // as a provision, "s MIX" comes back [NOT_FOUND] for a section nobody
+    // cited, instead of running the search the question asked for.
+    expect(extractProvisions("which sections mix civil and criminal penalties")).toHaveLength(0)
+    expect(extractProvisions("div id attribute")).toHaveLength(0)
+    expect(extractProvisions("the item is")).toHaveLength(0)
+    expect(extractProvisions("clause civil liability")).toHaveLength(0)
+  })
+
+  it("keeps a genuine roman-numeral part, which AGLC writes in capitals", () => {
+    expect(firstProvision("what does pt IVA of the CCA cover")).toBe("pt IVA")
+    expect(firstProvision("Constitution s 51(xx)")).toBe("s 51(xx)")
+    expect(firstProvision("sch IV cl 3")).toBe("sch IV cl 3")
+  })
+
   it("still finds a real reference in the same sentence shape", () => {
     expect(firstProvision("which version of the Migration Act s 501 applied on 20 March 2020")).toBe("s 501")
   })
@@ -175,6 +193,17 @@ describe("dates", () => {
 
   it("reads `as at`", () => {
     expect(pointInTimeDate("Privacy Act as at 1 December 2022")).toBe("2022-12-01")
+  })
+
+  it("reads a month and a year as that month, not that year", () => {
+    // "as at June 2015" used to fall through to the bare-year rule and hand
+    // applicable_law 31 December 2015 — past the 1 July commencement date most
+    // Commonwealth amendments take, so the compilation returned included
+    // amendments that were not in force on the date asked about.
+    expect(pointInTimeDate("Privacy Act as at June 2015")).toBe("2015-06-30")
+    // The whole phrase goes, lead-in included: a leftover "as at June" would
+    // travel on as a search term.
+    expect(extractDates("Privacy Act as at June 2015").rest).toBe("")
   })
 
   it("resolves a bare year to the end of the period", () => {

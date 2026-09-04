@@ -26,7 +26,7 @@
 import { z } from "zod"
 import type { AuApiClient } from "../lib/api-client.js"
 import { extractCaseCitations, formatCitation, type MncCitation } from "../lib/case-citation.js"
-import { formatToolError, notFoundResponse } from "../lib/errors.js"
+import { ErrorCodes, formatToolError, notFoundResponse, type ErrorCode } from "../lib/errors.js"
 import { lawCiteUrl } from "../lib/external-links-map.js"
 import { parseSectionRef } from "../lib/section-ref.js"
 import * as nsw from "../lib/sources/nsw-caselaw.js"
@@ -116,26 +116,72 @@ function tiedProvision(query: string): { lawName: string; provision: string } | 
   return undefined
 }
 
+/**
+ * The override check's outcome — and, separately, whether it *ran*.
+ *
+ * `effects: []` is ambiguous on its own: it is what "the endnote table was read
+ * and holds no later amending Act" looks like, and also what "the endnote table
+ * was never read" looks like. `amendment-lookup` distinguishes the two
+ * (`AmendmentHistory.available`), so this carries the distinction through to the
+ * render instead of collapsing it into an absence.
+ */
+interface OverrideCheck {
+  effects: DatedEffect[]
+  /** False when the check never ran, and then `effects` is evidence of nothing. */
+  available: boolean
+  /** The bracket label for the gap, from `ErrorCodes`, when `available` is false. */
+  gapCode?: ErrorCode
+  title?: string
+  titleId?: string
+  note?: string
+}
+
 async function legislativeOverride(
   client: AuApiClient,
   tie: { lawName: string; provision: string },
   decisionYear: number,
-): Promise<{ effects: DatedEffect[]; title?: string; titleId?: string; note?: string }> {
+): Promise<OverrideCheck> {
   const ref = parseSectionRef(tie.provision)
-  if (!ref) return { effects: [], note: `"${tie.provision}" is not a provision reference` }
+  if (!ref) {
+    return {
+      effects: [],
+      available: false,
+      gapCode: ErrorCodes.INVALID_PARAM,
+      note: `"${tie.provision}" is not a provision reference`,
+    }
+  }
   try {
     const lookup = await resolveTitle(client, { query: tie.lawName })
     const history = await provisionHistory(client, lookup.title.id, ref)
     if (!history.available) {
-      return { effects: [], title: lookup.title.name, titleId: lookup.title.id, ...(history.note ? { note: history.note } : {}) }
+      // The endnote table could not be read — a 503 on the volume, a spent
+      // budget, or the TOC/volume anchor mismatch `amendment-lookup` reports.
+      // Treating that as an empty table is how "never read" becomes "never
+      // amended".
+      return {
+        effects: [],
+        available: false,
+        gapCode: ErrorCodes.UPSTREAM_NO_DATA,
+        title: lookup.title.name,
+        titleId: lookup.title.id,
+        ...(history.note ? { note: history.note } : {}),
+      }
     }
     return {
       effects: amendedAfter(history.rows, decisionYear),
+      available: true,
       title: lookup.title.name,
       titleId: lookup.title.id,
     }
   } catch (error) {
-    return { effects: [], note: error instanceof Error ? error.message : String(error) }
+    // `resolveTitle` did not answer, so the provision's history was never even
+    // requested. The observation is about the lookup, never about the section.
+    return {
+      effects: [],
+      available: false,
+      gapCode: ErrorCodes.UPSTREAM_NO_DATA,
+      note: error instanceof Error ? error.message : String(error),
+    }
   }
 }
 
@@ -252,7 +298,7 @@ function render(p: {
   citing: readonly SourceHit[]
   scans: readonly ScanResult[]
   overruling: readonly ScanResult[]
-  override?: { effects: DatedEffect[]; title?: string; titleId?: string; note?: string }
+  override?: OverrideCheck
   tie?: { lawName: string; provision: string }
   verdict: Verdict
   input: CiteCheckInput
@@ -343,11 +389,26 @@ function render(p: {
       `  ⚠️ The endnote cites amending Acts by year and number, never by commencement date, so "after ${p.citation.year}" ` +
         `here means "numbered in ${p.citation.year} or later". An Act numbered in ${p.citation.year} may have commenced before the judgment — check it.`,
     )
+  } else if (!p.override || !p.override.available) {
+    // The endnote table was never read, so it shows nothing — least of all an
+    // absence of amending Acts. Saying "shows no amending Act" here is a
+    // legislative_override clearance built on an upstream failure.
+    lines.push(
+      `▶ Legislative override: could not be checked for ${p.tie.provision} of ` +
+        `${p.override?.title ?? p.tie.lawName}`,
+    )
+    lines.push(
+      `  [${p.override?.gapCode ?? ErrorCodes.UPSTREAM_NO_DATA}] ` +
+        `${p.override?.note ?? "the compilation's amendment-history endnote could not be read"}`,
+    )
+    lines.push(
+      "  ⚠️ The check did not run, so nothing here says the provision was never amended. Do not read the verdict " +
+        "above as covering the legislation — retry, or read the compilation endnotes yourself.",
+    )
   } else {
     lines.push(
-      `▶ Legislative override: ${p.tie.provision} of ${p.override?.title ?? p.tie.lawName} shows no amending Act ` +
-        `numbered ${p.citation.year} or later in the compilation endnotes` +
-        `${p.override?.note ? ` (${p.override.note})` : ""}.`,
+      `▶ Legislative override: ${p.tie.provision} of ${p.override.title ?? p.tie.lawName} shows no amending Act ` +
+        `numbered ${p.citation.year} or later in the compilation endnotes.`,
     )
   }
 

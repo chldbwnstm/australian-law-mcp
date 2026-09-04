@@ -30,7 +30,7 @@
 
 import { normaliseAliasKey, resolveLawAlias, type AliasJurisdiction } from "../../lib/law-alias.js"
 import { formatRef, parseSectionRef, type SectionRef } from "../../lib/section-ref.js"
-import { ROMAN_NUMBER, SPELLING_ALTERNATION } from "../../lib/section-ref-vocab.js"
+import { ROMAN_NUMBER, SPELLING_ALTERNATION, SUBDIVISION_TOKEN } from "../../lib/section-ref-vocab.js"
 import { extractContentClaim, type ClaimSource } from "./content-claims.js"
 
 export type { ClaimSource }
@@ -67,7 +67,29 @@ export interface StatuteCitation {
 }
 
 const JURISDICTION_TOKENS = "Cth|NSW|Vic|Qld|SA|WA|Tas|ACT|NT"
-const STATUTE_SUFFIX = "Acts?|Code|Constitution|Regulations|Regulation|Rules|Rule|Ordinance|Instrument|Determination|Bill"
+
+/**
+ * The word a short title ends in. `Law` is here for the *Australian Consumer
+ * Law*, the *Corporations Law* and the uniform state laws, which are bodies of
+ * law rather than Acts and are cited by name; without it the one trap this
+ * module exists for — ACL s 18 is CCA sch 2 s 18 — was never even attributed.
+ *
+ * It is guarded by the two properties every pattern below already has: the
+ * match is **case sensitive**, so "the law s 5 says" is ordinary prose and
+ * stays prose, and a preceding title body is **mandatory**, so a bare `Law`
+ * cannot be a statute name on its own.
+ */
+const STATUTE_SUFFIX = "Acts?|Code|Constitution|Regulations|Regulation|Rules|Rule|Ordinance|Instrument|Determination|Bill|Law"
+
+/**
+ * The one short title that *is* its suffix word. AGLC r 3.6 cites the
+ * Australian Constitution as "the Constitution", so the mandatory title body
+ * in front of the suffix would otherwise make it — and only it — impossible to
+ * attach to a pinpoint. `Act`, `Code` and `Law` are deliberately not here:
+ * standing alone they are English words.
+ */
+const STANDALONE_TITLE = "Constitution"
+const STANDALONE_TITLE_ONLY = new RegExp(`^${STANDALONE_TITLE}$`)
 
 /**
  * Bounded number and subsection patterns. They mirror `section-ref.ts` because
@@ -76,7 +98,7 @@ const STATUTE_SUFFIX = "Acts?|Code|Constitution|Regulations|Regulation|Rules|Rul
  * rejects is simply dropped.
  */
 const NUMBER = `(?:${ROMAN_NUMBER}|\\d{1,4}(?:[.\\-]\\d{1,4}){0,3}[A-Za-z]{0,4})`
-const SUBSECTIONS = `(?:\\s?\\([A-Za-z0-9]{1,4}\\)){0,6}`
+const SUBSECTIONS = `(?:\\s?\\(${SUBDIVISION_TOKEN}\\)){0,6}`
 const SCHEDULE_WORD = `(?:[Ss]chedules|[Ss]chedule|[Ss]chs|[Ss]ch)`
 
 /**
@@ -106,7 +128,7 @@ const PINPOINT = new RegExp(
     `(${SPELLINGS})\\s*(${NUMBER})` +
     `(?:\\s*[-–]\\s*${NUMBER})?` +
     SUBSECTIONS +
-    `|(${SPELLINGS})\\s?\\([A-Za-z0-9]{1,4}\\)` +
+    `|(${SPELLINGS})\\s?\\(${SUBDIVISION_TOKEN}\\)` +
     `)`,
   "g",
 )
@@ -125,15 +147,18 @@ const PINPOINT = new RegExp(
  */
 const TITLE_BODY = "[^;*_\\n0-9]"
 
+/** A short title: capitalised body then a suffix word, or a standalone title. */
+const STATUTE_NAME = `(?:[A-Z]${TITLE_BODY}{2,110}?(?:${STATUTE_SUFFIX})|${STANDALONE_TITLE})`
+
 /** A complete citation: title, year, jurisdiction. Markdown emphasis tolerated. */
 const FULL_CITE = new RegExp(
-  `[*_]{0,2}([A-Z]${TITLE_BODY}{2,110}?(?:${STATUTE_SUFFIX}))\\s+((?:1[89]|20)\\d{2})[*_]{0,2}\\s*\\(\\s*(${JURISDICTION_TOKENS})\\s*\\)`,
+  `[*_]{0,2}(${STATUTE_NAME})\\s+((?:1[89]|20)\\d{2})[*_]{0,2}\\s*\\(\\s*(${JURISDICTION_TOKENS})\\s*\\)`,
   "g",
 )
 
 /** The same shape anchored to the end of the lookback window. */
 const FULL_CITE_TAIL = new RegExp(
-  `[*_]{0,2}([A-Z]${TITLE_BODY}{2,110}?(?:${STATUTE_SUFFIX}))\\s+((?:1[89]|20)\\d{2})[*_]{0,2}\\s*\\(\\s*(${JURISDICTION_TOKENS})\\s*\\)[\\s,]{0,4}$`,
+  `[*_]{0,2}(${STATUTE_NAME})\\s+((?:1[89]|20)\\d{2})[*_]{0,2}\\s*\\(\\s*(${JURISDICTION_TOKENS})\\s*\\)[\\s,]{0,4}$`,
 )
 
 /** `the Act`, `that Act`, `the same Act` — the pronoun forms. */
@@ -141,15 +166,23 @@ const ANAPHORA_TAIL = /(?:^|[^A-Za-z])(?:the|that|this|said)\s+(?:same\s+|said\s
 
 /** A named statute with no jurisdiction: `Crimes Act 1900`, `FW Act`. */
 const BARE_NAME_TAIL = new RegExp(
-  `[*_]{0,2}([A-Z]${TITLE_BODY}{2,110}?(?:${STATUTE_SUFFIX}))[*_]{0,2}(?:\\s+((?:1[89]|20)\\d{2}))?[\\s,]{0,4}$`,
+  `[*_]{0,2}(${STATUTE_NAME})[*_]{0,2}(?:\\s+((?:1[89]|20)\\d{2}))?[\\s,]{0,4}$`,
 )
 
-/** A bare abbreviation immediately before a pinpoint: `CCA s 18`. */
-const ABBREVIATION_TAIL = /(?:^|[^A-Za-z])([A-Z][A-Za-z]{1,7})[\s,]{0,3}$/
+/**
+ * A bare abbreviation immediately before a pinpoint: `CCA s 18`.
+ *
+ * The optional digits and year are how the tax Acts are abbreviated — `ITAA97`
+ * and `ITAA 1997` are both alias-table entries, and a letters-only token could
+ * reach neither, so the two most-cited Commonwealth Acts in the country were
+ * never attached to their pinpoints. Only tokens `isKnownAlias` recognises are
+ * accepted, so widening the shape cannot invent a statute.
+ */
+const ABBREVIATION_TAIL = /(?:^|[^A-Za-z])([A-Z][A-Za-z]{1,7}\d{0,4}(?:\s+(?:1[89]|20)\d{2})?)[\s,]{0,3}$/
 
 /** `s 18 of the Competition and Consumer Act 2010 (Cth)` / `s 18 of the CCA`. */
 const OF_THE_LEAD = new RegExp(
-  `^[\\s,]{0,4}of\\s+(?:the\\s+)?(?:[*_]{0,2}([A-Z]${TITLE_BODY}{2,110}?(?:${STATUTE_SUFFIX}))[*_]{0,2}` +
+  `^[\\s,]{0,4}of\\s+(?:the\\s+)?(?:[*_]{0,2}(${STATUTE_NAME})[*_]{0,2}` +
     `(?:\\s+((?:1[89]|20)\\d{2}))?(?:\\s*\\(\\s*(${JURISDICTION_TOKENS})\\s*\\))?` +
     `|([A-Z]{2,7})\\b)`,
 )
@@ -195,11 +228,20 @@ export function statuteNameCandidates(name: string): string[] {
   return out.length > 0 ? out : [name.trim()]
 }
 
-/** Drop leading prose words while at least two remain. Never touches `A`/`An`. */
+/**
+ * Drop leading prose words. Never touches `A`/`An`.
+ *
+ * How far it may trim depends on the last word. A one-word result is allowed
+ * only for a title that stands alone — "under the Constitution" is exactly
+ * that, and stopping a word early left "the Constitution", which resolves to
+ * nothing. Everything else keeps two words, so "Under this Law s 5" cannot be
+ * trimmed down to a statute called `Law`.
+ */
 function trimLeadingFiller(name: string): string {
   const words = name.trim().split(/\s+/).filter(Boolean)
+  const floor = STANDALONE_TITLE_ONLY.test(words[words.length - 1] ?? "") ? 1 : 2
   let start = 0
-  while (start < words.length - 2 && LEADING_FILLER.has(words[start].toLowerCase().replace(/[^a-z.]/g, ""))) start++
+  while (start < words.length - floor && LEADING_FILLER.has(words[start].toLowerCase().replace(/[^a-z.]/g, ""))) start++
   return words.slice(start).join(" ")
 }
 

@@ -13,7 +13,9 @@
  *  - **A hyphen means different things either side of a plural.** `ss 5-6` is
  *    a range; `s 355-25` is one ITAA-style section number. The plural
  *    abbreviation is the only signal present in the text, so that is what
- *    decides it — an en dash overrides, because it only ever means "to".
+ *    decides it — an en dash overrides, because it only ever means "to", while
+ *    U+2010/U+2011 do not (they are how FRL prints a plain hyphen). Whatever
+ *    the signal, a pair that runs backwards is never a range.
  *  - **`s18` is tolerated on input and never produced on output.** AGLC r
  *    3.1.4 requires the space. Being strict on input would reject most real
  *    user typing; being loose on output would emit non-compliant citations.
@@ -23,6 +25,7 @@ import {
   PLURAL_SPELLINGS,
   ROMAN_NUMBER,
   SPELLING_ALTERNATION,
+  SUBDIVISION_TOKEN,
   isRomanNumber,
   kindForSpelling,
   vocabFor,
@@ -52,23 +55,35 @@ export interface SectionRef {
 }
 
 /**
- * En dash, em dash and friends all mean "to" in a pinpoint range — unlike a
- * plain hyphen, which can be part of an ITAA-style section number.
+ * Every dash-like character that becomes a plain `-` before parsing: U+2010
+ * HYPHEN, U+2011 NON-BREAKING HYPHEN, figure dash, en dash, em dash,
+ * horizontal bar and minus.
+ */
+const DASH_REPLACE = new RegExp("[‐‑‒–—―−]", "g")
+
+/**
+ * The subset that only ever means "to" in a pinpoint range — unlike a plain
+ * hyphen, which can be part of an ITAA-style section number.
+ *
+ * U+2010 HYPHEN and U+2011 NON-BREAKING HYPHEN are deliberately **not** here.
+ * They are typographic spellings of the plain hyphen, and the Federal Register
+ * emits U+2011 *inside* section numbers — `provision-slicer.ts` folds the same
+ * character back to `-` for exactly that reason. Counting them as range dashes
+ * read the real `s 355‑25` as the impossible range 355–25 and reported a
+ * correctly cited provision as one the Act does not contain.
  *
  * Deliberately not a `/g/` regex: `RegExp.prototype.test` on a global pattern
  * advances `lastIndex`, so the same call would alternate true and false.
  */
-const LONG_DASH_SOURCE = "[‐‑‒–—―−]"
-const LONG_DASH_TEST = new RegExp(LONG_DASH_SOURCE)
-const LONG_DASH_REPLACE = new RegExp(LONG_DASH_SOURCE, "g")
+const RANGE_DASH_TEST = new RegExp("[‒–—―−]")
 /** Non-breaking and thin spaces: FRL text and pasted citations are full of them. */
 const ODD_SPACES = /[     ]/g
 
-function normaliseInput(input: string): { text: string; hadLongDash: boolean } {
+function normaliseInput(input: string): { text: string; hadRangeDash: boolean } {
   const collapsed = input.replace(ODD_SPACES, " ").replace(/\s+/g, " ").trim()
   return {
-    text: collapsed.replace(LONG_DASH_REPLACE, "-"),
-    hadLongDash: LONG_DASH_TEST.test(collapsed),
+    text: collapsed.replace(DASH_REPLACE, "-"),
+    hadRangeDash: RANGE_DASH_TEST.test(collapsed),
   }
 }
 
@@ -84,8 +99,8 @@ function normaliseInput(input: string): { text: string; hadLongDash: boolean } {
  */
 const NUMBER_PATTERN = `(?:${ROMAN_NUMBER}|\\d{1,4}(?:[.\\-]\\d{1,4}){0,3}[A-Za-z]{0,4})`
 
-/** `(2)(a)(ii)` — at most six levels, each at most four characters. */
-const SUBSECTION_PATTERN = `(?:\\s?\\([A-Za-z0-9]{1,4}\\)){0,6}`
+/** `(2)(a)(ii)` — at most six levels, each one `SUBDIVISION_TOKEN`. */
+const SUBSECTION_PATTERN = `(?:\\s?\\(${SUBDIVISION_TOKEN}\\)){0,6}`
 
 const DESIGNATOR = `(?:${SPELLING_ALTERNATION})`
 const SCHEDULE_WORD = `(?:schedules|schedule|schs|sch)`
@@ -105,7 +120,7 @@ const REF_BODY =
 const ANCHORED_REF = new RegExp(`^${REF_BODY}$`, "i")
 
 /** Bare `sub-s (2)` / `para (a)` — a designation whose number is bracketed. */
-const BRACKETED_ONLY = new RegExp(`^(${DESIGNATOR})\\s*\\(([A-Za-z0-9]{1,4})\\)$`, "i")
+const BRACKETED_ONLY = new RegExp(`^(${DESIGNATOR})\\s*\\((${SUBDIVISION_TOKEN})\\)$`, "i")
 
 /**
  * `sub-div B`, `div A` — structural units are sometimes lettered rather than
@@ -136,7 +151,28 @@ function splitLetterSuffix(value: string): { number: string; letterSuffix?: stri
 
 function parseSubsections(raw: string): string[] {
   if (!raw) return []
-  return [...raw.matchAll(/\(([A-Za-z0-9]{1,4})\)/g)].map((m) => m[1])
+  return [...raw.matchAll(new RegExp(`\\((${SUBDIVISION_TOKEN})\\)`, "g"))].map((m) => m[1])
+}
+
+/**
+ * Is this pair arithmetically impossible as a range?
+ *
+ * `ss 355-25, 355-30` is how the ITAA 1997 is cited in a list — the plural
+ * designation belongs to the list, not to a range — and reading the first item
+ * as "sections 355 to 25" produces a lookup that cannot succeed, which the
+ * caller then reports as the provision not existing. A backwards pair is
+ * therefore always read as one dashed section number instead.
+ *
+ * The same reading is applied to a genuine backwards typo ("ss 20-15"),
+ * deliberately: `s 20-15` either exists upstream, in which case the answer is
+ * right, or comes back honestly as not in the table of contents, whereas the
+ * range reading is guaranteed nonsense and is reported as an absence. A
+ * non-numeric side (`pt IV-V`) is never treated as backwards.
+ */
+function runsBackwards(from: string, to: string): boolean {
+  const start = Number.parseInt(from, 10)
+  const end = Number.parseInt(to, 10)
+  return Number.isFinite(start) && Number.isFinite(end) && end < start
 }
 
 /**
@@ -146,7 +182,7 @@ function parseSubsections(raw: string): string[] {
  */
 export function parseSectionRef(input: string): SectionRef | null {
   if (!input) return null
-  const { text, hadLongDash } = normaliseInput(input)
+  const { text, hadRangeDash } = normaliseInput(input)
   if (!text) return null
 
   const scheduleOnly = SCHEDULE_ONLY.exec(text)
@@ -190,18 +226,19 @@ export function parseSectionRef(input: string): SectionRef | null {
 
   // The hyphen decision. `NUMBER_PATTERN` is greedy, so `ss 5-6` arrives here
   // as the single number "5-6" and has to be split back out; `s 355-25` must
-  // not be. A long dash always means "to"; a hyphen only does after a plural.
+  // not be. A range dash always means "to"; a hyphen only does after a plural.
   let numberText = rawNumber
   let rangeEnd = spacedRangeEnd as string | undefined
-  if (!rangeEnd && (plural || hadLongDash)) {
+  if (!rangeEnd && (plural || hadRangeDash)) {
     const split = /^(\d{1,4}[A-Za-z]{0,4})-(\d{1,4}[A-Za-z]{0,4})$/.exec(rawNumber)
-    if (split) {
+    if (split && !runsBackwards(split[1], split[2])) {
       numberText = split[1]
       rangeEnd = split[2]
     }
   }
-  if (rangeEnd && !plural && !hadLongDash) {
-    // A spaced hyphen after a singular designation is still part of the number.
+  if (rangeEnd && ((!plural && !hadRangeDash) || runsBackwards(numberText, rangeEnd))) {
+    // A spaced hyphen after a singular designation is still part of the number,
+    // and so is a pair that runs backwards — see `runsBackwards`.
     numberText = `${numberText}-${rangeEnd}`
     rangeEnd = undefined
   }

@@ -165,6 +165,13 @@ export function extractOptionsFromSchema(schema: z.ZodSchema): CliOption[] {
       type = "boolean"
     } else if (propType === "array") {
       type = "array"
+    } else if (propType === "object") {
+      // A record-valued parameter — `execute_tool.params`,
+      // `search_decisions.options`, `search_treaties.facets` — used to fall
+      // through to "string", so the raw text reached Zod and every such flag
+      // answered "expected record, received string" no matter what was passed.
+      // JSON is the one spelling of an object a shell can carry.
+      type = "object"
     }
 
     const hasDefault = prop.default !== undefined
@@ -180,6 +187,15 @@ export function extractOptionsFromSchema(schema: z.ZodSchema): CliOption[] {
   return options
 }
 
+/**
+ * A flag's text as the schema's type.
+ *
+ * Throws only for `object`: an array has a second reading a shell user plainly
+ * meant (`a,b,c`), and a number or a boolean that does not parse still reaches
+ * Zod, which names the parameter. A malformed JSON object has no such reading,
+ * and returning the raw string would put back the "expected record, received
+ * string" message that says nothing about what was wrong with it.
+ */
 export function coerceValue(value: string, type: string): unknown {
   switch (type) {
     case "number": return Number(value)
@@ -187,6 +203,18 @@ export function coerceValue(value: string, type: string): unknown {
     case "array": {
       try { return JSON.parse(value) }
       catch { return value.split(",") }
+    }
+    case "object": {
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(value)
+      } catch (error) {
+        throw new Error(`expected a JSON object such as '{"court":"HCA"}' — ${error instanceof Error ? error.message : String(error)}`)
+      }
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error(`expected a JSON object such as '{"court":"HCA"}' — got ${Array.isArray(parsed) ? "an array" : JSON.stringify(parsed)}`)
+      }
+      return parsed
     }
     default: return value
   }

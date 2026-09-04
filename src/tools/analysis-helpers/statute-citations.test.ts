@@ -151,6 +151,76 @@ describe("extractStatuteCitations", () => {
   })
 })
 
+// The Australian Consumer Law, the Constitution and the two Income Tax
+// Assessment Acts are among the most cited law in the country, and none of
+// them could reach a pinpoint: the title pattern needed three characters in
+// front of its suffix word (so a name that *is* the suffix word never
+// matched), "Law" was not a suffix word at all, and the abbreviation shape was
+// letters-only.
+describe("statutes whose name is, or ends in, a suffix word", () => {
+  it("attaches the Australian Consumer Law and rewrites the pinpoint into sch 2", () => {
+    const [cite] = extractStatuteCitations(
+      "The Australian Consumer Law s 18 prohibits misleading or deceptive conduct.",
+      5,
+    )
+    expect(cite.lawName).toBe("Australian Consumer Law")
+    expect(cite.attachedBy).toBe("bare-name")
+    expect(cite.pinpoint).toBe("sch 2 s 18")
+    expect(cite.ref.schedule).toBe("2")
+  })
+
+  it("attaches the Constitution named on its own, before and after the pinpoint", () => {
+    const [bare] = extractStatuteCitations("The Constitution s 51(xx) is the corporations power.", 5)
+    expect(bare.lawName).toBe("Constitution")
+    expect(bare.attachedBy).toBe("bare-name")
+
+    const [lead] = extractStatuteCitations("s 92 of the Constitution guarantees free trade.", 5)
+    expect(lead.lawName).toBe("Constitution")
+    expect(lead.attachedBy).toBe("leading-cite")
+  })
+
+  it("keeps the placitum the writer actually cited", () => {
+    const [cite] = extractStatuteCitations("Australian Constitution s 51(xxxvii) is the referral power.", 5)
+    expect(cite.pinpoint).toBe("s 51(xxxvii)")
+    expect(cite.raw).toBe("Australian Constitution s 51(xxxvii)")
+  })
+
+  it("attaches an abbreviation that carries its year", () => {
+    const [full] = extractStatuteCitations("ITAA 1997 s 355-25 gives the offset.", 5)
+    expect(full.lawName).toBe("ITAA 1997")
+    expect(full.attachedBy).toBe("abbreviation")
+
+    const [short] = extractStatuteCitations("ITAA97 s 8-1 allows a deduction.", 5)
+    expect(short.lawName).toBe("ITAA97")
+    expect(short.attachedBy).toBe("abbreviation")
+  })
+
+  // "Law" is a suffix word only inside a name. Lower case is ordinary English
+  // and the patterns are case sensitive; a bare `Law` needs a title body in
+  // front of it, and trimming never strips a capture down to it.
+  it("does not turn ordinary prose into a statute called Law", () => {
+    const [lower] = extractStatuteCitations("the law s 5 says otherwise.", 5)
+    expect(lower.attachedBy).toBe("none")
+    expect(lower.lawName).toBeUndefined()
+
+    const [upper] = extractStatuteCitations("Under this Law s 5 nothing follows.", 5)
+    expect(upper.lawName).not.toBe("Law")
+
+    const [away] = extractStatuteCitations("The tribunal noted the Law Reform Commission report s 5.", 5)
+    expect(away.lawName).toBeUndefined()
+  })
+
+  it("reads a plural ITAA pinpoint as the section it names, not an impossible range", () => {
+    const [cite] = extractStatuteCitations(
+      "Income Tax Assessment Act 1997 (Cth) ss 355-25, 355-30 apply.",
+      5,
+    )
+    expect(cite.ref.number).toBe("355-25")
+    expect(cite.ref.rangeEnd).toBeUndefined()
+    expect(cite.pinpoint).toBe("ss 355-25")
+  })
+})
+
 describe("findFullCites / findShortForms", () => {
   it("locates every complete citation", () => {
     const cites = findFullCites("Fair Work Act 2009 (Cth) and Crimes Act 1900 (NSW) both apply.")

@@ -31,6 +31,8 @@ function client(counters: Counters = { toc: 0, volumes: [] }): AuApiClient {
   const volumeHtml = (volume: number) => (volume === 1 ? VOL1 : VOL4)
   return {
     getTitle: async () => CCA,
+    // The alias path: "ACL" is searched as "Competition and Consumer Act 2010".
+    searchTitles: async () => ({ count: 1, titles: [CCA] }),
     getToc: async () => {
       counters.toc++
       return ENTRIES
@@ -104,6 +106,60 @@ describe("get_law_text provision resolution", () => {
     const text = (await run({ provision: "sch 2 s 18" })).content[0].text
     expect(text).toContain("document_4/document_4.html#_Toc235543096")
     expect(text).toContain("https://www.legislation.gov.au/C2004A00109")
+  })
+})
+
+describe("get_law_text applies the schedule its alias names", () => {
+  // The flagship trap: the ACL *is* sch 2 of the CCA. Resolving the alias and
+  // then fetching the body's s 18 answers a different question confidently.
+  const byQuery = (input: Record<string, unknown>) =>
+    getLawText(client(), { maxChars: 20000, ...input } as never)
+
+  it('query "ACL" + "s 18" returns the ACL section, not CCA s 18', async () => {
+    const text = (await byQuery({ query: "ACL", provision: "s 18" })).content[0].text
+    expect(text).toContain("Provision: sch 2 s 18")
+    expect(text).toContain("Misleading or deceptive conduct")
+    expect(text).toContain("Schedule 2—The Australian Consumer Law")
+    // "quorum" appears only in the body provision (18 Meetings of Commission).
+    expect(text).not.toContain("quorum")
+  })
+
+  it("says it rewrote the reference, rather than silently answering another one", async () => {
+    const text = (await byQuery({ query: "ACL", provision: "s 18" })).content[0].text
+    expect(text).toContain('Read "s 18" as "sch 2 s 18"')
+  })
+
+  it("does not double-prefix a schedule the caller wrote out", async () => {
+    const text = (await byQuery({ query: "ACL", provision: "sch 2 s 18" })).content[0].text
+    expect(text).toContain("Provision: sch 2 s 18")
+    expect(text).not.toContain("sch 2 sch 2")
+    expect(text).toContain("Misleading or deceptive conduct")
+  })
+
+  it("leaves an alias that names no schedule alone", async () => {
+    const text = (await byQuery({ query: "CCA", provision: "s 18" })).content[0].text
+    expect(text).toContain("Provision: s 18")
+    expect(text).toContain("Meetings of Commission")
+    expect(text).not.toContain("Misleading or deceptive conduct")
+  })
+
+  it("scopes a structural reference to the schedule too", async () => {
+    const text = (await byQuery({ query: "ACL", provision: "pt 2-1" })).content[0].text
+    expect(text).toContain("Provision: sch 2 pt 2-1")
+    expect(text).toContain("Misleading or deceptive conduct")
+  })
+
+  it("a miss inside the schedule says the reference was rewritten", async () => {
+    const result = await byQuery({ query: "ACL", provision: "s 4242" })
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toContain("[LAW_NOT_FOUND]")
+    expect(result.content[0].text).toContain('was looked up as "sch 2 s 4242"')
+  })
+
+  it("a registerId with no query is unaffected", async () => {
+    const text = (await run({ provision: "s 18" })).content[0].text
+    expect(text).toContain("Provision: s 18")
+    expect(text).toContain("Meetings of Commission")
   })
 })
 
