@@ -72,13 +72,25 @@ function label(cite: StatuteCitation): string {
   return name ? `${name} ${cite.pinpoint}` : cite.pinpoint
 }
 
-/** Resolve a name to one FRL title, trying the shortened readings in turn. */
+/**
+ * Resolve a name to one FRL title, trying the shortened readings in turn.
+ *
+ * `year` is the year written in the citation, and it is tried first because the
+ * name capture never contains one: the scanner's title body excludes digits, so
+ * "Income Tax Assessment Act 1997 (Cth)" arrives here as the bare name plus a
+ * separate year. Without it the Register's relevance order decides between the
+ * 1922 and the 1997 Act — and it picked 1922, which turned the single most-cited
+ * provision family in Australian tax law into a `✗ NOT_FOUND` against the wrong
+ * statute. The year is what distinguishes same-named Acts; drop it and the
+ * citation is no longer the citation the reader wrote.
+ */
 async function lookupTitle(
   client: AuApiClient,
   name: string,
   context: StatuteCheckContext,
+  year?: number,
 ): Promise<FrlTitle | Error> {
-  const key = name.toLowerCase()
+  const key = `${name.toLowerCase()}|${year ?? ""}`
   const cached = context.titles.get(key)
   if (cached) return cached
 
@@ -92,8 +104,12 @@ async function lookupTitle(
     return error
   }
 
+  const readings = statuteNameCandidates(name)
+  const qualified = year !== undefined && !name.includes(String(year)) ? [`${name} ${year}`] : []
+  // Bounded exactly as before: the year-qualified reading takes the first slot
+  // rather than adding one, so the per-call lookup budget is unchanged.
   let last: Error = new LawApiError(`No reading of "${name}" resolved`, ErrorCodes.NOT_FOUND)
-  for (const candidate of statuteNameCandidates(name).slice(0, 3)) {
+  for (const candidate of [...qualified, ...readings].slice(0, 3)) {
     if (context.lookupsLeft <= 0) break
     context.lookupsLeft--
     try {
@@ -171,7 +187,7 @@ export async function checkStatuteCitation(
     }
   }
 
-  const title = await lookupTitle(client, cite.lawName, context)
+  const title = await lookupTitle(client, cite.lawName, context, cite.year)
   if (title instanceof Error) return unresolvedTitle(cite, shown, title)
 
   const notes: string[] = []

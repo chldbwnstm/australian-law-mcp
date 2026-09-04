@@ -319,9 +319,18 @@ export function refToNcxLabelPattern(ref: SectionRef): RegExp {
   if (vocab.ncxLabel === "worded") {
     return new RegExp(`^${vocab.ncxWord}${gap}*${number}(?![0-9A-Za-z])`, "i")
   }
-  // A number-led label is always followed by whitespace and then the heading.
-  // The lookahead, not the anchor, is what keeps `s 1` away from `18`.
-  return new RegExp(`^${number}(?=${gap})`)
+  // A number-led label is always followed by whitespace and then the heading,
+  // optionally with a full stop between the two. The lookahead, not the anchor,
+  // is what keeps `s 1` away from `18`.
+  //
+  // The optional stop is for the pre-Federation continued laws, which keep
+  // their original typography: the *Commonwealth of Australia Constitution
+  // Act* lists `"51. Legislative powers of the Parliament."`, so without it no
+  // section of the Constitution could be fetched at all — while the alias
+  // table's own note advertises `Australian Constitution s 51(xx)` as the way
+  // to cite it. It is escaped and optional, so `s 51` still cannot reach `51A`
+  // (no gap after the number) or `51.2` (no gap after the stop).
+  return new RegExp(`^${number}\\.?(?=${gap})`)
 }
 
 /**

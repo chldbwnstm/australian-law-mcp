@@ -23,7 +23,10 @@ function client(opts: { html?: string; entries?: typeof ENTRIES } = {}): AuApiCl
     getTitle: async () => CCA,
     getToc: async () => opts.entries ?? ENTRIES,
     getVolumeHtml: async () => opts.html ?? ENDNOTE_HTML,
-    searchTitles: async (p: { filter?: string }) => {
+    searchTitles: async (p: { filter?: string; text?: string }) => {
+      // Name searches (the `query` path) resolve to the CCA; the year/number
+      // filter is the amending-Act lookup.
+      if (p.text) return { count: 1, titles: [CCA] }
       const match = /year eq (\d+) and number eq (\d+)/.exec(p.filter ?? "")
       const hit = match ? ACTS[`${match[1]}/${match[2]}`] : undefined
       return { count: hit ? 1 : 0, titles: hit ? [hit] : [] }
@@ -77,6 +80,26 @@ describe("get_provision_history", () => {
     expect(body).toContain("am (amended)")
     expect(body).toContain("No 17, 1986")
     expect(body).not.toContain("No 103, 2010")
+  })
+
+  // Live 2026-09-04 this printed the ACL alias note — which spells the trap
+  // out — and then returned the body section's 1986/1995/2007 history under it.
+  it("applies an alias's schedule, so query 'ACL' + 's 18' is the ACL's history", async () => {
+    const text = (await run({ registerId: undefined, query: "ACL", provision: "s 18" })).content[0].text
+    expect(text).toContain("Amendment history of sch 2 s 18")
+    expect(text).toContain('Read "s 18" as "sch 2 s 18"')
+    expect(text).toContain("ad (added or inserted)")
+    expect(text).toContain("No 103, 2010")
+    expect(text).not.toContain("No 17, 1986")
+    // The follow-up must carry the schedule too, or it walks back into the trap.
+    expect(text).toContain('provision:"sch 2 s 18"')
+  })
+
+  it("leaves an explicit reference alone when the alias names no schedule", async () => {
+    const text = (await run({ registerId: undefined, query: "CCA", provision: "s 18" })).content[0].text
+    expect(text).toContain("Amendment history of s 18")
+    expect(text).not.toContain("Read \"s 18\" as")
+    expect(text).toContain("No 17, 1986")
   })
 
   it("resolves the cited Acts to register ids when asked", async () => {

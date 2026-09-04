@@ -143,6 +143,61 @@ describe("verify_citations — statutes", () => {
   })
 })
 
+/**
+ * The scanner's title capture cannot contain digits, so the year of a citation
+ * arrives separately. Live 2026-09-04, dropping it made the Register answer
+ * "Income Tax Assessment Act" with the *1922* Act, and s 355-25 was reported
+ * `✗ NOT_FOUND` — a false hallucination signal against a real provision.
+ */
+describe("verify_citations — the year in the citation selects between same-named Acts", () => {
+  const ITAA_1922: FrlTitle = {
+    id: "C1922A00037",
+    name: "Income Tax Assessment Act 1922",
+    collection: "Act",
+    status: "InForce",
+    isPrincipal: true,
+    year: 1922,
+    number: 37,
+  }
+  const ITAA_1997: FrlTitle = { ...ITAA_1922, id: "C2004A05138", name: "Income Tax Assessment Act 1997", year: 1997 }
+
+  function itaaClient(searches: string[]): AuApiClient {
+    return {
+      // Relevance order, as the Register really returns it: 1922 first.
+      searchTitles: async (p: { text?: string }) => {
+        const text = p.text ?? ""
+        searches.push(text)
+        const titles = text.includes("1997") ? [ITAA_1997, ITAA_1922] : [ITAA_1922, ITAA_1997]
+        return { count: titles.length, titles }
+      },
+      getTitle: async () => ITAA_1997,
+      getToc: async () => ENTRIES,
+      fetchHtml: async () => {
+        throw new LawApiError("no fixture", ErrorCodes.API_ERROR)
+      },
+    } as unknown as AuApiClient
+  }
+
+  it("searches the Register with the year the citation wrote", async () => {
+    const searches: string[] = []
+    await verifyCitations(itaaClient(searches), {
+      text: "Income Tax Assessment Act 1997 (Cth) s 18 applies.",
+      maxCitations: 15,
+    } as never)
+    expect(searches[0]).toBe("Income Tax Assessment Act 1997")
+  })
+
+  it("resolves to the cited year's Act, not the one relevance ranks first", async () => {
+    const result = await verifyCitations(itaaClient([]), {
+      text: "Income Tax Assessment Act 1997 (Cth) s 18 applies.",
+      maxCitations: 15,
+    } as never)
+    const text = result.content[0].text
+    expect(text).toContain("C2004A05138")
+    expect(text).not.toContain("C1922A00037")
+  })
+})
+
 describe("verify_citations — cases", () => {
   it("confirms a NSW citation through the exact medium-neutral lookup", async () => {
     const text = await run("The Court applied Dela Cruz v R [2010] NSWCCA 333.", {

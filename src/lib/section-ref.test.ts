@@ -254,6 +254,26 @@ describe("refToNcxLabelPattern", () => {
   })
 })
 
+describe("refToNcxLabelPattern — the Constitution's 1900 typography", () => {
+  const match = (input: string, label: string) =>
+    refToNcxLabelPattern(parseSectionRef(input)!).test(label)
+
+  // FRL prints modern Acts as "18  Meetings of Commission" but leaves the
+  // pre-Federation continued laws as they were set. Without the optional stop
+  // no section of the Constitution could be fetched at all.
+  it("matches the full-stop label form", () => {
+    expect(match("s 51", "51. Legislative powers of the Parliament.")).toBe(true)
+    expect(match("s 92", "92. Trade within the Commonwealth to be free.")).toBe(true)
+    expect(match("s 51(xx)", "51. Legislative powers of the Parliament.")).toBe(true)
+  })
+
+  it("does not widen the section number", () => {
+    expect(match("s 51", "51A. Something else.")).toBe(false)
+    expect(match("s 51", "51.2 Something else")).toBe(false)
+    expect(match("s 5", "51. Legislative powers of the Parliament.")).toBe(false)
+  })
+})
+
 describe("extractSectionRefs", () => {
   it("finds every reference in a sentence, in order", () => {
     const found = extractSectionRefs(

@@ -89,7 +89,7 @@ export async function applicableLaw(apiClient: AuApiClient, input: ApplicableLaw
     const title = lookup.title
     const today = new Date().toISOString().slice(0, 10)
 
-    const versions = await safeVersions(apiClient, title.id)
+    const { versions, error: versionsError } = await safeVersions(apiClient, title.id)
     const found = await safeFindVersion(apiClient, title.id, date)
     const asAt = found.version
 
@@ -115,7 +115,9 @@ export async function applicableLaw(apiClient: AuApiClient, input: ApplicableLaw
           ? `  The version list did load (${versions.length} rows): get_law_history({registerId:"${title.id}"}) shows the ` +
             `compilation windows, and get_law_text({registerId:"${title.id}", date:"${date}"}) fetches the text for that ` +
             "date directly."
-          : "  The version list could not be read either, so nothing about this title's compilations was retrieved.",
+          : versionsError
+            ? `  The version list could not be read either (${versionsError}), so nothing about this title's compilations was retrieved.`
+            : "  The Register's version list came back empty as well, so nothing about this title's compilations was retrieved.",
       )
       lines.push(`  ${frlHumanUrl(title.id, date)}`)
     } else if (!asAt) {
@@ -123,7 +125,9 @@ export async function applicableLaw(apiClient: AuApiClient, input: ApplicableLaw
       lines.push(
         earliest
           ? `  The Register has no compilation covering ${date}. Its earliest compilation window starts ${isoDay(earliest.start)}.`
-          : `  The Register returned no compilation for ${date}, and its version list could not be read.`,
+          : versionsError
+            ? `  The Register returned no compilation for ${date}, and its version list could not be read (${versionsError}).`
+            : `  The Register returned no compilation for ${date}, and its version list came back empty.`,
       )
       lines.push(
         "  For a date before the first compilation the operative text is the Act **as made**: " +
@@ -194,10 +198,14 @@ export async function applicableLaw(apiClient: AuApiClient, input: ApplicableLaw
     )
     if (asAt) {
       lines.push("")
+      // "No later compilation" is only sayable when the list was actually read.
       lines.push(
-        between.length === 0
-          ? `▶ Since ${date}: no later compilation in the ${versions.length} most recent version rows — the text may be unchanged.`
-          : `▶ Since ${date}: ${between.length} later compilation(s) in the ${versions.length} most recent version rows.`,
+        versionsError
+          ? `▶ Since ${date}: the version list could not be read (${versionsError}) — a lookup failure, not a finding ` +
+            "that nothing has changed since. Retry, or use get_law_history."
+          : between.length === 0
+            ? `▶ Since ${date}: no later compilation in the ${versions.length} most recent version rows — the text may be unchanged.`
+            : `▶ Since ${date}: ${between.length} later compilation(s) in the ${versions.length} most recent version rows.`,
       )
     }
 
@@ -230,11 +238,23 @@ export async function applicableLaw(apiClient: AuApiClient, input: ApplicableLaw
   }
 }
 
-async function safeVersions(client: AuApiClient, titleId: string): Promise<FrlVersion[]> {
+/**
+ * The version list, and the reason if it did not arrive.
+ *
+ * The error is carried rather than swallowed because an empty list and a failed
+ * list read identically at every call site below, and they mean opposite
+ * things: "the Register lists no other compilation" is evidence, "the request
+ * failed" is not. Returning a bare `[]` printed "no later compilation in the 0
+ * most recent version rows — the text may be unchanged" off a timeout.
+ */
+async function safeVersions(
+  client: AuApiClient,
+  titleId: string,
+): Promise<{ versions: FrlVersion[]; error?: string }> {
   try {
-    return await client.listVersions(titleId, { top: 100 })
-  } catch {
-    return []
+    return { versions: await client.listVersions(titleId, { top: 100 }) }
+  } catch (error) {
+    return { versions: [], error: error instanceof Error ? error.message : String(error) }
   }
 }
 

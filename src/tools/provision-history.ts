@@ -17,6 +17,7 @@ import { z } from "zod"
 import type { AuApiClient } from "../lib/api-client.js"
 import { ARTICLE_CACHE_TTL, lawCache } from "../lib/cache.js"
 import { ErrorCodes, LawApiError, formatToolError } from "../lib/errors.js"
+import { primaryLawMention, provisionParam } from "../lib/query-extract.js"
 import { truncateResponse } from "../lib/schemas.js"
 import { formatRef } from "../lib/section-ref.js"
 import type { FrlTitle, NcxEntry, ToolResponse } from "../lib/types.js"
@@ -67,11 +68,29 @@ export async function getProvisionHistory(
     })
     const title = lookup.title
     const date = input.date && input.date !== "latest" ? input.date : undefined
-    const ref = requireRef(input.provision)
+    const asked = requireRef(input.provision)
+    // An alias can name a *schedule*, and this tool's own description turns on
+    // the distinction: sch 2 s 18 (ACL s 18) was inserted in 2010, while the
+    // body's s 18 was amended in 1986/1995/2007. Asked for "ACL" + "s 18" this
+    // used to print the ACL alias note — which spells the trap out — and then
+    // return the body section's history underneath it. Same rewrite as
+    // get_law_text and get_batch_provisions (`query-extract.provisionParam`),
+    // reused so the three cannot drift; an explicit `sch N` keeps its own.
+    const mention = input.query ? primaryLawMention(input.query) : undefined
+    const scoped = provisionParam(asked, mention)
+    const rewritten = scoped !== formatRef(asked)
+    const ref = rewritten ? requireRef(scoped) : asked
+    const provision = rewritten ? scoped : input.provision
 
     const lines: string[] = [`Amendment history of ${formatRef(ref)} — ${title.name} [${title.id}]`]
     for (const note of lookup.notes) lines.push(note)
     for (const note of titleAnnotations(title)) lines.push(note)
+    if (rewritten) {
+      lines.push(
+        `Read "${input.provision}" as "${scoped}": "${input.query}" names sch ${mention?.sch ?? "?"} of this Act, ` +
+          "so the bare reference would have given the history of the body provision instead.",
+      )
+    }
     lines.push("")
 
     const entries = await cachedToc(apiClient, title.id, date)
@@ -152,7 +171,7 @@ export async function getProvisionHistory(
     )
     lines.push("")
     lines.push(
-      `Next: compare_old_new({registerId:"${title.id}", provision:"${input.provision}", fromDate:"..."}) to see the ` +
+      `Next: compare_old_new({registerId:"${title.id}", provision:"${provision}", fromDate:"..."}) to see the ` +
         "wording either side of one of these amendments.",
     )
 

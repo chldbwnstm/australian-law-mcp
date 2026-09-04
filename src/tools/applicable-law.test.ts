@@ -48,6 +48,8 @@ interface Options {
   findVersion?: (asAt: string) => FrlVersion | undefined
   /** Thrown by `findVersion` instead of answering — an upstream failure, not a 404. */
   findVersionError?: Error
+  /** Thrown by `listVersions` — the version list failing, as against being empty. */
+  versionsError?: Error
   provisionThen?: string | Error
   provisionNow?: string | Error
   /** Records the `date` each getProvision call asked for. */
@@ -68,7 +70,10 @@ function client(options: Options = {}): AuApiClient {
       return { count: 0, titles: [] }
     },
     getTitle: async () => title,
-    listVersions: async () => options.versions ?? VERSIONS,
+    listVersions: async () => {
+      if (options.versionsError) throw options.versionsError
+      return options.versions ?? VERSIONS
+    },
     findVersion: async (p: { asAt?: string }) => {
       if (options.findVersionError) throw options.findVersionError
       const found = options.findVersion ? options.findVersion(p.asAt ?? "") : TPA_VERSION
@@ -205,6 +210,28 @@ describe("applicable_law — unincorporated amendments", () => {
     const text = await run({ lawName: "CCA", date: "2010-12-15" })
     expect(text).toContain("is NOT the latest registered one")
     expect(text).toContain("already behind the law in force")
+  })
+})
+
+// A version list that failed and one that is genuinely empty read identically
+// off a bare `[]`, and they mean opposite things. Live 2026-09-04 a failed list
+// printed "no later compilation in the 0 most recent version rows".
+describe("applicable_law — a failed version list is not an unchanged Act", () => {
+  it("reports the failure instead of 'the text may be unchanged'", async () => {
+    const text = await run(
+      { lawName: "CCA", date: "2010-12-15" },
+      { versionsError: new LawApiError("frlApi upstream server error (503)", ErrorCodes.API_ERROR) },
+    )
+    expect(text).toContain("the version list could not be read")
+    expect(text).toContain("not a finding that nothing has changed since")
+    expect(text).not.toContain("may be unchanged")
+    expect(text).not.toContain("0 most recent version rows")
+  })
+
+  it("still says 'may be unchanged' when the list really did load", async () => {
+    const text = await run({ lawName: "CCA", date: "2010-12-15" }, { versions: [] })
+    expect(text).toContain("no later compilation in the 0 most recent version rows")
+    expect(text).not.toContain("could not be read")
   })
 })
 
