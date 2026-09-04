@@ -16,6 +16,7 @@
 import { z } from "zod"
 import type { AuApiClient } from "../lib/api-client.js"
 import { ErrorCodes, LawApiError, formatToolError } from "../lib/errors.js"
+import { scopeProvisionsToLaw } from "../lib/query-extract.js"
 import { truncateResponse } from "../lib/schemas.js"
 import type { FrlVersion, ToolResponse } from "../lib/types.js"
 import { diffStats, unifiedDiff } from "./statute-helpers/diff.js"
@@ -107,12 +108,46 @@ export async function compareOldNew(apiClient: AuApiClient, input: CompareOldNew
       if (reasons.length > 40) lines.push(`  … ${reasons.length - 40} more amendment reasons`)
     }
 
+    // The words the caller used to name the law decide which schedule a bare
+    // "s 18" belongs to: the ACL **is** sch 2 of the CCA, so a diff of "s 18"
+    // asked of the ACL must be a diff of sch 2 s 18 — the Act's own s 18 is
+    // "Meetings of Commission", and it has a different amendment history.
+    // `chain_amendment_track` hands this tool `query` alongside `registerId`
+    // for exactly that, and used to print get_provision_history's sch 2 s 18
+    // beside this tool's body s 18 under one ACL heading. One call does the
+    // whole rewrite (`query-extract.scopeProvisionsToLaw`), so this tool, the
+    // history leg and the CLI router cannot drift apart again.
+    const scope = scopeProvisionsToLaw({
+      query: input.query,
+      provisions: input.provision ? [input.provision] : [],
+    })
+    const scoped = scope.provisions[0]
+
     if (input.provision) {
       lines.push("")
-      lines.push(...(await provisionDiff(apiClient, title.id, input.provision, earlier, later, input.context)))
+      // Never silently: the caller asked about "s 18" and is being shown
+      // another number, and the reason has to travel with the diff.
+      if (scope.note) lines.push(scope.note)
+      lines.push(
+        ...(await provisionDiff(
+          apiClient,
+          title.id,
+          scoped?.provision ?? input.provision,
+          earlier,
+          later,
+          input.context,
+        )),
+      )
     } else {
       lines.push("")
-      lines.push("Add `provision` (e.g. \"s 45\") to see the text of one section diffed between these compilations.")
+      lines.push(
+        `Add \`provision\` (e.g. "${scope.schedule ? `sch ${scope.schedule} s 18` : "s 45"}") to see the text of ` +
+          "one section diffed between these compilations." +
+          (scope.schedule
+            ? ` "${scope.mention?.raw}" is sch ${scope.schedule} of this Act, so write the schedule in: a bare ` +
+              "reference names the body of the Act, which is a different provision."
+            : ""),
+      )
     }
 
     return { content: [{ type: "text", text: truncateResponse(lines.join("\n")) }] }

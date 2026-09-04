@@ -1,7 +1,17 @@
-import { readFileSync } from "node:fs"
+import { readdirSync, readFileSync } from "node:fs"
+import { fileURLToPath } from "node:url"
+import { join, relative } from "node:path"
 import { describe, expect, it } from "vitest"
+import { sliceSubtree } from "../tools/statute-helpers/toc.js"
 import { parseNcx } from "./ncx-parser.js"
-import { findNavPoint, htmlToText, sliceProvision } from "./provision-slicer.js"
+import {
+  duplicateNumberNote,
+  findNavPoint,
+  htmlToText,
+  leadingNumber,
+  resolveNavPoint,
+  sliceProvision,
+} from "./provision-slicer.js"
 import { parseSectionRef } from "./section-ref.js"
 
 const fixture = (name: string) => readFileSync(new URL(`./__fixtures__/${name}`, import.meta.url), "utf-8")
@@ -137,5 +147,233 @@ describe("htmlToText", () => {
 
   it("returns an empty string for markup with no paragraphs", () => {
     expect(htmlToText("<div>nothing</div>")).toBe("")
+  })
+})
+
+/*
+ * ── The Constitution's twice-used section numbers ─────────────────────────
+ *
+ * A faithful miniature of the *Commonwealth of Australia Constitution Act*'s
+ * table of contents (register id C2004Q00685). Labels, anchors and nesting are
+ * verbatim from the live NCX at
+ * https://www.legislation.gov.au/C2004Q00685/latest/latest/text/latest/epub/OEBPS/document.ncx
+ * (157 navPoints, read 2026-09-04); only sections nobody needs here are cut.
+ *
+ * The shape is the point: the Imperial Act's **covering clauses** are ss 1–9
+ * hanging directly off the document root, and the Constitution's own ss 1–9
+ * sit under "Chapter I.—The Parliament.". Every number from 1 to 9 therefore
+ * names two different provisions.
+ */
+const nav = (label: string, anchor: string | null, children = ""): string =>
+  `<navPoint id="${anchor ?? "root"}" playOrder="0"><navLabel><text>${label}</text></navLabel>` +
+  `<content src="document_1/document_1.html${anchor ? `#${anchor}` : ""}" />${children}</navPoint>`
+
+const CONSTITUTION_NCX =
+  '<?xml version="1.0" encoding="utf-8"?><ncx><docTitle><text>Commonwealth of Australia ' +
+  "Constitution Act</text></docTitle><navMap>" +
+  nav(
+    "Commonwealth of Australia Constitution Act - [Other]",
+    null,
+    // The covering clauses of the 1900 Imperial Act.
+    nav("1.&#xa0; Short title.", "_Toc29462582") +
+      nav("2.&#xa0; Act to extend to the Queen&#8217;s successors.", "_Toc29462583") +
+      nav("3.&#xa0; Proclamation of Commonwealth.", "_Toc29462584") +
+      nav("4.&#xa0; Commencement of Act.", "_Toc29462585") +
+      nav("5.&#xa0; Operation of the Constitution and laws.", "_Toc29462586") +
+      nav("6.&#xa0; Definitions.", "_Toc29462587") +
+      nav("7.&#xa0; Repeal of Federal Council Act.", "_Toc29462588") +
+      nav("8.&#xa0; Application of Colonial Boundaries Act.", "_Toc29462589") +
+      nav("9.&#xa0; Constitution.", "_Toc29462590") +
+      // The Constitution proper.
+      nav(
+        "Chapter I.&#8212;The Parliament.",
+        "_Toc29462592",
+        nav("Part I.&#8212;General.", "_Toc29462593") +
+          nav("1.&#xa0; Legislative Power.", "_Toc29462594") +
+          nav("2.&#xa0; Governor-General.", "_Toc29462595") +
+          nav("3.&#xa0; Salary of Governor-General.", "_Toc29462596") +
+          nav("4.&#xa0; Provisions relating to Governor-General.", "_Toc29462597") +
+          nav("5.&#xa0; Sessions of Parliament.", "_Toc29462598") +
+          nav("6.&#xa0; Yearly session of Parliament.", "_Toc29462599") +
+          nav("Part II.&#8212;The Senate.", "_Toc29462600") +
+          nav("7.&#xa0; The Senate.", "_Toc29462601") +
+          nav("8.&#xa0; Qualification of electors.", "_Toc29462602") +
+          nav("9.&#xa0; Method of election of senators.", "_Toc29462603") +
+          nav("10.&#xa0; Application of State laws.", "_Toc29462604") +
+          nav("Part V.&#8212;Powers of the Parliament.", "_Toc29462647") +
+          nav("51.&#xa0; Legislative powers of the Parliament.", "_Toc29462648"),
+      ) +
+      nav("SCHEDULE.", "_Toc29462733", nav("Endnotes", "_Toc29462734")),
+  ) +
+  "</navMap></ncx>"
+
+const CONSTITUTION = parseNcx(CONSTITUTION_NCX)
+
+/** The volume HTML, in NCX order, for the anchors the slicing tests reach. */
+const CONSTITUTION_HTML =
+  "<html><body>" +
+  '<p class="ActHead5"><a id="_Toc29462582">1 Short title.</a></p>' +
+  '<p class="subsection">This Act may be cited as the Commonwealth of Australia Constitution Act.</p>' +
+  '<p class="ActHead5"><a id="_Toc29462588">7 Repeal of Federal Council Act.</a></p>' +
+  '<p class="subsection">The Federal Council of Australasia Act 1885 is hereby repealed.</p>' +
+  '<p class="ActHead5"><a id="_Toc29462601">7 The Senate.</a></p>' +
+  '<p class="subsection">The Senate shall be composed of senators for each State, directly chosen by the people of the State.</p>' +
+  '<p class="ActHead5"><a id="_Toc29462602">8 Qualification of electors.</a></p>' +
+  '<p class="subsection">The qualification of electors of senators shall be&#8230;</p>' +
+  "</body></html>"
+
+const label = (input: string) => findNavPoint(ref(input), CONSTITUTION)?.label
+
+describe("findNavPoint — the Constitution's two sets of ss 1-9", () => {
+  it("serves Chapter I s 7, not the 1900 Act's covering clause", () => {
+    // Before the fix this returned "7. Repeal of Federal Council Act." — the
+    // provision behind Lange, Roach and Rowe was unreachable.
+    expect(label("s 7")).toBe("7. The Senate.")
+  })
+
+  // Enumerated, because the bug was one rule mis-serving all nine numbers.
+  const CHAPTER_I: ReadonlyArray<[string, string]> = [
+    ["s 1", "1. Legislative Power."],
+    ["s 2", "2. Governor-General."],
+    ["s 3", "3. Salary of Governor-General."],
+    ["s 4", "4. Provisions relating to Governor-General."],
+    ["s 5", "5. Sessions of Parliament."],
+    ["s 6", "6. Yearly session of Parliament."],
+    ["s 7", "7. The Senate."],
+    ["s 8", "8. Qualification of electors."],
+    ["s 9", "9. Method of election of senators."],
+  ]
+  it.each(CHAPTER_I)("%s resolves to the Constitution's own section (%s)", (input, expected) => {
+    expect(label(input)).toBe(expected)
+  })
+
+  const COVERING: ReadonlyArray<[string, string]> = [
+    ["cl 1", "1. Short title."],
+    ["cl 2", "2. Act to extend to the Queen’s successors."],
+    ["cl 3", "3. Proclamation of Commonwealth."],
+    ["cl 4", "4. Commencement of Act."],
+    ["cl 5", "5. Operation of the Constitution and laws."],
+    ["cl 6", "6. Definitions."],
+    ["cl 7", "7. Repeal of Federal Council Act."],
+    ["cl 8", "8. Application of Colonial Boundaries Act."],
+    ["cl 9", "9. Constitution."],
+  ]
+  it.each(COVERING)("%s reaches the covering clause (%s)", (input, expected) => {
+    expect(label(input)).toBe(expected)
+  })
+
+  it("accepts the spelled-out clause designation too", () => {
+    expect(label("clause 5")).toBe("5. Operation of the Constitution and laws.")
+  })
+
+  it("leaves numbers that occur once alone", () => {
+    expect(label("s 10")).toBe("10. Application of State laws.")
+    expect(label("s 51")).toBe("51. Legislative powers of the Parliament.")
+    expect(resolveNavPoint(ref("s 51"), CONSTITUTION).alternatives).toEqual([])
+  })
+
+  it("reports the rejected twin as an alternative rather than dropping it", () => {
+    const both = resolveNavPoint(ref("s 7"), CONSTITUTION)
+    expect(both.alternatives.map((entry) => entry.label)).toEqual(["7. Repeal of Federal Council Act."])
+    expect(resolveNavPoint(ref("cl 7"), CONSTITUTION).alternatives.map((e) => e.label)).toEqual(["7. The Senate."])
+  })
+
+  it("does not treat a schedule twin as an unnameable ambiguity (sch 2 s 18 addresses it)", () => {
+    expect(resolveNavPoint(ref("s 18"), entries).alternatives).toEqual([])
+    expect(resolveNavPoint(ref("sch 2 s 18"), entries).alternatives).toEqual([])
+  })
+})
+
+describe("duplicateNumberNote — the ambiguity is named, never silent", () => {
+  it("says which s 7 was served, where the other is, and how to ask for it", () => {
+    const note = duplicateNumberNote(findNavPoint(ref("s 7"), CONSTITUTION)!, CONSTITUTION)!
+    expect(note).toContain('numbers "7" more than once')
+    expect(note).toContain("served: 7. The Senate. — in Chapter I.—The Parliament.")
+    expect(note).toContain("also numbered 7: 7. Repeal of Federal Council Act.")
+    expect(note).toContain('Ask for it as "cl 7".')
+  })
+
+  it("points the other way when the covering clause is what was asked for", () => {
+    const note = duplicateNumberNote(findNavPoint(ref("cl 7"), CONSTITUTION)!, CONSTITUTION)!
+    expect(note).toContain("served: 7. Repeal of Federal Council Act.")
+    expect(note).toContain('Ask for it as "s 7".')
+  })
+
+  it("stays quiet for unambiguous provisions and for schedule twins", () => {
+    expect(duplicateNumberNote(findNavPoint(ref("s 51"), CONSTITUTION)!, CONSTITUTION)).toBeUndefined()
+    expect(duplicateNumberNote(findNavPoint(ref("s 18"), entries)!, entries)).toBeUndefined()
+    expect(duplicateNumberNote(findNavPoint(ref("sch 2 s 18"), entries)!, entries)).toBeUndefined()
+    expect(duplicateNumberNote(findNavPoint(ref("pt IIA"), entries)!, entries)).toBeUndefined()
+  })
+
+  it("reads the number a navLabel leads with, and only that", () => {
+    expect(leadingNumber("7. The Senate.")).toBe("7")
+    expect(leadingNumber("18 Meetings of Commission")).toBe("18")
+    expect(leadingNumber("105A. Agreements with respect to State debts.")).toBe("105A")
+    expect(leadingNumber("86.")).toBe("86")
+    expect(leadingNumber("Part IV—Restrictive trade practices")).toBeUndefined()
+    expect(leadingNumber("Endnotes")).toBeUndefined()
+  })
+})
+
+/*
+ * Every function that turns a navPoint into served text has to carry the note;
+ * the table is the enumeration, so a third one cannot be added silently.
+ */
+describe("served text carries the ambiguity note — all slicers enumerated", () => {
+  const SLICERS: ReadonlyArray<[string, (entry: (typeof CONSTITUTION)[number]) => string | null]> = [
+    ["sliceProvision", (entry) => sliceProvision(CONSTITUTION_HTML, entry, CONSTITUTION)],
+    ["sliceSubtree", (entry) => sliceSubtree(CONSTITUTION_HTML, CONSTITUTION, entry)],
+  ]
+
+  it.each(SLICERS)("%s prefixes Constitution s 7 with the note", (_name, slice) => {
+    const text = slice(findNavPoint(ref("s 7"), CONSTITUTION)!)!
+    expect(text.startsWith('Note: this compilation numbers "7" more than once')).toBe(true)
+    expect(text).toContain('Ask for it as "cl 7".')
+    expect(text).toContain("The Senate shall be composed of senators")
+    expect(text).not.toContain("Federal Council of Australasia")
+  })
+
+  it.each(SLICERS)("%s leaves unambiguous CCA provisions untouched", (_name, _slice) => {
+    // Guard against the note leaking into ordinary text: the CCA's only
+    // repeated number is the schedule twin, which is addressable.
+    const entry = findNavPoint(ref("s 18"), entries)!
+    const text =
+      _name === "sliceProvision" ? sliceProvision(vol1, entry, entries)! : sliceSubtree(vol1, entries, entry)!
+    expect(text.startsWith("18 Meetings of Commission")).toBe(true)
+    expect(text).not.toContain("more than once")
+  })
+})
+
+/*
+ * Consumers of the resolver, enumerated. `findNavPoint`/`resolveNavPoint` is
+ * the single place a navPoint is chosen; a module that starts choosing one has
+ * to be checked against the duplicate-number rule above, and this list is how
+ * that gets noticed.
+ */
+describe("navPoint resolution has one owner", () => {
+  const SRC = fileURLToPath(new URL("../", import.meta.url))
+
+  function sourceFiles(dir: string): string[] {
+    const out: string[] = []
+    for (const item of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, item.name)
+      if (item.isDirectory()) out.push(...sourceFiles(path))
+      else if (item.name.endsWith(".ts") && !item.name.endsWith(".test.ts")) out.push(path)
+    }
+    return out
+  }
+
+  it("is imported only by the modules that have been checked against it", () => {
+    const importers = sourceFiles(SRC)
+      .filter((path) => /import\s*{[^}]*\b(?:find|resolve)NavPoint\b/.test(readFileSync(path, "utf8")))
+      .map((path) => relative(SRC, path).replaceAll("\\", "/"))
+      .sort()
+    expect(importers).toEqual([
+      "lib/api-client.ts",
+      "tools/analysis-helpers/statute-check.ts",
+      "tools/impact-map.ts",
+      "tools/statute-helpers/toc.ts",
+    ])
   })
 })

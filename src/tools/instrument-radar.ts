@@ -21,6 +21,7 @@ import { z } from "zod"
 import type { AuApiClient } from "../lib/api-client.js"
 import { formatToolError } from "../lib/errors.js"
 import { truncateResponse } from "../lib/schemas.js"
+import { formatRef, parseSectionRef } from "../lib/section-ref.js"
 import type { FrlTitle, FrlVersion, ToolResponse } from "../lib/types.js"
 import { isoDay, reasonLine, titleAnnotations } from "./statute-helpers/format.js"
 import { enablingActs, enablingProvisionFor, expandAuthorisedBy } from "./statute-helpers/instruments.js"
@@ -40,6 +41,88 @@ export const InstrumentRadarSchema = z.object({
 })
 
 export type InstrumentRadarInput = z.infer<typeof InstrumentRadarSchema>
+
+// ── the Register's enabling-provision strings are not section references ────
+
+/**
+ * What a follow-up call may say about an enabling provision.
+ *
+ * `authorisedBy.affectingProvisions` is prose the Register keeps for humans —
+ * measured against the live API, 8 of the 18 distinct values returned for the
+ * CCA, Fair Work Act, Corporations Act and Migration Act are rejected outright
+ * by `parseSectionRef`: `s 134(1) of sch 2`, `s 109(1)(b) of sch 2`,
+ * `s 95X(1) and (2)`, `sch 2 (s 134(1))`, `s 202(5), 205(3), 737(1),
+ * 768BK(1A)`, `s 245J, 245K`, `s 140GBA(4), (5), (6A)`, `s 104(1) of sch 2`.
+ * Interpolated straight into `get_provision_history({provision:"…"})` they
+ * produce a suggestion that fails the moment the caller runs it, which is
+ * worse than no suggestion at all.
+ *
+ * So the string is normalised into a reference **this project's own parser
+ * accepts** — the suggestion is built from `formatRef`, never from the raw
+ * value — and when a list has to be narrowed to its first member, or nothing
+ * can be normalised, the output says so instead of pretending.
+ */
+export interface EnablingProvisionCall {
+  /** Canonical, `parseSectionRef`-accepted reference; absent when none could be derived. */
+  provision?: string
+  /** The Register's own string, whenever it differs from `provision`. */
+  raw?: string
+  /** Set when `provision` covers only part of what the Register recorded. */
+  narrowed?: boolean
+}
+
+/** `s 134(1) of sch 2` — the Register writes the schedule as a trailing phrase. */
+const SCHEDULE_TAIL = /\s+of\s+sch(?:edule)?\s+([A-Za-z0-9]+)\s*$/i
+/** `sch 2 (s 134(1))` — and sometimes as a prefix with the section in brackets. */
+const SCHEDULE_BRACKETED = /^(sch(?:edule)?\s+[A-Za-z0-9]+)\s*\((.+)\)$/i
+/** `s 202(5), 205(3), 737(1)` / `s 95X(1) and (2)` — several provisions in one field. */
+const LIST_SEPARATOR = /\s*,\s*|\s+and\s+/i
+
+function canonical(value: string): string | undefined {
+  const ref = parseSectionRef(value.trim())
+  return ref ? formatRef(ref) : undefined
+}
+
+/**
+ * Turn the Register's enabling-provision string into something callable.
+ *
+ * Every candidate is verified through `parseSectionRef` before it is returned,
+ * so a suggestion this builds cannot be rejected by `requireRef` on the other
+ * side — the two use the same parser.
+ */
+export function enablingProvisionCall(raw: string | undefined): EnablingProvisionCall {
+  if (!raw) return {}
+  const text = raw.replace(/\s+/g, " ").trim()
+  if (!text) return {}
+
+  const asGiven = canonical(text)
+  if (asGiven) return { provision: asGiven, ...(asGiven === text ? {} : { raw: text }) }
+
+  // `sch 2 (s 134(1))` → `sch 2 s 134(1)`
+  const bracketed = SCHEDULE_BRACKETED.exec(text)
+  if (bracketed) {
+    const flattened = canonical(`${bracketed[1]} ${bracketed[2]}`)
+    if (flattened) return { provision: flattened, raw: text }
+  }
+
+  // `s 134(1) of sch 2` → `sch 2 s 134(1)`
+  const tail = SCHEDULE_TAIL.exec(text)
+  const body = tail ? text.slice(0, tail.index).trim() : text
+  const prefix = tail ? `sch ${tail[1]} ` : ""
+  if (tail) {
+    const moved = canonical(`${prefix}${body}`)
+    if (moved) return { provision: moved, raw: text }
+  }
+
+  // A list: the first member is a real reference, and the narrowing is stated.
+  const first = body.split(LIST_SEPARATOR)[0]?.trim()
+  if (first && first !== body) {
+    const narrowed = canonical(`${prefix}${first}`)
+    if (narrowed) return { provision: narrowed, raw: text, narrowed: true }
+  }
+
+  return { raw: text }
+}
 
 export const instrumentRadarDescription =
   "Staleness check for a legislative instrument: compare when it was last compiled against when its enabling Act was " +
@@ -129,10 +212,31 @@ export async function instrumentRadar(apiClient: AuApiClient, input: InstrumentR
         if (after.length > input.showActChanges) {
           lines.push(`     … ${after.length - input.showActChanges} further compilation(s).`)
         }
-        lines.push(
-          `     Check whether any of these touched ${provision ? provision : "the enabling provision"}: ` +
-            `get_provision_history({registerId:"${act.id}", provision:"${provision ?? "s 1"}"}).`,
-        )
+        const call = enablingProvisionCall(provision)
+        if (call.provision) {
+          lines.push(
+            `     Check whether any of these touched ${provision ?? "the enabling provision"}: ` +
+              `get_provision_history({registerId:"${act.id}", provision:"${call.provision}"}).`,
+          )
+          if (call.raw && call.raw !== call.provision) {
+            lines.push(
+              `        (the Register records the power as "${call.raw}"; the call above asks for ` +
+                `${call.provision}${call.narrowed ? " — the first of the provisions it names, so check the others too" : ""}.)`,
+            )
+          }
+        } else if (provision) {
+          // Never hand back a call that this server's own parser would reject.
+          lines.push(
+            `     The Register records the power as "${provision}", which is not a single provision reference, ` +
+              "so no get_provision_history call is suggested for it. Read it as written and check the parts " +
+              `individually, or start from get_law_text({registerId:"${act.id}"}).`,
+          )
+        } else {
+          lines.push(
+            "     The Register records no enabling provision for this Act, so there is nothing specific to check " +
+              `against; get_law_text({registerId:"${act.id}"}) is the whole Act.`,
+          )
+        }
       }
       lines.push("")
     }

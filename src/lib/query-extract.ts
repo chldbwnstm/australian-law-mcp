@@ -27,7 +27,7 @@ import { extractCaseCitations, type CaseCitationResult, type MncCitation } from 
 import { escapeRegex } from "./escape-regex.js"
 import { extractQueryDates, type QueryDates } from "./au-dates.js"
 import { LAW_ALIAS_ENTRIES, resolveLawAlias, type AliasJurisdiction, type LawAliasEntry } from "./law-alias.js"
-import { extractSectionRefs, formatRef, type SectionRef } from "./section-ref.js"
+import { extractSectionRefs, formatRef, parseSectionRef, type SectionRef } from "./section-ref.js"
 import { isRomanNumber } from "./section-ref-vocab.js"
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -348,23 +348,148 @@ export function extractProvisions(query: string): SectionRef[] {
 }
 
 /**
- * The provision parameter to send, canonicalised.
+ * RAW PIECE — half of the alias rewrite. Call `scopeProvisionsToLaw` instead.
  *
  * The schedule prefix is the whole point: the alias table records that `ACL`
  * *is* schedule 2 of the CCA, so "s 18 of the ACL" must go out as
  * `sch 2 s 18`. Dropping it returns CCA s 18 — "Meetings of Commission" —
  * under the heading the caller asked about. A reference that already names a
  * schedule keeps its own.
+ *
+ * `mention` is **required and un-defaulted on purpose**. Three review rounds
+ * running, a tool called the formatter without ever resolving the mention and
+ * shipped the body provision under the schedule's name; a parameter you cannot
+ * forget to pass is a parameter you have to think about. Passing `undefined`
+ * is a decision ("this call site has no query to read a law out of"), not an
+ * omission — and if you have a query, you want `scopeProvisionsToLaw`, which
+ * resolves the mention, applies the schedule and writes the note in one call.
+ *
+ * @deprecated for tool code — use {@link scopeProvisionsToLaw}. Kept exported
+ * because `route-patterns.ts` scopes per routed parameter and already holds a
+ * resolved mention.
  */
-export function provisionParam(ref: SectionRef, mention?: LawMention): string {
+export function provisionParam(ref: SectionRef, mention: LawMention | undefined): string {
   if (!mention?.sch || ref.schedule || ref.kind === "schedule") return formatRef(ref)
   return formatRef({ ...ref, schedule: mention.sch })
 }
 
-/** The first provision in the query, canonicalised against the named statute. */
-export function firstProvision(query: string, mention?: LawMention): string | undefined {
+/**
+ * RAW PIECE — the first provision in the query, scoped to a mention you already
+ * hold. `mention` is required for the reason spelled out on `provisionParam`.
+ *
+ * @deprecated for tool code — use {@link scopeProvisionsToLaw}.
+ */
+export function firstProvision(query: string, mention: LawMention | undefined): string | undefined {
   const refs = extractProvisions(query)
   return refs[0] ? provisionParam(refs[0], mention) : undefined
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// The (law, provision) choke point
+// ──────────────────────────────────────────────────────────────────────────
+
+/** One requested provision, before and after the alias's schedule is applied. */
+export interface ScopedProvision {
+  /** Exactly the text the caller gave, or — when read out of the query — the reference as written. */
+  raw: string
+  /** `raw` canonicalised, with no schedule added. Equal to `provision` when nothing was rewritten. */
+  asked: string
+  /** **Send this one.** `asked` inside the schedule the alias names, when it names one. */
+  provision: string
+  /** Parsed form of `provision`; `undefined` when the text is not a provision reference at all. */
+  ref?: SectionRef
+  /** `provision !== asked` — the alias moved the reference into its schedule. */
+  rewritten: boolean
+}
+
+/** What one (law-words, provisions) pair means once the alias table has had its say. */
+export interface LawScope {
+  /** The statute the words named, when the alias table or the title grammar resolved one. */
+  mention?: LawMention
+  /** The schedule that statute-name *is*: "2" for the ACL, "1" for the National Credit Code. */
+  schedule?: string
+  /** One entry per requested provision, in the order asked. */
+  provisions: ScopedProvision[]
+  /** Any entry was rewritten. */
+  rewritten: boolean
+  /** Ready to print when `rewritten`; `undefined` otherwise. Say it — a silent rewrite is its own trap. */
+  note?: string
+}
+
+/**
+ * **The one call every tool that takes (law words, provision) must make.**
+ *
+ * This project's flagship wrong answer is a bare `s 18` asked of the ACL: the
+ * *Australian Consumer Law* **is** schedule 2 of the *Competition and Consumer
+ * Act 2010*, so `s 18` means `sch 2 s 18` ("Misleading or deceptive conduct")
+ * and the Act's own s 18 is "Meetings of Commission". The same shape holds for
+ * the National Credit Code (NCCP sch 1), the Criminal Code (Criminal Code Act
+ * sch 1) and every other body of law carried as a schedule — `law-alias.ts`
+ * records the schedule, and dropping it returns real text from the wrong
+ * provision, which is worse than an error.
+ *
+ * The rewrite used to be assembled at each call site out of `primaryLawMention`
+ * + `provisionParam` + a hand-written note, and three review rounds running a
+ * site was found that had assembled only part of it (round 3 shipped
+ * `search_ai_law` with the extractor but not the formatter, and
+ * `compare_old_new` was handed a `query` it never read). So the assembly lives
+ * here, once:
+ *
+ *  - `query` is whatever field your schema calls the law — `query`, `lawName`,
+ *    `law`. It may be a bare alias ("ACL") or a whole sentence ("what does
+ *    s 18 of the ACL say"); `primaryLawMention` handles both, where
+ *    `resolveLawAlias` only matches a whole string.
+ *  - `provisions` is what the caller asked for. **Omit it** and the provisions
+ *    are read out of `query` itself — the `search_ai_law` shape.
+ *  - Send `provisions[i].provision`. Print `note` when `rewritten`.
+ *
+ * `src/lib/query-extract.test.ts` enumerates every registered tool whose schema
+ * has both a law-ish and a provision-ish field and asserts each one rewrites
+ * "ACL" + "s 18" into `sch 2 s 18`. A new tool that skips this function fails
+ * that test.
+ */
+export function scopeProvisionsToLaw(input: {
+  /** The words the caller used to name the law: `query` / `lawName` / `law`. */
+  query?: string | undefined
+  /** The provisions asked for. Omit to read them out of `query`. */
+  provisions?: readonly string[] | undefined
+}): LawScope {
+  const query = input.query?.trim() ?? ""
+  const mention = query ? primaryLawMention(query) : undefined
+  const asked: Array<{ raw: string; ref: SectionRef | undefined }> =
+    input.provisions === undefined
+      ? extractProvisions(query).map((ref) => ({ raw: formatRef(ref), ref }))
+      : input.provisions.map((raw) => ({ raw, ref: parseSectionRef(raw) ?? undefined }))
+
+  const provisions: ScopedProvision[] = asked.map(({ raw, ref }) => {
+    // An unparseable string is passed through untouched: this function decides
+    // schedules, not validity, and the tool's own error path says the rest.
+    const canonical = ref ? formatRef(ref) : raw
+    const scoped = ref ? provisionParam(ref, mention) : raw
+    return {
+      raw,
+      asked: canonical,
+      provision: scoped,
+      ...(ref ? { ref: scoped === canonical ? ref : (parseSectionRef(scoped) ?? ref) } : {}),
+      rewritten: scoped !== canonical,
+    }
+  })
+
+  const rewritten = provisions.filter((entry) => entry.rewritten)
+  return {
+    ...(mention ? { mention } : {}),
+    ...(mention?.sch ? { schedule: mention.sch } : {}),
+    provisions,
+    rewritten: rewritten.length > 0,
+    ...(rewritten.length > 0 && mention
+      ? {
+          note:
+            `"${mention.raw}" is sch ${mention.sch} of the ${mention.name}, so ` +
+            `${rewritten.map((entry) => `"${entry.asked}" was read as "${entry.provision}"`).join(", ")}. ` +
+            "A bare reference points at the body of the Act, which is a different provision.",
+        }
+      : {}),
+  }
 }
 
 // ──────────────────────────────────────────────────────────────────────────

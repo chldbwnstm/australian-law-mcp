@@ -59,9 +59,46 @@ export interface SectionRef {
  * Every dash-like character that becomes a plain `-` before parsing: U+2010
  * HYPHEN, U+2011 NON-BREAKING HYPHEN, figure dash, en dash, em dash,
  * horizontal bar and minus.
+ *
+ * Exported so the tests can enumerate the three roles below and fail if a
+ * character is ever added to this string without being given one.
  */
-const DASH_LIKE = "‐‑‒–—―−"
+export const DASH_LIKE = "‐‑‒–—―−"
 const DASH_REPLACE = new RegExp(`[${DASH_LIKE}]`, "g")
+
+/**
+ * The three roles a dash plays in scanned text. Every character of
+ * `DASH_LIKE` has exactly one of them, and the plain ASCII hyphen has two (it
+ * is both the hyphen inside a number and the range dash a keyboard produces),
+ * so `HYPHEN_SPELLINGS ∪ RANGE_DASHES ∪ HEADING_DASHES` is the whole class —
+ * which is what the test enumerating them checks. `parseSectionRef` never
+ * sees them: it folds every dash to a plain `-` first, so these widths only
+ * ever change what the *unanchored* scanner harvests out of a document.
+ *
+ *  - `HYPHEN_SPELLINGS` — typographic spellings of the plain hyphen, which is
+ *    a character *inside* a number. The Federal Register sets `s 355‑25`,
+ *    `Part 2‑1` and `Subdivision 152‑A` with U+2011, and `provision-slicer.ts`
+ *    folds the same character for the same reason.
+ *  - `RANGE_DASHES` — a dash that means "to" between two numbers: `ss 5–6`.
+ *  - `HEADING_DASHES` — the separator the Federal Register prints between a
+ *    heading's number and its title: `Schedule 1—2019 measures`,
+ *    `Part IVA—News media…`. It is an EM DASH in all 284 navLabels of
+ *    `__fixtures__/cca-document.ncx` and in FRL body text; the register never
+ *    writes a range with one.
+ *
+ * Treating an em dash as a range dash is how "Schedule 1—2019 measures" came
+ * back as the schedule range `sch 1-2019`, "Part 1—2015 transitional
+ * provisions" as `pts 1–2015` and "s 45 — 1 January 2011" as the fabricated
+ * ITAA-style `s 45-1` — the heading swallowed, and a provision nobody cited
+ * reported in its place. The trade is deliberate and one-sided: prose that
+ * writes a range with an em dash (AGLC r 1.9 says en dash) now scans as its
+ * first half, which is a reference the author did write, while the anchored
+ * `parseSectionRef("s 5—6")` still reads the range, because there the caller
+ * has said the whole string is one reference.
+ */
+const HYPHEN_SPELLINGS = "‐‑"
+const RANGE_DASHES = "‒–−"
+const HEADING_DASHES = "—―"
 
 /**
  * The subset that only ever means "to" in a pinpoint range — unlike a plain
@@ -74,10 +111,15 @@ const DASH_REPLACE = new RegExp(`[${DASH_LIKE}]`, "g")
  * read the real `s 355‑25` as the impossible range 355–25 and reported a
  * correctly cited provision as one the Act does not contain.
  *
+ * A heading dash *is* here, unlike in the scanner's `RANGE_DASH`: this test
+ * runs on input a caller has already said is one reference, where there is no
+ * heading for an em dash to separate, so `parseSectionRef("s 5—6")` still
+ * reads the range the writer meant.
+ *
  * Deliberately not a `/g/` regex: `RegExp.prototype.test` on a global pattern
  * advances `lastIndex`, so the same call would alternate true and false.
  */
-const RANGE_DASH_TEST = new RegExp("[‒–—―−]")
+const RANGE_DASH_TEST = new RegExp(`[${RANGE_DASHES}${HEADING_DASHES}]`)
 /** Non-breaking and thin spaces: FRL text and pasted citations are full of them. */
 const ODD_SPACES = /[     ]/g
 
@@ -90,16 +132,25 @@ function normaliseInput(input: string): { text: string; hadRangeDash: boolean } 
 }
 
 /**
- * A dash inside a number, and the same class with the dotted separator added.
+ * The dash a number may contain, the dash that may join the two ends of a
+ * range, and the same class with the dotted separator added.
  *
- * `parseSectionRef` folds every dash to a plain `-` before it matches, so the
- * width only matters to the document scanner, which sees the typography the
- * author actually wrote. Without it the scanner stopped at the dash and
- * `s 355‑25` came back as `s 355` and `ss 5–6` as `ss 5` — a different
- * provision, reported without a word about the tail it dropped.
+ * `parseSectionRef` folds every dash to a plain `-` before it matches, so
+ * these widths only matter to the document scanner, which sees the typography
+ * the author actually wrote. Too narrow and the scanner stops at the dash, so
+ * `s 355‑25` comes back as `s 355` and `ss 5–6` as `ss 5` — a different
+ * provision, reported without a word about the tail it dropped. Too wide and
+ * it swallows the heading separator: see `HEADING_DASHES`.
+ *
+ * `NUMBER_HYPHEN` is the tighter of the two on purpose. It is the dash that
+ * appears *within* a number, so it also decides what may precede the lettered
+ * structural tail (`152-A`), and a heading dash there read
+ * "Schedule 2—The Australian Consumer Law" — an FRL navLabel — as schedule
+ * `2-The`.
  */
-const NUMBER_DASH = `[\\-${DASH_LIKE}]`
-const NUMBER_SEP = `[.\\-${DASH_LIKE}]`
+const NUMBER_HYPHEN = `[\\-${HYPHEN_SPELLINGS}]`
+const RANGE_DASH = `[\\-${HYPHEN_SPELLINGS}${RANGE_DASHES}]`
+const NUMBER_SEP = `[.\\-${HYPHEN_SPELLINGS}${RANGE_DASHES}]`
 
 /**
  * How far a number's trailing letters may run.
@@ -134,7 +185,7 @@ const LETTER_RUN_MAX = 6
 const NUMBER_PATTERN =
   `(?:${ROMAN_NUMBER}` +
   `|\\d{1,4}(?:${NUMBER_SEP}\\d{1,4}){0,3}` +
-  `(?:${NUMBER_DASH}[A-Za-z]{1,3}(?![A-Za-z0-9])|[A-Za-z]{0,${LETTER_RUN_MAX}}))`
+  `(?:${NUMBER_HYPHEN}[A-Za-z]{1,3}(?![A-Za-z0-9])|[A-Za-z]{0,${LETTER_RUN_MAX}}))`
 
 /** `(2)(a)(ii)` — at most six levels, each one `SUBDIVISION_TOKEN`. */
 const SUBSECTION_PATTERN = `(?:\\s?\\(${SUBDIVISION_TOKEN}\\)){0,6}`
@@ -143,14 +194,37 @@ const DESIGNATOR = `(?:${SPELLING_ALTERNATION})`
 const SCHEDULE_WORD = `(?:schedules|schedule|schs|sch)`
 
 /**
+ * What may sit between a designation and its number: whitespace, or nothing at
+ * all when the number begins with a digit.
+ *
+ * `s18` is tolerated on input (see the module header) — but only when the
+ * number is arabic. Glued to *letters*, a designation spelling is not a
+ * designation at all: it is the front of an ordinary all-capitals word, and
+ * every one of them was harvested as a pinpoint. `SIS` (the Superannuation
+ * Industry (Supervision) Act's own everyday abbreviation) read as `s IS`,
+ * `SIX` as `s IX`, `ARTIX` as `art IX`, `SCHIV` as `sch IV`, and once the
+ * roman tail grew to three letters `PARTIES` — a word that appears verbatim in
+ * the party block of every judgment — read as `pt IES`. Each phantom then
+ * routes to a lookup that answers `[NOT_FOUND]` for a provision the document
+ * never cited.
+ *
+ * The rule is one line rather than a list of blocked words on purpose: the
+ * gap, not the vocabulary, is what tells a citation from a word, and a
+ * spelling added to `KIND_VOCAB` tomorrow is covered the day it lands. Nobody
+ * writes `sIV`; AGLC r 3.1.4 spaces every pinpoint, and the no-space
+ * tolerance only ever existed for what a keyboard produces (`s18`).
+ */
+const NUMBER_GAP = `(?:\\s+|(?=\\d))`
+
+/**
  * One provision expression, optionally prefixed by a schedule and optionally
  * carrying an `item`.
  */
 const REF_BODY =
-  `(?:${SCHEDULE_WORD}\\s*(${NUMBER_PATTERN})\\s*[,\\-]?\\s*)?` + // schedule prefix
-  `(${DESIGNATOR})\\s*` +                                        // designation
+  `(?:${SCHEDULE_WORD}${NUMBER_GAP}(${NUMBER_PATTERN})\\s*[,\\-]?\\s*)?` + // schedule prefix
+  `(${DESIGNATOR})${NUMBER_GAP}` +                               // designation
   `(${NUMBER_PATTERN})` +                                        // number
-  `(?:\\s*${NUMBER_DASH}\\s*(${NUMBER_PATTERN}))?` +             // spaced range end
+  `(?:\\s*${RANGE_DASH}\\s*(${NUMBER_PATTERN}))?` +              // spaced range end
   `(${SUBSECTION_PATTERN})` +                                    // (2)(a)
   `(?:\\s+items?\\s+(${NUMBER_PATTERN}))?`                       // sch 1 item 4
 
@@ -163,18 +237,21 @@ const BRACKETED_ONLY = new RegExp(`^(${DESIGNATOR})\\s*\\((${SUBDIVISION_TOKEN})
  * `sub-div B`, `div A` — structural units are sometimes lettered rather than
  * numbered.
  *
- * Two restrictions keep this out of ordinary prose, and both are load-bearing:
- * the letter must be **uppercase** (otherwise "part of" parses as part "of"),
- * and the kind must be structural (a section is never a bare letter).
+ * Three restrictions keep this out of ordinary prose, and all are
+ * load-bearing: the letter must be **uppercase** (otherwise "part of" parses
+ * as part "of"), the kind must be structural (a section is never a bare
+ * letter), and the letter must be separated from the designation — glued, as
+ * `NUMBER_GAP` explains, `PARTIES` is a word and not part "IES".
  */
 const LETTERED_STRUCTURAL_KINDS: ReadonlySet<RefKind> = new Set<RefKind>([
   "part", "division", "subdivision", "chapter", "schedule", "appendix",
 ])
-const LETTERED_STRUCTURAL = new RegExp(`^(${DESIGNATOR})\\s*([A-Z]{1,3})$`, "i")
+const LETTERED_STRUCTURAL = new RegExp(`^(${DESIGNATOR})\\s+([A-Z]{1,3})$`, "i")
 
 /** `sch 2` on its own, or `sch 1 item 4`. */
 const SCHEDULE_ONLY = new RegExp(
-  `^${SCHEDULE_WORD}\\s*(${NUMBER_PATTERN})(?:\\s*[,\\-]?\\s*items?\\s*(${NUMBER_PATTERN}))?$`,
+  `^${SCHEDULE_WORD}${NUMBER_GAP}(${NUMBER_PATTERN})` +
+    `(?:\\s*[,\\-]?\\s*items?${NUMBER_GAP}(${NUMBER_PATTERN}))?$`,
   "i",
 )
 
@@ -222,6 +299,34 @@ function hasLowercaseDashedLetters(number: string): boolean {
 }
 
 /**
+ * Reject a roman number the writer did not capitalise.
+ *
+ * The grammar has to stay case-insensitive — designations are written
+ * "Part IVA", "part IVA" and "PART IVA" — but that same insensitivity turns
+ * every English word built from numeral letters into a provision number:
+ * "the item is", "which sections mix", "div id attribute" parsed as items,
+ * sections and divisions nobody cited, and each one routes to a lookup that
+ * answers `[NOT_FOUND]` for a reference the document never contained.
+ * AGLC r 3.1.4 writes roman pinpoints in capitals, so case is the signal —
+ * the same rule `LETTERED_STRUCTURAL` applies to a bare lettered unit and the
+ * same one `query-extract.ts` and `statute-citations.ts` settled on for their
+ * own copies of this grammar. It belongs here, at the one choke point both
+ * `parseSectionRef` and `extractSectionRefs` pass through, rather than in each
+ * caller: `ROMAN_NUMBER`'s three-letter tail is only safe with it in place.
+ *
+ * Lower-case *subsections* (`s 51(xx)`) are untouched — a subsection is not
+ * the number — and a lettered arabic number is uppercased by
+ * `splitLetterSuffix`, so `s 10aa` still reads as `s 10AA`.
+ */
+function romanNumbersAreCapitalised(...parts: Array<string | undefined>): boolean {
+  for (const part of parts) {
+    if (!part || part === part.toUpperCase()) continue
+    if (isRomanNumber(part.toUpperCase())) return false
+  }
+  return true
+}
+
+/**
  * Is this pair arithmetically impossible as a range?
  *
  * `ss 355-25, 355-30` is how the ITAA 1997 is cited in a list — the plural
@@ -254,6 +359,7 @@ export function parseSectionRef(input: string): SectionRef | null {
 
   const scheduleOnly = SCHEDULE_ONLY.exec(text)
   if (scheduleOnly) {
+    if (!romanNumbersAreCapitalised(scheduleOnly[1], scheduleOnly[2])) return null
     const { number, letterSuffix } = splitLetterSuffix(scheduleOnly[1])
     return {
       kind: "schedule",
@@ -289,6 +395,7 @@ export function parseSectionRef(input: string): SectionRef | null {
 
   const vocab = kindForSpelling(spelling)
   if (!vocab) return null
+  if (!romanNumbersAreCapitalised(rawNumber, schedule, spacedRangeEnd, item)) return null
   const plural = PLURAL_SPELLINGS.has(spelling.toLowerCase())
 
   // The hyphen decision. `NUMBER_PATTERN` is greedy, so `ss 5-6` arrives here
@@ -376,11 +483,12 @@ function escapeForPattern(value: string): string {
  * The Federal Register sets `Part 2‑1` and `Subdivision 152‑A` with U+2011
  * NON-BREAKING HYPHEN — `htmlToText` folds it back for the body text, but
  * navLabels arrive as written, so a pattern built from the parsed (plain
- * hyphen) form has to accept both. Range dashes stay out: they never occur
- * inside a number, and admitting them would let `pt 2-1` match a label that
- * says something else.
+ * hyphen) form has to accept both. It is the same class the number grammar
+ * calls `NUMBER_HYPHEN`, and for the same reason: range and heading dashes
+ * never occur inside a number, and admitting them would let `pt 2-1` match a
+ * label that says something else.
  */
-const LABEL_HYPHEN = "[-‐‑]"
+const LABEL_HYPHEN = NUMBER_HYPHEN
 
 function numberForLabel(ref: SectionRef): string {
   return escapeForPattern(`${ref.number}${ref.letterSuffix ?? ""}`).replace(/-/g, LABEL_HYPHEN)
@@ -389,13 +497,21 @@ function numberForLabel(ref: SectionRef): string {
 /**
  * What may follow a worded label's number: anything but more of the number.
  *
- * The hyphen half is the ITAA/ACL structural form. `Subdivision 152` does not
- * exist — the Act has 152-A, 152-B, 152-C and 152-D — so letting `sub-div 152`
- * match the first of them answers a request for one subdivision with another
- * one's text. The title separator is an em dash, never a hyphen, so this
- * refuses nothing a real navLabel offers.
+ * A structural number continues past its first component in two ways, and
+ * both have to be refused. `Subdivision 152` does not exist — the ITAA has
+ * 152-A, 152-B, 152-C and 152-D — so letting `sub-div 152` match the first of
+ * them answers a request for one subdivision with another one's text. The
+ * *Corporations Act 2001* numbers the same shape with a stop: Chapter 5 has
+ * Parts 5.1 to 5.9 and no bare Part 5, so a dot-blind guard answered
+ * `pt 5` with Part 5.1's subtree.
+ *
+ * The separator between a label's number and its title is a heading dash,
+ * never a hyphen or a stop-with-more-number after it, so this refuses nothing
+ * a real navLabel offers — including the 1900 typography of
+ * `"Schedule 1. Amendments"`, where the stop is followed by a space.
  */
-const LABEL_TAIL = `(?![0-9A-Za-z]|${LABEL_HYPHEN}[0-9A-Za-z])`
+const LABEL_CONTINUATION = `[.\\-${HYPHEN_SPELLINGS}]`
+const LABEL_TAIL = `(?![0-9A-Za-z]|${LABEL_CONTINUATION}[0-9A-Za-z])`
 
 /**
  * A regex matching the FRL epub NCX navLabel for this reference.

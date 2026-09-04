@@ -119,8 +119,42 @@ export const SPELLING_ALTERNATION = [...spellingToKind.keys()]
   .map((spelling) => spelling.replace(/-/g, "\\-"))
   .join("|")
 
-/** Uppercase roman numeral, optionally with a trailing letter: `IV`, `IVA`, `XI`. */
-export const ROMAN_NUMBER = "[IVXLCDM]+[A-Z]?"
+/**
+ * A roman structural number: the numeral, then up to three letters of tail —
+ * `IV`, `IVA`, `XI`, `IIIAA`, `IVBA`, `XICA`, `IABA`.
+ *
+ * Both bounds are load-bearing.
+ *
+ * **The tail runs to three letters, not one.** The Commonwealth really does go
+ * that far: the *Competition and Consumer Act 2010* has Parts IIIAA, IVBA,
+ * IVBB, XIAA, XICA and XICB (they are navLabels in this repo's own
+ * `__fixtures__/cca-document.ncx`), and the *Crimes Act 1914* has Part IABA.
+ * A one-letter tail did not merely reject `pt IVBA` — `section-ref.ts`'s
+ * right-edge guard then dropped it out of a scanned document *silently*, so a
+ * citation checker reported on the rest of the document as though that
+ * citation had been checked.
+ *
+ * **The numeral is a real numeral (I–XXXIX), not "letters drawn from
+ * IVXLCDM".** The loose spelling is what made the tail dangerous to widen:
+ * `section-ref.ts` scans documents case-insensitively, so `[IVXLCDM]+[A-Z]{0,3}`
+ * reads `can`, `did`, `made`, `civil` and `dill` as roman numbers, and "the
+ * rules can be amended" yields a pinpoint `rr CAN` that the caller then
+ * reports as a provision the Act does not contain. No Part, Division or
+ * Chapter is numbered L, C, D or M (they would be 50, 100, 500 and 1000), so
+ * dropping those letters costs nothing real and removes every one of those
+ * readings: measured against `/usr/share/dict/words`, `[IVXLCDM]+[A-Z]{0,3}`
+ * matches 2,005 ordinary English words and this pattern matches 237 — fewer
+ * than the 188 of the old one-letter tail once its own `civil`/`dill` family
+ * is taken out.
+ *
+ * A bare lettered unit (`pt C`, `sub-div B`) is not this pattern's business:
+ * `LETTERED_STRUCTURAL` in `section-ref.ts` reads those, and only for the
+ * structural kinds that really are lettered.
+ *
+ * Wrapped in its own group and free of capturing groups: callers interpolate
+ * it into alternations and read their own match indices.
+ */
+export const ROMAN_NUMBER = "(?:(?:X{1,3}(?:IX|IV|V?I{0,3})|IX|IV|V?I{1,3}|V)[A-Z]{0,3})"
 
 /**
  * One bracketed subdivision token: `(2)`, `(a)`, `(ii)` — or a longer roman

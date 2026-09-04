@@ -95,6 +95,84 @@ describe("compare_old_new text diff", () => {
   })
 })
 
+describe("the alias decides which schedule a bare provision belongs to", () => {
+  /** Records every provision string that reached the client. */
+  function recording(): { api: AuApiClient; asked: string[] } {
+    const asked: string[] = []
+    const api = {
+      ...client(),
+      getProvision: async (_id: string, provision: string, date?: string) => {
+        asked.push(provision)
+        return {
+          ref: provision,
+          heading: provision,
+          text: `${provision} at ${date ?? "latest"}`,
+          volumeDoc: "document_4/document_4.html",
+          breadcrumb: [],
+        }
+      },
+    } as unknown as AuApiClient
+    return { api, asked }
+  }
+
+  it("diffs sch 2 s 18 when the query names the ACL", async () => {
+    // The ACL **is** sch 2 of the CCA. The body's own s 18 ("Meetings of
+    // Commission") exists and returns text, so an unscoped diff is a confident
+    // wrong answer: `chain_amendment_track` printed get_provision_history's
+    // sch 2 s 18 next to this tool's body s 18 under one ACL heading.
+    const { api, asked } = recording()
+    const text = (
+      await compareOldNew(api, {
+        registerId: "C2004A00109",
+        query: "ACL",
+        fromDate: "2026-01-15",
+        provision: "s 18",
+        context: 1,
+      } as never)
+    ).content[0].text
+    expect(asked).toEqual(["sch 2 s 18", "sch 2 s 18"])
+    expect(text).toContain("Text of sch 2 s 18")
+    // Never silently: the caller asked about "s 18" and is shown another number.
+    expect(text).toContain("sch 2")
+    expect(text).toContain("body of the Act")
+  })
+
+  it("leaves a provision that already names its schedule alone", async () => {
+    const { api, asked } = recording()
+    await compareOldNew(api, {
+      registerId: "C2004A00109",
+      query: "ACL",
+      fromDate: "2026-01-15",
+      provision: "sch 2 s 18",
+      context: 1,
+    } as never)
+    expect(asked).toEqual(["sch 2 s 18", "sch 2 s 18"])
+  })
+
+  it("adds no schedule when the named law is not one", async () => {
+    const { api, asked } = recording()
+    const text = (
+      await compareOldNew(api, {
+        registerId: "C2004A00109",
+        query: "Competition and Consumer Act 2010",
+        fromDate: "2026-01-15",
+        provision: "s 45",
+        context: 1,
+      } as never)
+    ).content[0].text
+    expect(asked).toEqual(["s 45", "s 45"])
+    expect(text).not.toContain("sch 2 s 45")
+  })
+
+  it("tells a caller who gave no provision which schedule to write", async () => {
+    const { api } = recording()
+    const text = (
+      await compareOldNew(api, { registerId: "C2004A00109", query: "ACL", fromDate: "2026-01-15", context: 1 } as never)
+    ).content[0].text
+    expect(text).toContain('sch 2 s 18')
+  })
+})
+
 describe("local unified diff", () => {
   it("marks unchanged runs rather than dropping them silently", () => {
     const a = ["a", "b", "c", "d", "e", "f", "g"].join("\n")

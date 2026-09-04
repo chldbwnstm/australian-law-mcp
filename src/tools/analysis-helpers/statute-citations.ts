@@ -24,13 +24,62 @@
  *    South Wales and Victoria. It is returned with no jurisdiction so the
  *    caller can report the ambiguity, never resolved by guessing.
  *
+ *  - **More than one provision in one pinpoint.** "ss 45 and 46", "ss 45 to
+ *    46", "ss 45, 46, 47" name two and three sections. Reading only the first
+ *    is the same failure as not reading any of them, and worse, because the
+ *    count then says one was found and one was checked.
+ *
  * Parsing of the pinpoint itself is delegated to `lib/section-ref.ts`, which
  * owns that grammar. Only *locating* a pinpoint in prose lives here.
+ *
+ * ## Nothing located may be dropped in silence
+ *
+ * The scanner is deliberately more generous than the parser: it locates a
+ * pinpoint-shaped run of text and `parseSectionRef` decides what it means. That
+ * split leaves one failure mode, and it is the worst one this module has —
+ * text that *is* a citation, that the scanner cannot read, and that therefore
+ * never reaches the report at all, so `verify_citations` prints `[VERIFIED]`
+ * over a document it only partly read.
+ *
+ * Two mechanisms, both structural, keep that from happening:
+ *
+ *  - **A right edge on every number.** A pinpoint that does not end where the
+ *    match ends is not a match. Without it the scanner read `s 8AAZLGA` — a
+ *    real *Taxation Administration Act 1953* section — as `s 8AAZL`, which is
+ *    *also* a real section, and the checker ticked the citation off against
+ *    that one's heading. `section-ref.ts` learned the same lesson in
+ *    `extractSectionRefs`; this is the other half of it.
+ *  - **`PINPOINT_SHAPE`, a wider net cast after the fact.** Every fragment it
+ *    finds must be accounted for: consumed by the reader, or refused by the
+ *    reader for a named reason. Anything else is returned as an unread
+ *    citation (`attachedBy: "unread"`) and reported. A new gap in the reader —
+ *    a number shape nobody anticipated, a designation the parser rejects —
+ *    surfaces there by itself, rather than waiting for someone to notice a
+ *    missing line.
+ *
+ * The right edge only pays if the number grammar in front of it is the *same*
+ * grammar `section-ref.ts` parses. Every place this file was narrower than the
+ * parser was a way to truncate a real citation into a different real
+ * provision: a four-letter tail cut `s 8AAZLGA` down to `s 8AAZL`; an
+ * ASCII-only separator cut the Federal Register's own `s 355‑25` (U+2011) down
+ * to `s 355`; no dash-letter form at all cut `Subdiv 152-A` down to
+ * `sub-div 152`, which does not exist. All three were silent, and the checker
+ * reported on the truncation as though it were the citation. The test file
+ * enumerates the shapes and fails if scanner and parser ever disagree again.
  */
 
+import { MONTH_ALTERNATION } from "../../lib/au-date-patterns.js"
+import { ErrorCodes } from "../../lib/errors.js"
 import { normaliseAliasKey, resolveLawAlias, type AliasJurisdiction } from "../../lib/law-alias.js"
 import { formatRef, parseSectionRef, type SectionRef } from "../../lib/section-ref.js"
-import { ROMAN_NUMBER, SPELLING_ALTERNATION, SUBDIVISION_TOKEN } from "../../lib/section-ref-vocab.js"
+import {
+  PLURAL_SPELLINGS,
+  ROMAN_NUMBER,
+  SPELLING_ALTERNATION,
+  SUBDIVISION_TOKEN,
+  isRomanNumber,
+  kindForSpelling,
+} from "../../lib/section-ref-vocab.js"
 import { extractContentClaim, type ClaimSource } from "./content-claims.js"
 
 export type { ClaimSource }
@@ -44,6 +93,11 @@ export type Attachment =
   | "anaphora"
   | "bare-name"
   | "none"
+  /**
+   * Not a citation at all: a pinpoint this scanner located and could **not**
+   * read. It carries no `lawName` on purpose — see `unreadCitation`.
+   */
+  | "unread"
 
 export interface StatuteCitation {
   /** The citation as the text writes it: `"CCA s 18"`. */
@@ -96,21 +150,45 @@ const STANDALONE_TITLE_ONLY = new RegExp(`^${STANDALONE_TITLE}$`)
  * Bounded number and subsection patterns. They mirror `section-ref.ts` because
  * the same grammar has to be *found* here and *parsed* there; `parseSectionRef`
  * stays the authority on meaning, and anything this scanner matches that it
- * rejects is simply dropped.
+ * rejects is reported as unread rather than dropped.
+ *
+ * The three dash classes are `section-ref.ts`'s, for its reasons: U+2010 and
+ * U+2011 are typographic spellings of the plain hyphen and the Register sets
+ * `s 355‑25` with one, the en/figure/minus dashes only ever mean "to", and the
+ * em dash and horizontal bar are heading separators (`Part IVA—News media…`)
+ * that must never join two numbers. Six letters of tail is that module's
+ * `LETTER_RUN_MAX`, sized on `s 8AAZLGA`.
+ *
+ * The dash-letter tail is `[A-Z]` where the parser writes `[A-Za-z]`: the
+ * parser scans case-insensitively and rejects a lowercase tail afterwards
+ * (`hasLowercaseDashedLetters`), while this file is case sensitive throughout,
+ * so requiring the capital here reads "the s 18-based claim" as `s 18` instead
+ * of manufacturing an unreadable `s 18-based`.
  */
-const ARABIC_NUMBER = `\\d{1,4}(?:[.\\-]\\d{1,4}){0,3}[A-Za-z]{0,4}`
+const LETTER_RUN_MAX = 6
+const HYPHEN_SPELLINGS = "‐‑"
+const RANGE_DASHES = "‒–−"
+const NUMBER_SEP = `[.\\-${HYPHEN_SPELLINGS}${RANGE_DASHES}]`
+const NUMBER_HYPHEN = `[\\-${HYPHEN_SPELLINGS}]`
+const RANGE_DASH = `[\\-${HYPHEN_SPELLINGS}${RANGE_DASHES}]`
+const ARABIC_NUMBER =
+  `\\d{1,4}(?:${NUMBER_SEP}\\d{1,4}){0,3}` +
+  `(?:${NUMBER_HYPHEN}[A-Z]{1,3}(?![A-Za-z0-9])|[A-Za-z]{0,${LETTER_RUN_MAX}})`
 const NUMBER = `(?:${ROMAN_NUMBER}|${ARABIC_NUMBER})`
 const SUBSECTIONS = `(?:\\s?\\(${SUBDIVISION_TOKEN}\\)){0,6}`
 const SCHEDULE_WORD = `(?:[Ss]chedules|[Ss]chedule|[Ss]chs|[Ss]ch)`
+/** A four-digit year: what a titled instrument carries where a pinpoint carries a number. */
+const YEAR_ONLY = /^(?:1[89]|20)\d{2}$/
 
 /**
  * The number as it may follow a designation — the roman branch guarded on
  * **both** edges.
  *
- * `ROMAN_NUMBER` is `[IVXLCDM]+[A-Z]?`, which is also the tail of a great many
- * all-caps Australian abbreviations, and the designation letter in front of it
- * is a designation spelling: `SIS` reads as `s IS`, `SDA` as `s DA`, `RDA` as
- * `r DA`, `SIX` as `s IX`, `SCHEDULE` as `s CH`. Each phantom then inherits
+ * `ROMAN_NUMBER` (the vocabulary module owns it) is a numeral with up to three
+ * letters of tail — `IVA`, `IIIAA`, `IABA`, all real Commonwealth Parts — and
+ * that is also the tail of a great many all-caps Australian abbreviations, with
+ * a designation spelling for its first letter: `SIS` reads as `s IS`, `SDA` as
+ * `s DA`, `RDA` as `r DA`, `SIX` as `s IX`, `SCHEDULE` as `s CH`. Each inherits
  * whatever Act the sentence already cited and is reported as a provision that
  * Act does not have — `verify_citations` accusing correct prose of inventing a
  * section, which is the one answer this server must never give. They also
@@ -148,15 +226,50 @@ const SPELLINGS = SPELLING_ALTERNATION.split("|")
  * The second branch is the bracketed form (`sub-s (2)`, `para (a)`), which has
  * no number of its own — without it those references are never extracted, and
  * an unextracted citation is one the report silently claims to have checked.
+ *
+ * The trailing `(?![0-9A-Za-z])` is the right edge described at the top of the
+ * file: a number this grammar can only read *part* of is not read at all, and
+ * `PINPOINT_SHAPE` then reports the whole fragment as unread. Truncating is the
+ * one outcome that must not happen, because the truncation is usually a real
+ * provision of the same Act and the checker ticks the citation off against it.
+ *
+ * Groups: 1 schedule prefix as written, 2 designation, 3 number, 4 designation
+ * of the bracketed branch, 5 its token. The schedule prefix, the designation
+ * and the token are captured because a multi-provision pinpoint ("sch 2 ss 18
+ * and 29", "sub-ss (2) and (3)") has to rebuild each member of the list.
  */
 const PINPOINT = new RegExp(
   `(?<![A-Za-z])(?:` +
-    `(?:${SCHEDULE_WORD}\\s*${NUMBER}\\s*[,\\-]?\\s*)?` +
+    `(${SCHEDULE_WORD}\\s*${NUMBER}\\s*[,\\-]?\\s*)?` +
     `(${SPELLINGS})\\s*(${PINPOINT_NUMBER})` +
-    `(?:\\s*[-–]\\s*${NUMBER})?` +
+    `(?:\\s*${RANGE_DASH}\\s*${NUMBER})?` +
     SUBSECTIONS +
-    `|(${SPELLINGS})\\s?\\(${SUBDIVISION_TOKEN}\\)` +
+    `(?![0-9A-Za-z])` +
+    `|(${SPELLINGS})\\s?\\((${SUBDIVISION_TOKEN})\\)` +
     `)`,
+  "g",
+)
+
+/**
+ * The wider net: a designation followed by *something number-shaped*, with the
+ * same guards against acronyms and none of the guards about what a number may
+ * contain.
+ *
+ * It exists to be compared against what the reader actually did. A fragment
+ * this finds that no reading consumed and no named refusal covers is a hole in
+ * the reader, and `extractStatuteCitations` returns it as an unread citation
+ * rather than letting the document go out one citation shorter than it came in.
+ *
+ * The roman branch keeps the two guards that make roman numerals safe here —
+ * a space in front (so `SIS` is not `s IS`) and a word edge behind — and starts
+ * at `I`, `V` or `X` only, because `ROMAN_NUMBER` deliberately refuses the
+ * `L`/`C`/`D`/`M` readings that turn English words into pinpoints. Reporting
+ * those as "unread" would turn a correct refusal into noise on every document.
+ */
+const PINPOINT_SHAPE = new RegExp(
+  `(?<![A-Za-z])(?:${SPELLINGS})\\s*` +
+    `(?:(?<=\\s)[IVX][A-Z]{0,9}|\\d[0-9A-Za-z]{0,12}(?:${NUMBER_SEP}[0-9A-Za-z]{1,8}){0,4})` +
+    `(?![0-9A-Za-z])`,
   "g",
 )
 
@@ -530,9 +643,250 @@ function lastCiteBefore(cites: readonly FullCite[], index: number): FullCite | u
   return found
 }
 
+/** A half-open span of the source text. */
+interface Span {
+  start: number
+  end: number
+}
+
+/**
+ * Do any of `spans` overlap `span`, given both sequences are read in order?
+ *
+ * A linear sweep rather than a scan of the whole list per fragment: the caller
+ * runs this over every pinpoint-shaped fragment of a whole document against
+ * every span the reader accounted for, and the quadratic form took 450 ms on a
+ * 160 KB brief. `cursor` and `coveredTo` carry between calls, which is why this
+ * is a closure and not a predicate.
+ */
+function overlapSweep(spans: readonly Span[]): (span: Span) => boolean {
+  const sorted = [...spans].sort((left, right) => left.start - right.start)
+  let cursor = 0
+  let coveredTo = -1
+  return (span) => {
+    while (cursor < sorted.length && sorted[cursor].start < span.end) {
+      coveredTo = Math.max(coveredTo, sorted[cursor].end)
+      cursor++
+    }
+    return coveredTo > span.start
+  }
+}
+
+/**
+ * The shape of a provision number, which is the signal a list continuation is
+ * judged against.
+ *
+ * A list continues only while its items keep the shape of the first, because
+ * the alternative — accepting whatever number follows a comma — harvests
+ * ordinary prose: "under s 18, 3 March 2020" would yield a citation to `s 3`,
+ * and a fabricated citation reported as one the reader wrote is worse than a
+ * missed one. Same-shape is the narrow rule; anything else is either stopped
+ * (a bare number, which is what prose looks like) or reported unread (a number
+ * carrying letters or separators, which prose does not look like).
+ */
+type NumberShape = "roman" | "compound" | "lettered" | "plain" | "other"
+
+function numberShape(value: string): NumberShape {
+  if (value === value.toUpperCase() && isRomanNumber(value)) return "roman"
+  if (/^\d{1,4}$/.test(value)) return "plain"
+  if (new RegExp(`^\\d{1,4}[A-Za-z]{1,${LETTER_RUN_MAX}}$`).test(value)) return "lettered"
+  if (new RegExp(`^\\d{1,4}(?:${NUMBER_SEP}[0-9A-Za-z]{1,4}){1,3}$`).test(value)) return "compound"
+  return "other"
+}
+
+/** At most this many continuations of one pinpoint. A list is a citation, not a corpus. */
+const MAX_LIST_ITEMS = 12
+
+/**
+ * How the next member of a multi-provision pinpoint may be joined to the last:
+ * `ss 45 and 46`, `ss 45 & 46`, `ss 45, 46, 47`, `ss 45, 46 and 47`,
+ * `ss 45 to 46`. Group 1 is the join, 2 the number, 3 any subsections.
+ *
+ * Sticky, not global: a continuation is only a continuation when it sits
+ * immediately after the item before it, and the lookbehind inside
+ * `PINPOINT_NUMBER` still sees the real text to its left.
+ */
+const LIST_ITEM = new RegExp(
+  `(\\s*,\\s*(?:and\\s+|&\\s*)?|\\s+and\\s+|\\s*&\\s*|\\s+to\\s+)(${PINPOINT_NUMBER})(${SUBSECTIONS})(?![0-9A-Za-z])`,
+  "y",
+)
+
+/**
+ * A date immediately after a candidate list item: "ss 18, 3 March 2020".
+ *
+ * This is the harvest the comma form risks, and the month word is the thing
+ * that gives it away. `au-date-patterns.ts` owns the month vocabulary.
+ */
+const DATE_TAIL = new RegExp(`^\\s{1,3}(?:${MONTH_ALTERNATION})\\b`, "i")
+
+/** `3rd`, `13th` — an English ordinal is prose (usually the rest of a date), never a provision. */
+const ORDINAL = /^\d{1,4}(?:st|nd|rd|th)$/i
+
+interface ListItem extends Span {
+  number: string
+  subsections: string
+  /** `ss 45 to 46` — this item is the far end of a range, not a second citation. */
+  joinsAsRange: boolean
+  /** `sub-ss (2) and (3)` — the member is a bracketed token, not a number. */
+  bracketed?: boolean
+}
+
+interface ListScan {
+  items: ListItem[]
+  /** Located, provision-shaped, and deliberately not read — reported, never dropped. */
+  unread?: Span
+}
+
+/**
+ * The rest of a multi-provision pinpoint, read left to right from `from`.
+ *
+ * Only ever called after a **plural** designation (`ss`, `sections`, `pts`):
+ * the plural is the writer's own signal that more than one provision is named,
+ * and without it "s 18, 3 March 2020" is a section and a date.
+ */
+function scanProvisionList(text: string, from: number, headShape: NumberShape, headNumber: string): ListScan {
+  const items: ListItem[] = []
+  let cursor = from
+  for (;;) {
+    LIST_ITEM.lastIndex = cursor
+    const match = LIST_ITEM.exec(text)
+    if (!match) break
+    const end = LIST_ITEM.lastIndex
+    const start = end - (match[2].length + match[3].length)
+    const number = match[2]
+
+    if (DATE_TAIL.test(text.slice(end, end + 12)) || ORDINAL.test(number)) break
+    const shape = numberShape(number)
+    if (shape !== headShape) {
+      // A bare number that does not match the first item's shape is what prose
+      // looks like; a lettered, dotted or roman one is not, so that one is
+      // reported rather than silently discarded.
+      if (shape === "plain" || shape === "other") break
+      return { items, unread: { start, end } }
+    }
+    if (shape === "plain" && YEAR_ONLY.test(number) && !YEAR_ONLY.test(headNumber)) break
+    // The ceiling is on the work, never on what the reader admits to: a list
+    // that runs past it stops here and says so, because a citation dropped for
+    // being the thirteenth is exactly as unchecked as one nobody could parse.
+    if (items.length >= MAX_LIST_ITEMS) return { items, unread: { start, end } }
+
+    items.push({ number, subsections: match[3], joinsAsRange: /\bto\b/.test(match[1]), start, end })
+    cursor = end
+  }
+  return { items }
+}
+
+/**
+ * The bracketed form of the same list: `sub-ss (2) and (3)`, `paras (a), (b)
+ * and (c)`.
+ *
+ * The same two rules as the numbered form — a plural designation in front, and
+ * items that keep the shape of the first — because the same harvest is
+ * available here: `(2020)` is a `SUBDIVISION_TOKEN`, so "see ss 18, (2020) 15
+ * ALJ 3" would otherwise put a subsection (2020) into the report. Shape plus
+ * the year test refuse it.
+ *
+ * A `to` join is read as naming its two ends rather than as a range: a
+ * bracketed range has no representation in `SectionRef`, and inventing the
+ * members between them would be inventing citations the writer did not make.
+ */
+const BRACKET_ITEM = new RegExp(
+  `(\\s*,\\s*(?:and\\s+|&\\s*)?|\\s+and\\s+|\\s*&\\s*|\\s+to\\s+)\\((${SUBDIVISION_TOKEN})\\)`,
+  "y",
+)
+
+function tokenShape(token: string): "digits" | "letters" | "other" {
+  if (/^\d{1,4}$/.test(token)) return "digits"
+  if (/^[A-Za-z]{1,8}$/.test(token)) return "letters"
+  return "other"
+}
+
+function scanBracketList(text: string, from: number, headToken: string): ListScan {
+  const items: ListItem[] = []
+  const headShape = tokenShape(headToken)
+  if (headShape === "other") return { items }
+  let cursor = from
+  for (;;) {
+    BRACKET_ITEM.lastIndex = cursor
+    const match = BRACKET_ITEM.exec(text)
+    if (!match) break
+    const end = BRACKET_ITEM.lastIndex
+    const token = match[2]
+    if (tokenShape(token) !== headShape || YEAR_ONLY.test(token)) break
+    if (items.length >= MAX_LIST_ITEMS) return { items, unread: { start: end - token.length - 2, end } }
+    items.push({
+      number: token,
+      subsections: "",
+      joinsAsRange: false,
+      bracketed: true,
+      start: end - token.length - 2,
+      end,
+    })
+    cursor = end
+  }
+  return { items }
+}
+
+/**
+ * A pinpoint this scanner located and could not read.
+ *
+ * It deliberately carries **no `lawName`**: every consumer of a citation
+ * without one already knows it cannot be checked (`statute-check.ts` answers ⚠
+ * before it ever looks at `ref`, and `cite-check.ts` skips it), so an unread
+ * fragment can never be turned into a lookup against a provision nobody cited.
+ * `ref` is an inert placeholder for the same reason — the shape of this record
+ * is "something is here and it was NOT checked", not a reference.
+ *
+ * The bracket label comes from `ErrorCodes` like every other label in this
+ * server: a machine reader has to be able to tell which set it belongs to, and
+ * this one is a parse failure on our side, never a statement about the law.
+ */
+function unreadCitation(fragment: string, index: number): StatuteCitation {
+  const shown = fragment.replace(/\s+/g, " ").trim()
+  return {
+    raw: shown,
+    ref: { kind: "section", number: "", subsections: [], plural: false, raw: shown },
+    pinpoint:
+      `[${ErrorCodes.PARSE_ERROR}] "${shown}" — a pinpoint this scanner located but could not read, ` +
+      `so it was NOT checked and nothing here says whether it is right`,
+    attachedBy: "unread",
+    index,
+  }
+}
+
+/**
+ * Every pinpoint-shaped fragment the reader neither used nor refused.
+ *
+ * This is the audit, and it is why a new gap in the grammar cannot go quiet:
+ * the reader records a span for every path it takes — a citation it built, a
+ * reading it refused for a named reason, a duplicate it dropped — and whatever
+ * `PINPOINT_SHAPE` finds outside those spans is reported.
+ */
+function unreadShapes(text: string, accounted: readonly Span[]): Span[] {
+  const found: Span[] = []
+  const accountedFor = overlapSweep(accounted)
+  PINPOINT_SHAPE.lastIndex = 0
+  for (const match of text.matchAll(PINPOINT_SHAPE)) {
+    const start = match.index ?? 0
+    const span = { start, end: start + match[0].length }
+    if (!accountedFor(span)) found.push(span)
+  }
+  return found
+}
+
+/** One provision of a pinpoint, with the text it was read from. */
+interface Located extends Span {
+  source: string
+  ref: SectionRef
+}
+
 /**
  * Every statute citation in the text, in order, de-duplicated by (law,
  * pinpoint) and capped at `maxCitations`.
+ *
+ * A multi-provision pinpoint becomes one citation per provision: "ss 45 and
+ * 46" is two, "ss 45, 46, 47" is three. Reading only the first is the failure
+ * this whole module is against — the report then says one was found and one
+ * was checked, over a text naming two.
  */
 export function extractStatuteCitations(text: string, maxCitations: number): StatuteCitation[] {
   if (!text) return []
@@ -541,44 +895,153 @@ export function extractStatuteCitations(text: string, maxCitations: number): Sta
 
   const out: StatuteCitation[] = []
   const seen = new Set<string>()
+  /** Spans the reader accounted for: read, refused for a named reason, or reported unread. */
+  const accounted: Span[] = []
+  const unread: Array<{ fragment: string; index: number }> = []
+  let cappedEarly = false
 
   PINPOINT.lastIndex = 0
   for (const match of text.matchAll(PINPOINT)) {
-    if (out.length >= maxCitations) break
+    if (out.length >= maxCitations) {
+      cappedEarly = true
+      break
+    }
     const raw = match[0]
     const start = match.index ?? 0
     const end = start + raw.length
+    const schedulePrefix = match[1] ?? ""
+    const spelling = match[2] ?? match[4] ?? ""
+    const numberText = match[3]
 
     // "Migration Regulations 1994 (Cth)" is a title, not `regs 1994`.
-    if (match[1] && WORD_SPELLING.test(match[1]) && /^(?:1[89]|20)\d{2}$/.test(match[2])) continue
-    if (new RegExp(`^\\s*\\(\\s*(?:${JURISDICTION_TOKENS})\\s*\\)`, "i").test(text.slice(end, end + 12))) continue
+    if (WORD_SPELLING.test(spelling) && numberText && YEAR_ONLY.test(numberText)) {
+      accounted.push({ start, end })
+      continue
+    }
+    if (new RegExp(`^\\s*\\(\\s*(?:${JURISDICTION_TOKENS})\\s*\\)`, "i").test(text.slice(end, end + 12))) {
+      accounted.push({ start, end })
+      continue
+    }
 
-    const ref = parseSectionRef(raw)
-    if (!ref) continue
+    const headRef = parseSectionRef(raw)
+    if (!headRef) {
+      unread.push({ fragment: raw, index: start })
+      accounted.push({ start, end })
+      continue
+    }
 
-    const attribution = attribute(text, start, end, cites, shortForms)
-    const effectiveRef: SectionRef =
-      attribution.schedule && !ref.schedule ? { ...ref, schedule: attribution.schedule } : ref
-    const pinpoint = formatRef(effectiveRef)
+    // The list, and then the provisions it names. `located[0]` is the head; a
+    // "to" join folds into whatever precedes it instead of standing alone.
+    const headNumber = `${headRef.number}${headRef.letterSuffix ?? ""}`
+    const headShape = numberShape(headNumber)
+    const plural = PLURAL_SPELLINGS.has(spelling.toLowerCase())
+    const bracketToken = match[5]
+    let scan: ListScan = { items: [] }
+    if (plural && numberText && headShape !== "other") scan = scanProvisionList(text, end, headShape, headNumber)
+    else if (plural && bracketToken) scan = scanBracketList(text, end, bracketToken)
+    // An unread continuation is reported with the head of its pinpoint in
+    // front, so the report shows `ss 45 … 46A` rather than a bare "46A" that
+    // names no designation and cannot be found in the text again.
+    if (scan.unread) {
+      unread.push({ fragment: `${raw} … ${text.slice(scan.unread.start, scan.unread.end)}`, index: scan.unread.start })
+      accounted.push(scan.unread)
+    }
 
-    const key = `${normaliseAliasKey(attribution.lawName ?? "")}|${attribution.jurisdiction ?? ""}|${pinpoint}`
-    if (seen.has(key)) continue
-    seen.add(key)
+    const singular = kindForSpelling(spelling)?.singular ?? spelling
+    const located: Located[] = [{ source: raw, ref: headRef, start, end }]
+    for (const item of scan.items) {
+      const last = located[located.length - 1]
+      if (item.joinsAsRange) {
+        const merged = `${last.source} - ${item.number}${item.subsections}`
+        const mergedRef = parseSectionRef(merged)
+        if (mergedRef?.rangeEnd) {
+          last.source = merged
+          last.ref = mergedRef
+          last.end = item.end
+          continue
+        }
+      }
+      const source = item.bracketed
+        ? `${singular} (${item.number})`
+        : `${schedulePrefix}${singular} ${item.number}${item.subsections}`
+      const ref = parseSectionRef(source)
+      if (!ref) {
+        unread.push({ fragment: `${raw} … ${text.slice(item.start, item.end)}`, index: item.start })
+        accounted.push({ start: item.start, end: item.end })
+        continue
+      }
+      located.push({ source, ref, start: item.start, end: item.end })
+    }
 
-    const claim = extractContentClaim(text.slice(Math.max(0, attribution.citeStart - 160), attribution.citeStart), text.slice(end, end + 200))
+    // Attribution and the content claim are read from the end of the *whole*
+    // pinpoint, so "ss 45 and 46 of the CCA" attaches the Act to both.
+    const listEnd = located[located.length - 1].end
+    const attribution = attribute(text, start, listEnd, cites, shortForms)
+    // A claim describing a list ("ss 45 and 46 prohibit anti-competitive
+    // conduct") is about the list, not about either member. Testing it against
+    // one member's heading is how correct prose gets reported as a content
+    // mismatch, which is the one verdict this server must never invent, so a
+    // multi-provision pinpoint is checked for existence only.
+    const claim =
+      located.length === 1
+        ? extractContentClaim(
+            text.slice(Math.max(0, attribution.citeStart - 160), attribution.citeStart),
+            text.slice(listEnd, listEnd + 200),
+          )
+        : undefined
+    const prefix = text.slice(Math.min(attribution.citeStart, start), start)
 
-    out.push({
-      raw: text.slice(Math.min(attribution.citeStart, start), end).replace(/[*_]/g, "").replace(/\s+/g, " ").trim(),
-      ...(attribution.lawName ? { lawName: attribution.lawName } : {}),
-      ...(attribution.jurisdiction ? { jurisdiction: attribution.jurisdiction } : {}),
-      ...(attribution.year ? { year: attribution.year } : {}),
-      ref: effectiveRef,
-      pinpoint,
-      attachedBy: attribution.attachedBy,
-      ...(attribution.antecedent ? { antecedent: attribution.antecedent } : {}),
-      ...(claim ? { claim: claim.text, claimSource: claim.source } : {}),
-      index: start,
-    })
+    for (const entry of located) {
+      if (out.length >= maxCitations) {
+        cappedEarly = true
+        break
+      }
+      const effectiveRef: SectionRef =
+        attribution.schedule && !entry.ref.schedule ? { ...entry.ref, schedule: attribution.schedule } : entry.ref
+      const pinpoint = formatRef(effectiveRef)
+
+      const key = `${normaliseAliasKey(attribution.lawName ?? "")}|${attribution.jurisdiction ?? ""}|${pinpoint}`
+      if (seen.has(key)) {
+        accounted.push({ start: entry.start, end: entry.end })
+        continue
+      }
+      seen.add(key)
+
+      // The head keeps the writer's own words; a continuation has none of its
+      // own ("46" alone is not a citation), so it is rebuilt from the
+      // designation and schedule the writer put in front of the list.
+      const written =
+        entry === located[0] ? text.slice(Math.min(attribution.citeStart, start), entry.end) : `${prefix}${entry.source}`
+
+      out.push({
+        raw: written.replace(/[*_]/g, "").replace(/\s+/g, " ").trim(),
+        ...(attribution.lawName ? { lawName: attribution.lawName } : {}),
+        ...(attribution.jurisdiction ? { jurisdiction: attribution.jurisdiction } : {}),
+        ...(attribution.year ? { year: attribution.year } : {}),
+        ref: effectiveRef,
+        pinpoint,
+        attachedBy: attribution.attachedBy,
+        ...(attribution.antecedent ? { antecedent: attribution.antecedent } : {}),
+        ...(claim ? { claim: claim.text, claimSource: claim.source } : {}),
+        index: entry.start,
+      })
+      accounted.push({ start: entry.start, end: entry.end })
+    }
   }
-  return out
+
+  // The audit only runs over text the reader actually reached: past the cap
+  // nothing was read, so "not accounted for" would say nothing about the
+  // grammar. The cap is reported by the caller in its own words.
+  const missed = cappedEarly
+    ? unread
+    : [
+        ...unread,
+        ...unreadShapes(text, accounted).map((span) => ({
+          fragment: text.slice(span.start, span.end),
+          index: span.start,
+        })),
+      ]
+  for (const item of missed) out.push(unreadCitation(item.fragment, item.index))
+  out.sort((left, right) => left.index - right.index)
+  return out.slice(0, maxCitations)
 }

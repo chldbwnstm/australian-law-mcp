@@ -3,12 +3,17 @@
  * (docs/research/frl-api-reference.md §3: there is no per-section endpoint —
  * the NCX anchor grammar is the only section-level address the Register has).
  *
- * Two functions, exported separately so each is testable against the recorded
- * CCA fixtures on its own:
+ * Exported separately so each is testable against the recorded CCA fixtures on
+ * its own:
  *
- *  - `findNavPoint` — provision reference → the right NCX entry. The load-bearing
- *    case is `sch 2 s 18` vs `s 18`: the CCA has both, with different content,
- *    and returning the wrong one is a confidently wrong legal answer.
+ *  - `resolveNavPoint` / `findNavPoint` — provision reference → the right NCX
+ *    entry, plus the same-numbered entries it did *not* serve. The load-bearing
+ *    cases are `sch 2 s 18` vs `s 18` (the CCA has both, with different
+ *    content) and the Constitution's two sets of ss 1–9; returning the wrong
+ *    one is a confidently wrong legal answer.
+ *  - `duplicateNumberNote` / `withDuplicateNumberNote` — the ambiguity the
+ *    reference grammar cannot express, named in the text that is served. A
+ *    silently resolved ambiguity is indistinguishable from a wrong answer.
  *  - `sliceProvision` — NCX entry + volume HTML → readable text between this
  *    anchor and the next one.
  */
@@ -36,8 +41,42 @@ function isInsideSchedule(entry: NcxEntry, pattern?: RegExp): boolean {
 }
 
 /**
- * Find the navPoint a parsed reference points at, or `undefined` — never a
- * guess — when the TOC has no such provision.
+ * Container navLabels that make a numbered provision part of an Act's own
+ * structure rather than material hanging off the document root.
+ *
+ * Volume roots are deliberately absent: `"Volume 1"` is a delivery artefact of
+ * the epub, not a division of the Act, and counting it would make every
+ * section of a multi-volume compilation "contained" and the test below useless.
+ */
+const STRUCTURAL_LABEL =
+  /^(?:chapters?|parts?|divisions?|sub-?divisions?|schedules?|appendix|appendices|orders?)[\s ]/i
+
+function structuralAncestors(entry: NcxEntry): NcxEntry[] {
+  return ancestorsOf(entry).filter((ancestor) => STRUCTURAL_LABEL.test(ancestor.label))
+}
+
+/** The innermost Chapter/Part/Division an entry sits in, if any. */
+function nearestStructural(entry: NcxEntry): string | undefined {
+  const chain = structuralAncestors(entry)
+  return chain.length > 0 ? chain[chain.length - 1].label : undefined
+}
+
+/** One navPoint choice, with the same-numbered entries the rules did not serve. */
+export interface NavPointMatch {
+  /** The entry to serve, or `undefined` when the TOC has no such provision. */
+  entry: NcxEntry | undefined
+  /**
+   * Entries that matched just as well and were not served. Non-empty only for
+   * a genuine ambiguity the reference grammar cannot express — the schedule
+   * rule below is a *decision*, so a rejected schedule twin is not listed here.
+   */
+  alternatives: NcxEntry[]
+}
+
+/**
+ * Resolve a parsed reference against a TOC, and say what else it could have
+ * meant. `findNavPoint` is the thin wrapper; this is the single place any
+ * navPoint choice is made, so a new caller cannot re-derive its own rule.
  *
  * Resolution rules, in order:
  *  - `sch N …` must match **inside** the `Schedule N` subtree; a body section
@@ -48,23 +87,125 @@ function isInsideSchedule(entry: NcxEntry, pattern?: RegExp): boolean {
  *  - An unqualified reference prefers a **body** match. Only when the whole
  *    act lives in schedules (some consolidations do) does a schedule-subtree
  *    match get returned.
+ *  - When two body matches survive, the Act's own numbering wins over material
+ *    hanging off the document root. That case is the *Commonwealth of Australia
+ *    Constitution Act 1900* (C2004Q00685, NCX read live 2026-09-04): its ss 1–9
+ *    are the Imperial Act's **covering clauses** (`1. Short title.`,
+ *    `7. Repeal of Federal Council Act.`) sitting directly under the document
+ *    root, while the Constitution's own ss 1–9 (`7. The Senate.`) sit under
+ *    `Chapter I.—The Parliament.`. "Constitution s 7" in a court, a textbook or
+ *    AGLC r 3.6 means the latter; taking the first match served the covering
+ *    clause for every one of ss 1–9 and said nothing about it. The covering
+ *    clauses keep their own address — the profession calls them clauses, so
+ *    `cl 7` asks for one — and `duplicateNumberNote` names the choice in the
+ *    text that is served.
  */
-export function findNavPoint(ref: SectionRef, entries: NcxEntry[]): NcxEntry | undefined {
+export function resolveNavPoint(ref: SectionRef, entries: readonly NcxEntry[]): NavPointMatch {
   if (ref.kind === "schedule") {
     const pattern = schedulePattern(ref.number + (ref.letterSuffix ?? ""))
-    return entries.find((entry) => pattern.test(entry.label))
+    return { entry: entries.find((entry) => pattern.test(entry.label)), alternatives: [] }
   }
 
   const pattern = refToNcxLabelPattern(ref)
   const matches = entries.filter((entry) => pattern.test(entry.label))
-  if (matches.length === 0) return undefined
+  if (matches.length === 0) return { entry: undefined, alternatives: [] }
 
   if (ref.schedule) {
     const owner = schedulePattern(ref.schedule)
-    return matches.find((entry) => isInsideSchedule(entry, owner))
+    const inside = matches.filter((entry) => isInsideSchedule(entry, owner))
+    return { entry: inside[0], alternatives: inside.slice(1) }
   }
 
-  return matches.find((entry) => !isInsideSchedule(entry)) ?? matches[0]
+  const body = matches.filter((entry) => !isInsideSchedule(entry))
+  const pool = body.length > 0 ? body : matches
+  if (pool.length === 1) return { entry: pool[0], alternatives: [] }
+
+  const rooted = pool.filter((entry) => structuralAncestors(entry).length === 0)
+  const contained = pool.filter((entry) => structuralAncestors(entry).length > 0)
+  const chosen =
+    rooted.length > 0 && contained.length > 0
+      ? // `cl` is how covering clauses are cited; every other designation means
+        // the Act's own numbering.
+        (ref.kind === "clause" ? rooted[0] : contained[0])
+      : pool[0]
+  return { entry: chosen, alternatives: pool.filter((entry) => entry !== chosen) }
+}
+
+/**
+ * Find the navPoint a parsed reference points at, or `undefined` — never a
+ * guess — when the TOC has no such provision. See `resolveNavPoint` for the
+ * rules; this wrapper exists because most callers only need the entry.
+ */
+export function findNavPoint(ref: SectionRef, entries: NcxEntry[]): NcxEntry | undefined {
+  return resolveNavPoint(ref, entries).entry
+}
+
+/**
+ * The number a navLabel leads with: `"7. The Senate."` → `7`,
+ * `"18 Meetings of Commission"` → `18`, `"105A. Agreements…"` → `105A`,
+ * `"86."` → `86`. `undefined` for worded labels (`"Part IV—…"`, `"Endnotes"`).
+ */
+export function leadingNumber(label: string): string | undefined {
+  const match = /^(\d[0-9A-Za-z.‐‑-]*?)\.?(?=[\s ]|$)/.exec(label)
+  return match ? match[1].replace(/[‐‑]/g, "-") : undefined
+}
+
+function placeOf(entry: NcxEntry): string {
+  const where = nearestStructural(entry)
+  return where
+    ? `in ${where}`
+    : "directly under the Act itself, in no Chapter or Part (where an enacting Act's covering clauses sit)"
+}
+
+/**
+ * Name an unresolvable ambiguity in the served text, or `undefined` when there
+ * is none.
+ *
+ * An Act that numbers the same provision twice outside its schedules cannot be
+ * addressed unambiguously by `s N`, and a reader who is handed one of the two
+ * with nothing said has no way to notice. `resolveNavPoint` picks the one a
+ * lawyer means; this says which was picked, where the other is, and how to ask
+ * for it — the ambiguity is named rather than resolved in silence.
+ *
+ * Schedule twins are deliberately out of scope: `sch 2 s 18` already addresses
+ * them, the schedule rule already decides them, and every tool that can serve
+ * one already prints the schedule in its breadcrumb.
+ */
+export function duplicateNumberNote(entry: NcxEntry, entries: readonly NcxEntry[]): string | undefined {
+  const number = leadingNumber(entry.label)
+  if (number === undefined || isInsideSchedule(entry)) return undefined
+
+  // Cheapest test first: most labels are worded and fail `leadingNumber`
+  // outright, so the ancestor walk runs only for the handful of numbered ones.
+  const peers = entries.filter(
+    (other) => other !== entry && leadingNumber(other.label) === number && !isInsideSchedule(other),
+  )
+  if (peers.length === 0) return undefined
+
+  const servedIsRooted = nearestStructural(entry) === undefined
+  const lines = [
+    `Note: this compilation numbers "${number}" more than once, so a bare reference cannot tell them apart.`,
+    `  served: ${entry.label} — ${placeOf(entry)}`,
+  ]
+  for (const peer of peers) {
+    const peerIsRooted = nearestStructural(peer) === undefined
+    const how =
+      peerIsRooted === servedIsRooted
+        ? "No reference form distinguishes it — use get_law_tree to see both."
+        : `Ask for it as "${peerIsRooted ? "cl" : "s"} ${number}".`
+    lines.push(`  also numbered ${number}: ${peer.label} — ${placeOf(peer)}. ${how}`)
+  }
+  return lines.join("\n")
+}
+
+/** Prefix served text with the ambiguity note, when there is one to make. */
+export function withDuplicateNumberNote(
+  text: string,
+  entry: NcxEntry,
+  entries: readonly NcxEntry[],
+): string {
+  const note = duplicateNumberNote(entry, entries)
+  return note ? `${note}\n\n${text}` : text
 }
 
 /** Where `id="…"` occurs in the HTML, or -1. Anchor ids never need escaping checks — they are `_Toc` + digits. */
@@ -89,11 +230,15 @@ function paragraphStart(html: string, position: number): number {
  * `_Toc` anchor in the HTML itself is used, and failing that the end of the
  * body. Both fallbacks keep the slice to one heading's worth of text instead
  * of everything to EOF.
+ *
+ * When the Act numbers this provision twice (`duplicateNumberNote`), the text
+ * is served with the ambiguity named above it — this is the only channel the
+ * served *text* has, and every tool that prints provision text goes through it.
  */
 export function sliceProvision(html: string, entry: NcxEntry, entries: NcxEntry[]): string | null {
   if (!entry.anchor) {
     // A volume root: the whole body is the "provision".
-    return htmlToText(html)
+    return withDuplicateNumberNote(htmlToText(html), entry, entries)
   }
 
   const anchorAt = anchorIndex(html, entry.anchor)
@@ -127,7 +272,7 @@ export function sliceProvision(html: string, entry: NcxEntry, entries: NcxEntry[
     }
   }
 
-  return htmlToText(html.slice(start, end))
+  return withDuplicateNumberNote(htmlToText(html.slice(start, end)), entry, entries)
 }
 
 /**

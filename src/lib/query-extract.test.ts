@@ -9,7 +9,15 @@
  * visible from the destination a query routes to.
  */
 
+import { readFileSync } from "node:fs"
 import { describe, expect, it } from "vitest"
+import { allTools } from "../tool-registry.js"
+import type { AuApiClient } from "./api-client.js"
+import { normalizeFrlVersion } from "./api-client.js"
+import { lawCache } from "./cache.js"
+import { resolveLawAlias } from "./law-alias.js"
+import { parseNcx } from "./ncx-parser.js"
+import { findNavPoint, sliceProvision } from "./provision-slicer.js"
 import {
   extractCitations,
   extractDates,
@@ -23,11 +31,14 @@ import {
   pointInTimeDate,
   primaryLawMention,
   provisionParam,
+  scopeProvisionsToLaw,
   searchExtract,
   statePreference,
   stripQuestionNoise,
   wantsFullText,
 } from "./query-extract.js"
+import { formatRef, parseSectionRef } from "./section-ref.js"
+import type { FrlTitle } from "./types.js"
 
 describe("law names", () => {
   it("reads an abbreviation through the alias table", () => {
@@ -93,9 +104,9 @@ describe("law names", () => {
 
 describe("provisions", () => {
   it("parses the ordinary shapes", () => {
-    expect(firstProvision("Fair Work Act s 387")).toBe("s 387")
-    expect(firstProvision("Corporations Act s 588G")).toBe("s 588G")
-    expect(firstProvision("Crimes Act 1900 s 61I")).toBe("s 61I")
+    expect(firstProvision("Fair Work Act s 387", undefined)).toBe("s 387")
+    expect(firstProvision("Corporations Act s 588G", undefined)).toBe("s 588G")
+    expect(firstProvision("Crimes Act 1900 s 61I", undefined)).toBe("s 61I")
   })
 
   it("applies an alias's schedule to a bare section number", () => {
@@ -115,8 +126,8 @@ describe("provisions", () => {
   it("ignores numbers that belong to the Act's own title", () => {
     // "Fair Work Regulations 2009" would otherwise parse as regulation 2009,
     // and that reading wins on position — the real reference comes after it.
-    expect(firstProvision("Fair Work Regulations 2009 reg 1.07")).toBe("reg 1.07")
-    expect(firstProvision("High Court Rules 2004 r 42.02")).toBe("r 42.02")
+    expect(firstProvision("Fair Work Regulations 2009 reg 1.07", undefined)).toBe("reg 1.07")
+    expect(firstProvision("High Court Rules 2004 r 42.02", undefined)).toBe("r 42.02")
   })
 
   it("rejects a reference that is a fragment of an ordinary word", () => {
@@ -141,13 +152,13 @@ describe("provisions", () => {
   })
 
   it("keeps a genuine roman-numeral part, which AGLC writes in capitals", () => {
-    expect(firstProvision("what does pt IVA of the CCA cover")).toBe("pt IVA")
-    expect(firstProvision("Constitution s 51(xx)")).toBe("s 51(xx)")
-    expect(firstProvision("sch IV cl 3")).toBe("sch IV cl 3")
+    expect(firstProvision("what does pt IVA of the CCA cover", undefined)).toBe("pt IVA")
+    expect(firstProvision("Constitution s 51(xx)", undefined)).toBe("s 51(xx)")
+    expect(firstProvision("sch IV cl 3", undefined)).toBe("sch IV cl 3")
   })
 
   it("still finds a real reference in the same sentence shape", () => {
-    expect(firstProvision("which version of the Migration Act s 501 applied on 20 March 2020")).toBe("s 501")
+    expect(firstProvision("which version of the Migration Act s 501 applied on 20 March 2020", undefined)).toBe("s 501")
   })
 
   it("finds every reference in a list, each with the schedule applied", () => {
@@ -157,7 +168,7 @@ describe("provisions", () => {
   })
 
   it("keeps a range as a range", () => {
-    expect(firstProvision("Fair Work Act ss 60-62")).toBe("ss 60–62")
+    expect(firstProvision("Fair Work Act ss 60-62", undefined)).toBe("ss 60–62")
   })
 
   it("finds none where there are none", () => {
@@ -165,6 +176,84 @@ describe("provisions", () => {
     expect(extractProvisions("Dela Cruz v R")).toHaveLength(0)
     expect(extractProvisions("[2010] NSWCCA 333")).toHaveLength(0)
     expect(extractProvisions("175 CLR 1")).toHaveLength(0)
+  })
+})
+
+describe("the (law, provision) choke point", () => {
+  it("resolves the law and scopes the provision in one call", () => {
+    const scope = scopeProvisionsToLaw({ query: "ACL", provisions: ["s 18"] })
+    expect(scope.mention?.name).toBe("Competition and Consumer Act 2010")
+    expect(scope.schedule).toBe("2")
+    expect(scope.provisions[0]).toMatchObject({ raw: "s 18", asked: "s 18", provision: "sch 2 s 18", rewritten: true })
+    expect(scope.rewritten).toBe(true)
+  })
+
+  it("writes the note the caller has to be shown", () => {
+    // A silent substitution is its own trap: the caller asked about s 18 and is
+    // being handed a different number, and only the note says why.
+    const scope = scopeProvisionsToLaw({ query: "ACL", provisions: ["s 18"] })
+    expect(scope.note).toContain("sch 2")
+    expect(scope.note).toContain("Competition and Consumer Act 2010")
+    expect(scope.note).toContain("body of the Act")
+  })
+
+  it("reads the provisions out of the query when none are given", () => {
+    // The `search_ai_law` shape: no provision parameter, the reference is in
+    // the sentence. Same guards as `extractProvisions`, then the schedule.
+    const scope = scopeProvisionsToLaw({ query: "ACL s 18 misleading conduct" })
+    expect(scope.provisions.map((entry) => entry.provision)).toEqual(["sch 2 s 18"])
+    // An empty list means "none asked for" and is NOT read out of the query.
+    expect(scopeProvisionsToLaw({ query: "ACL s 18", provisions: [] }).provisions).toEqual([])
+  })
+
+  it("scopes every provision in a batch, in order", () => {
+    const scope = scopeProvisionsToLaw({ query: "the ACL", provisions: ["s 18", "sch 2 s 29", "pt 2-1"] })
+    expect(scope.provisions.map((entry) => entry.provision)).toEqual(["sch 2 s 18", "sch 2 s 29", "sch 2 pt 2-1"])
+    expect(scope.provisions.map((entry) => entry.rewritten)).toEqual([true, false, true])
+  })
+
+  it("changes nothing when the law named is not a schedule", () => {
+    const scope = scopeProvisionsToLaw({ query: "CCA", provisions: ["s 45"] })
+    expect(scope.provisions[0]).toMatchObject({ provision: "s 45", rewritten: false })
+    expect(scope.schedule).toBeUndefined()
+    expect(scope.note).toBeUndefined()
+  })
+
+  it("changes nothing when there are no law words at all", () => {
+    // `registerId` without `query` — the id fixes the title, and nothing in it
+    // says which schedule a bare reference belongs to.
+    const scope = scopeProvisionsToLaw({ provisions: ["s 18"] })
+    expect(scope.provisions[0]).toMatchObject({ provision: "s 18", rewritten: false })
+    expect(scope.mention).toBeUndefined()
+  })
+
+  it("passes an unparseable provision through untouched", () => {
+    // Validity is the tool's own error path; this function decides schedules.
+    const scope = scopeProvisionsToLaw({ query: "ACL", provisions: ["Application of amendments"] })
+    expect(scope.provisions[0]).toMatchObject({ provision: "Application of amendments", rewritten: false })
+    expect(scope.provisions[0].ref).toBeUndefined()
+  })
+
+  it("hands back a parsed ref that matches the scoped string", () => {
+    // Callers that need a `SectionRef` (TOC lookup) must not re-parse the
+    // *unscoped* text — that is how a rewritten provision is looked up in the
+    // wrong place.
+    const scope = scopeProvisionsToLaw({ query: "ACL", provisions: ["s 18"] })
+    expect(scope.provisions[0].ref?.schedule).toBe("2")
+    expect(formatRef(scope.provisions[0].ref!)).toBe("sch 2 s 18")
+  })
+
+  it("covers the other schedule-carried bodies of law, not just the ACL", () => {
+    expect(scopeProvisionsToLaw({ query: "National Credit Code", provisions: ["s 47"] }).provisions[0].provision).toBe(
+      "sch 1 s 47",
+    )
+  })
+
+  it("reads an alias out of a whole sentence, where the alias table needs the whole string", () => {
+    // `resolveLawAlias("ACL s 18 misleading conduct")` returns no candidates —
+    // it matches a whole query. Tools that consult only that see no schedule.
+    expect(resolveLawAlias("ACL s 18 misleading conduct").candidates).toHaveLength(0)
+    expect(scopeProvisionsToLaw({ query: "ACL s 18 misleading conduct", provisions: ["s 18"] }).schedule).toBe("2")
   })
 })
 
@@ -308,4 +397,257 @@ describe("bare concept queries", () => {
     expect(isBareTermQuery("FW Act")).toBe(false)
     expect(isBareTermQuery("a very long phrase with far too many words in it")).toBe(false)
   })
+})
+
+// ──────────────────────────────────────────────────────────────────────────
+// The registry-wide guard
+// ──────────────────────────────────────────────────────────────────────────
+
+/**
+ * Every tool that takes (law words, provision) must apply the alias's schedule.
+ *
+ * This block is the reason `scopeProvisionsToLaw` exists. The ACL **is**
+ * schedule 2 of the *Competition and Consumer Act 2010*, so "ACL" + "s 18"
+ * means `sch 2 s 18` ("Misleading or deceptive conduct"); the Act's own s 18 is
+ * "Meetings of Commission" and it returns real text, so a tool that drops the
+ * schedule hands back a confident wrong answer with nothing in it that looks
+ * wrong.
+ *
+ * The rewrite was patched into `law-text.ts`, `batch-provisions.ts`,
+ * `provision-history.ts` and `route-patterns.ts` one tool at a time, and three
+ * review rounds running a *different* tool was found without it. Site-by-site
+ * does not converge, so the check is enumerated instead of listed: the schemas
+ * in `allTools` decide who is in scope, and a tool added tomorrow with a
+ * law-ish field and a provision-ish field is in scope the moment it is
+ * registered.
+ *
+ * A lib test reaching up to `tool-registry.ts` inverts the usual layering, and
+ * that is the point — the registry is the only place that knows every tool, and
+ * this rule is worth less than nothing if it is enforced only over the tools
+ * somebody remembered to list.
+ *
+ * What it proves for each tool: it never asks the Register for the *body's*
+ * s 18, and it says `sch 2 s 18` somewhere in its answer. What it does not
+ * prove: that a tool building a deep link rewrites the link itself rather than
+ * warning beside it (`get_external_links` passes on the warning alone).
+ */
+const LAW_FIELD = /^(?:query|lawName|law|act|title|name)$/
+const PROVISION_FIELD = /^provisions?$/
+
+/**
+ * Tools that do NOT apply the schedule, verified 2026-09-04.
+ *
+ * This is a ledger of open bugs, not a list of exemptions — each entry is a
+ * tool that answers "ACL s 18" with the body's s 18 today. **Delete the line
+ * when you fix the tool.** Adding a line is how a new tool opts out of the one
+ * rule this project's flagship example exists to state, so a reviewer should
+ * treat a new entry the way they would treat a new `@ts-expect-error`.
+ */
+const KNOWN_GAPS: Record<string, string> = {
+  get_instrument_provisions:
+    "parses `provision` with parseSectionRef and never consults `query` — prints the alias note, then serves the body provision under it.",
+  get_historical_law:
+    "same shape: requireRef(input.provision) with no mention, so a point-in-time read of 'ACL s 18' is the body's s 18 as at that date.",
+  applicable_law:
+    "takes `lawName` + `provision` and fetches both the as-at text and the diff for the unscoped reference.",
+  impact_map:
+    "takes `lawName` + `provision`; its own description tells the caller to pass the schedule by hand instead.",
+  legal_analysis: "dispatcher — inherits impact_map's and applicable_law's gap; nothing to fix here separately.",
+}
+
+/** Zod object shape, defensively: the tests must not go quietly vacuous on a zod upgrade. */
+function schemaFields(schema: unknown): string[] {
+  const holder = schema as { shape?: unknown; _def?: { shape?: unknown } }
+  const shape = holder?.shape ?? holder?._def?.shape
+  const resolved = typeof shape === "function" ? (shape as () => object)() : shape
+  return resolved ? Object.keys(resolved as object) : []
+}
+
+function toolsWith(predicate: (fields: string[]) => boolean): RegistryTool[] {
+  return (allTools as RegistryTool[]).filter((tool) => predicate(schemaFields(tool.schema)))
+}
+
+interface RegistryTool {
+  name: string
+  schema: unknown
+  handler: (client: AuApiClient, input: never) => Promise<{ content: Array<{ text: string }> }>
+}
+
+const CCA_NCX = readFileSync(new URL("../tools/__fixtures__/cca-schedules.ncx", import.meta.url), "utf8")
+const CCA_VOL1 = readFileSync(new URL("./__fixtures__/cca-vol1-slice.html", import.meta.url), "utf8")
+const CCA_VOL4 = readFileSync(new URL("./__fixtures__/cca-vol4-slice.html", import.meta.url), "utf8")
+const CCA_ENTRIES = parseNcx(CCA_NCX)
+const CCA_VERSIONS = (
+  JSON.parse(readFileSync(new URL("../tools/__fixtures__/frl-versions-cca.json", import.meta.url), "utf8")) as {
+    value: unknown[]
+  }
+).value.map(normalizeFrlVersion)
+const CCA_TITLE: FrlTitle = {
+  id: "C2004A00109",
+  name: "Competition and Consumer Act 2010",
+  collection: "Act",
+  status: "InForce",
+  isPrincipal: true,
+  isInForce: true,
+}
+
+/**
+ * One Register, stubbed: the CCA, its compilations and its real NCX (which
+ * carries both s 18s). `asked` records every provision string that reached the
+ * upstream boundary — that is where "did the tool apply the schedule" is
+ * answered, rather than in the prose.
+ */
+function registerStub(asked: string[]): AuApiClient {
+  const volumeHtml = (volume: number): string => (volume === 1 ? CCA_VOL1 : CCA_VOL4)
+  return {
+    getTitle: async () => CCA_TITLE,
+    searchTitles: async () => ({ count: 1, titles: [CCA_TITLE] }),
+    listVersions: async () => CCA_VERSIONS,
+    listAmenders: async () => ({ count: 0, titles: [] }),
+    findVersion: async (p: { asAt?: string; registerId?: string }) =>
+      (p.registerId
+        ? CCA_VERSIONS.find((version) => version.registerId === p.registerId)
+        : CCA_VERSIONS.find((version) => (version.start ?? "") <= `${p.asAt}T00:00:00`)) ??
+      CCA_VERSIONS[CCA_VERSIONS.length - 1],
+    getToc: async () => CCA_ENTRIES,
+    getVolumeHtml: async (_id: string, volume: number) => volumeHtml(volume),
+    getProvision: async (_id: string, provision: string, date?: string) => {
+      asked.push(provision)
+      const ref = parseSectionRef(provision)
+      const entry = ref ? findNavPoint(ref, CCA_ENTRIES) : undefined
+      if (!entry) throw new Error(`no such provision: ${provision}`)
+      const volume = Number(/document_(\d+)/.exec(entry.volumeDoc)?.[1] ?? 1)
+      return {
+        ref: provision,
+        heading: entry.label,
+        text: sliceProvision(volumeHtml(volume), entry, CCA_ENTRIES) ?? `${provision} as at ${date ?? "latest"}`,
+        volumeDoc: entry.volumeDoc,
+        breadcrumb: [],
+      }
+    },
+    fetchJson: async () => ({ "@odata.count": 1, value: [CCA_TITLE] }),
+    fetchHtml: async () => "<html></html>",
+    fetchBinary: async () => new Uint8Array(),
+  } as unknown as AuApiClient
+}
+
+/**
+ * Fields the harness fills so a tool gets far enough to use the provision at
+ * all. Only ever a neutral value for a field whose *absence* short-circuits the
+ * handler — `get_historical_law` refuses without a date, `legal_analysis`
+ * without a mode.
+ */
+const NEUTRAL_FIELDS: Record<string, unknown> = {
+  date: "2020-01-01",
+  fromDate: "2026-01-15",
+  mode: "impact_map",
+}
+
+async function runWithAclSection18(tool: RegistryTool): Promise<{ text: string; asked: string[] }> {
+  lawCache.clear()
+  const input: Record<string, unknown> = {}
+  for (const field of schemaFields(tool.schema)) {
+    if (LAW_FIELD.test(field)) input[field] = "ACL"
+    else if (field === "provision") input[field] = "s 18"
+    else if (field === "provisions") input[field] = ["s 18"]
+    else if (NEUTRAL_FIELDS[field] !== undefined) input[field] = NEUTRAL_FIELDS[field]
+  }
+  const asked: string[] = []
+  try {
+    const parsed = (tool.schema as { parse: (value: unknown) => never }).parse(input)
+    const result = await tool.handler(registerStub(asked), parsed)
+    return { text: result.content.map((part) => part.text).join("\n"), asked }
+  } catch (error) {
+    return { text: `threw: ${error instanceof Error ? error.message : String(error)}`, asked }
+  }
+}
+
+describe("the alias's schedule, across the whole registry", () => {
+  it("finds the tools that take a law and a provision", () => {
+    // Guards the enumeration itself: a zod upgrade that changes `.shape` would
+    // otherwise leave every test below passing over an empty list.
+    const found = toolsWith(
+      (fields) => fields.some((f) => LAW_FIELD.test(f)) && fields.some((f) => PROVISION_FIELD.test(f)),
+    ).map((tool) => tool.name)
+    expect(found).toEqual(
+      expect.arrayContaining(["get_law_text", "get_batch_provisions", "get_provision_history", "compare_old_new"]),
+    )
+    expect(found.length).toBeGreaterThanOrEqual(10)
+  })
+
+  it("every one of them reads 'ACL' + 's 18' as sch 2 s 18", async () => {
+    const candidates = toolsWith(
+      (fields) => fields.some((f) => LAW_FIELD.test(f)) && fields.some((f) => PROVISION_FIELD.test(f)),
+    ).filter((tool) => KNOWN_GAPS[tool.name] === undefined)
+
+    for (const tool of candidates) {
+      const { text, asked } = await runWithAclSection18(tool)
+      const bodySection = asked.filter((provision) => /^s\.?\s*18$/i.test(provision.trim()))
+      expect(
+        bodySection,
+        `${tool.name} asked the Register for the Act's own s 18 ("Meetings of Commission"). ` +
+          "Route (query|lawName, provision) through scopeProvisionsToLaw().",
+      ).toEqual([])
+      expect(
+        text,
+        `${tool.name} never says "sch 2 s 18" — it either dropped the schedule or applied it silently. ` +
+          "Route (query|lawName, provision) through scopeProvisionsToLaw() and print its note.",
+      ).toContain("sch 2 s 18")
+    }
+  }, 60_000)
+
+  it("keeps the ledger of tools that still drop it honest", () => {
+    // A stale entry is worse than none: it would silently exempt a tool that no
+    // longer has the field, or a name that no longer exists.
+    const candidates = new Set(
+      toolsWith(
+        (fields) => fields.some((f) => LAW_FIELD.test(f)) && fields.some((f) => PROVISION_FIELD.test(f)),
+      ).map((tool) => tool.name),
+    )
+    for (const name of Object.keys(KNOWN_GAPS)) {
+      expect(candidates.has(name), `${name} is listed as a known gap but is no longer such a tool — delete the entry`).toBe(
+        true,
+      )
+      expect(KNOWN_GAPS[name].length, `${name}'s ledger entry must say what is wrong`).toBeGreaterThan(20)
+    }
+  })
+
+  it("scopes a provision read out of the question itself, in every tool that reads one", async () => {
+    // The other half of the class, and the one round 3 missed: a tool with no
+    // `provision` field that lifts the reference out of the query and prints it
+    // as the follow-up call (`search_ai_law`, and every chain that embeds it).
+    // s 29 rather than s 18 because "s 18" is also the canned example in
+    // get_law_text's "Next:" block, and a canned example is not a reading of
+    // this question.
+    const swept = toolsWith(
+      (fields) => fields.some((f) => LAW_FIELD.test(f)) && !fields.some((f) => PROVISION_FIELD.test(f)),
+    )
+    expect(swept.map((tool) => tool.name)).toContain("search_ai_law")
+
+    for (const tool of swept) {
+      lawCache.clear()
+      const input: Record<string, unknown> = {}
+      for (const field of schemaFields(tool.schema)) {
+        if (LAW_FIELD.test(field)) input[field] = "ACL s 29 false representations"
+      }
+      const asked: string[] = []
+      let text = ""
+      try {
+        const parsed = (tool.schema as { parse: (value: unknown) => never }).parse(input)
+        text = (await tool.handler(registerStub(asked), parsed)).content.map((part) => part.text).join("\n")
+      } catch {
+        continue // A tool this stub cannot satisfy prints no follow-up call at all.
+      }
+      const hinted = [...text.matchAll(/provision\s*[:=]\s*"([^"]{1,24})"/g)].map((match) => match[1].trim())
+      expect(
+        hinted.filter((provision) => /^s\.?\s*29$/i.test(provision)),
+        `${tool.name} printed a follow-up call at the body's s 29 for a question about the ACL. ` +
+          "Read provisions out of the query with scopeProvisionsToLaw({ query }).",
+      ).toEqual([])
+      expect(
+        asked.filter((provision) => /^s\.?\s*29$/i.test(provision.trim())),
+        `${tool.name} asked the Register for the body's s 29 for a question about the ACL.`,
+      ).toEqual([])
+    }
+  }, 60_000)
 })

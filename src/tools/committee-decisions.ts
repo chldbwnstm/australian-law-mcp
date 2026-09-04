@@ -43,7 +43,7 @@ import {
   searchNacc,
 } from "../lib/sources/integrity-sources.js"
 import { renderDocument, renderSearch } from "../lib/sources/render.js"
-import type { SourceSearchResult } from "../lib/sources/types.js"
+import type { SourceHit, SourceSearchResult } from "../lib/sources/types.js"
 import { searchCases } from "./precedents.js"
 
 /**
@@ -175,6 +175,48 @@ export const GetPrivacySchema = z.object({
 
 export type GetPrivacyInput = z.infer<typeof GetPrivacySchema>
 
+/**
+ * `[2026] AICmr 40` — year, series, number. Brackets optional on input because
+ * callers paste citations both ways; the canonical form is rebuilt, so two
+ * spellings of one citation compare equal and two citations never do.
+ */
+const AICMR_CITATION = /\[?((?:19|20)\d{2})\]?\s*AICmr\s*(\d{1,5})\b/i
+
+/** The comparable form of an AICmr citation, or nothing if there is none in `value`. */
+export function canonicalAicmr(value: string | undefined): string | undefined {
+  if (!value) return undefined
+  const match = AICMR_CITATION.exec(value)
+  return match ? `[${match[1]}] AICmr ${Number(match[2])}` : undefined
+}
+
+function looseKey(value: string): string {
+  return value.toLowerCase().replace(/\s+/g, " ").trim()
+}
+
+/**
+ * The determination the caller asked for — **never** the nearest one.
+ *
+ * The OAIC index has no keyword parameter, so `searchDeterminations` filters a
+ * fetched page locally and that filter drops one-character tokens
+ * (`oaic.filterHits`): asked for `[2025] AICmr 2` it keeps every 2025
+ * determination on the page, in the index's own order. Taking `hits[0]` off
+ * that list therefore served `[2025] AICmr 175` under the citation the caller
+ * typed — a different record presented as the one requested, with nothing in
+ * the rendering to say so. The identifier has to match, or there is no answer.
+ */
+export function exactDeterminationHit(hits: readonly SourceHit[], id: string): SourceHit | undefined {
+  const wanted = canonicalAicmr(id)
+  if (wanted) {
+    return hits.find((hit) =>
+      [hit.citation, hit.id, hit.title].some((field) => canonicalAicmr(field) === wanted),
+    )
+  }
+  // No citation in the id at all: an exact identifier/title match is still an
+  // answer, keyword overlap is not.
+  const key = looseKey(id)
+  return hits.find((hit) => looseKey(hit.id) === key || looseKey(hit.title) === key)
+}
+
 export async function getPrivacyDecisionText(
   client: AuApiClient,
   input: GetPrivacyInput,
@@ -183,13 +225,24 @@ export async function getPrivacyDecisionText(
     const params: Parameters<typeof oaic.searchDeterminations>[1] = { query: input.id }
     if (input.page) params.page = input.page
     const result = await oaic.searchDeterminations(client, params)
-    const hit = result.hits[0]
+    const hit = exactDeterminationHit(result.hits, input.id)
     if (!hit) {
+      const seen = result.hits
+        .map((candidate) => candidate.citation ?? candidate.id)
+        .filter((candidate) => candidate.length > 0)
+        .slice(0, 8)
       throw new LawApiError(
         `${input.id} was not on OAIC determinations index page ${input.page ?? 1}.`,
         ErrorCodes.UPSTREAM_NO_DATA,
         [
           "⚠️ The index is paginated and has no search parameter, so this only rules out one page.",
+          ...(seen.length > 0
+            ? [
+                `Determinations on that page that the filter kept, none of which is ${input.id}: ${seen.join(", ")}` +
+                  `${result.hits.length > seen.length ? `, … (${result.hits.length} in all)` : ""}. ` +
+                  "⚠️ Do not treat any of these as the one you asked for.",
+              ]
+            : []),
           "Raise `page` and try again, or run search_decisions(domain=\"privacy\") without a query to see what is on each page.",
         ],
       )

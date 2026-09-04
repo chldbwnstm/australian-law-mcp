@@ -29,9 +29,8 @@ import { z } from "zod"
 import type { AuApiClient } from "../lib/api-client.js"
 import { formatToolError } from "../lib/errors.js"
 import { resolveLawAlias } from "../lib/law-alias.js"
-import { extractProvisions } from "../lib/query-extract.js"
+import { scopeProvisionsToLaw } from "../lib/query-extract.js"
 import { truncateResponse } from "../lib/schemas.js"
-import { formatRef } from "../lib/section-ref.js"
 import { frlSearchUrl, searchTitlesMatching } from "../lib/sources/frl-search.js"
 import type { FrlTitle, ToolResponse } from "../lib/types.js"
 import { collectionLabel } from "./statute-helpers/format.js"
@@ -120,6 +119,29 @@ export async function searchAiLawStructured(
     )
   }
 
+  // What the question already told us: which statute, and which provisions of
+  // it. One call, because the two answers have to agree — the schedule the
+  // statute-name resolves to is what a bare "s 18" belongs to.
+  //
+  // The *guarded* extractor sits behind this, not the raw document scanner.
+  // `section-ref`'s scanner is case-insensitive, so its roman-numeral branch
+  // reads ordinary words as provisions — "small business" → s MA, "sections
+  // mix" → ss MIX, "applies" → app LIE. Here that phantom would be printed
+  // back as "the provision reference read out of your question" and handed on
+  // as the next call. `scopeProvisionsToLaw` masks the statute's own title,
+  // drops fragments and un-capitalised roman numbers, and then applies the
+  // alias's schedule (`query-extract.ts`) — so this tool's follow-up call, the
+  // router's, and `get_law_text`'s own reading cannot disagree.
+  //
+  // The schedule is the load-bearing half: "ACL s 18 misleading conduct" must
+  // print `provision="sch 2 s 18"`, because the CCA's own s 18 is "Meetings of
+  // Commission" and the follow-up call is the whole product of this tool.
+  // `resolveLawAlias` above sees no alias in that sentence (it matches a whole
+  // string), so this is also where the "sch 2" note comes from.
+  const scope = scopeProvisionsToLaw({ query })
+  const provisionRefs = scope.provisions.map((provision) => provision.provision)
+  if (scope.note) notes.push(scope.note)
+
   const searches: Array<{ via: "query" | "alias"; text: string }> = [{ via: "query", text: query }]
   if (aliasHit && alias.searchText && alias.searchText !== query) {
     searches.push({ via: "alias", text: alias.searchText })
@@ -145,17 +167,6 @@ export async function searchAiLawStructured(
       }
     }),
   )
-
-  // The *guarded* extractor, not the raw document scanner. `section-ref`'s
-  // scanner is case-insensitive, so its roman-numeral branch reads ordinary
-  // words as provisions — "small business" → s MA, "sections mix" → ss MIX,
-  // "applies" → app LIE. Here that phantom is printed back as "the provision
-  // reference read out of your question" and handed on as the next call, which
-  // sends the caller to look up a section nobody wrote. `extractProvisions`
-  // masks the statute's own title and drops both fragments and un-capitalised
-  // roman numbers (`query-extract.ts`), and is the same reading the router
-  // uses — so the two cannot disagree about what the question cited.
-  const provisionRefs = extractProvisions(query).map(formatRef)
 
   // De-duplicate across the two passes, keeping the first attribution: a title
   // the question itself named should not be relabelled as an alias hit.
@@ -194,7 +205,17 @@ export async function searchAiLawStructured(
         {
           type: "text",
           text: truncateResponse(
-            render({ query, ranked, titleSignals, notes, passes, provisionRefs, everyPassFailed, input }),
+            render({
+              query,
+              ranked,
+              titleSignals,
+              notes,
+              passes,
+              provisionRefs,
+              provisionsScoped: scope.rewritten,
+              everyPassFailed,
+              input,
+            }),
           ),
         },
       ],
@@ -223,6 +244,8 @@ interface RenderArgs {
   /** One entry per search pass that answered, with the count that pass reported. */
   passes: Array<{ text: string; count: number }>
   provisionRefs: string[]
+  /** A reference was moved into the schedule the named law *is* (ACL → sch 2). */
+  provisionsScoped: boolean
   everyPassFailed: boolean
   input: SearchAiLawInput
 }
@@ -282,8 +305,9 @@ function render(args: RenderArgs): string {
 
   if (args.provisionRefs.length > 0) {
     lines.push(
-      `Provision reference(s) read out of your question: ${args.provisionRefs.join(", ")} — ` +
-        "the hints above ask for those directly.",
+      `Provision reference(s) read out of your question${
+        args.provisionsScoped ? ", inside the schedule the law you named is" : ""
+      }: ${args.provisionRefs.join(", ")} — the hints above ask for those directly.`,
     )
   }
   lines.push(

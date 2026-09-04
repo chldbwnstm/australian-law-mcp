@@ -8,6 +8,11 @@ import {
   toIso,
   toIsoDate,
 } from "./au-dates.js"
+import {
+  FINANCIAL_SPAN_SEPARATORS,
+  FINANCIAL_YEAR_MARKERS,
+  RANGE_PATTERNS,
+} from "./au-date-patterns.js"
 
 // Fixed "now" so every relative phrase is deterministic. Wednesday.
 const NOW = new Date(2026, 8, 3) // 3 September 2026, local time
@@ -192,23 +197,10 @@ describe("the Australian financial year", () => {
     })
   }
 
-  // A financial year is twelve months. A wider span carrying the same marker
-  // is a run of them, and answering it with the last one silently drops every
-  // year but the final twelve months of the period asked about.
-  it("does not shrink a multi-year span to its closing financial year", () => {
-    const cases: Array<[input: string, from: string, to: string]> = [
-      ["ATO rulings financial years 2019-2024", "2019-01-01", "2024-12-31"],
-      ["reports for financial years 2018-2022", "2018-01-01", "2022-12-31"],
-      ["the financial years 2010-2020", "2010-01-01", "2020-12-31"],
-      ["the 2018 to 2021 financial years", "2018-01-01", "2021-12-31"],
-    ]
-    for (const [input, from, to] of cases) {
-      expect({ input, ...parseAuDateRange(input, NOW)!.range }).toEqual({ input, from, to })
-    }
-  })
-
   it("leaves a calendar range alone", () => {
     // No marker, so this is not a financial year and must not be read as one.
+    // "to" is a financial-span separator as much as "-" is, so this is also
+    // what proves the marker, not the separator, is what makes a span financial.
     expect(parseAuDateRange("amendments 2015-2019", NOW)!.range).toEqual({
       from: "2015-01-01",
       to: "2019-12-31",
@@ -217,6 +209,129 @@ describe("the Australian financial year", () => {
       from: "2019-01-01",
       to: "2019-12-31",
     })
+    expect(parseAuDateRange("2015 to 2019", NOW)!.pattern).toBe("year-to-year")
+    expect(parseAuDateRange("amendments 2015-2019", NOW)!.pattern).toBe("year-to-year")
+  })
+})
+
+describe("a multi-year financial span", () => {
+  // A financial year is twelve months; a wider span carrying the same marker is
+  // a run of them, and the run is the answer.
+  //
+  // The regression this pins: `financial-year-span` matched the phrase, declined
+  // to resolve anything wider than one year, and whichever narrower pattern bit
+  // next answered a six-year question with twelve months of it — differently for
+  // each spelling, which is why no single example exposed it. "FY 2019-2024"
+  // reached `financial-year` and came back as the year ending 30 June *2019*;
+  // "financial years 2019-2024" missed that pattern's singular arms and came
+  // back as six calendar years; "the 2019-2024 financial year" came back as the
+  // year ending 30 June 2024. One question, three answers, one of them holding
+  // none of the period asked about.
+  const SPAN = { from: "2019-07-01", to: "2024-06-30" }
+
+  // Written out rather than generated, so the regression stays legible.
+  const spellings = [
+    "FY 2019-2024",
+    "FY2019-2024",
+    "FY2019-24",
+    "financial year 2019-2024",
+    "financial years 2019-2024",
+    "amendments in FY 2019-2024",
+    "ATO rulings financial years 2019-2024",
+    "the 2019-2024 financial year",
+    "the 2019-2024 financial years",
+    "the 2019-2024 FY",
+    "the 2019-24 FY",
+    "FY 2019/2024",
+    "FY 2019 to 2024",
+    "FY2019-FY2024",
+  ]
+
+  for (const spelling of spellings) {
+    it(`keeps the whole span in ${JSON.stringify(spelling)}`, () => {
+      const parsed = parseAuDateRange(spelling, NOW)!
+      expect({ pattern: parsed.pattern, ...parsed.range }).toEqual({
+        pattern: "financial-year-span",
+        ...SPAN,
+      })
+    })
+  }
+
+  /**
+   * Every phrase the pattern's own marker and separator lists admit, built from
+   * the exported constants rather than from a hand-written list: a spelling
+   * added to the parser cannot opt out of these two tests by not being written
+   * down here.
+   */
+  function admittedSpellings(): string[] {
+    const phrases: string[] = []
+    for (const marker of FINANCIAL_YEAR_MARKERS) {
+      // "FY2019" is written closed up; "financial year2019" is not.
+      const gaps = marker === "FY" ? ["", " "] : [" "]
+      for (const separator of FINANCIAL_SPAN_SEPARATORS) {
+        const written = /^[a-z]+$/i.test(separator) ? [` ${separator} `] : [separator, ` ${separator} `]
+        for (const sep of written) {
+          for (const end of ["2024", "24"]) {
+            for (const gap of gaps) {
+              phrases.push(`${marker}${gap}2019${sep}${end}`)
+              phrases.push(`${marker}${gap}2019${sep}${marker}${gap}${end}`)
+              phrases.push(`amendments in the 2019${sep}${end} ${marker}`)
+            }
+          }
+        }
+      }
+    }
+    return phrases
+  }
+
+  it("answers every spelling its marker and separator lists admit", () => {
+    const phrases = admittedSpellings()
+    // The generator has to actually reach every entry of both lists, or the two
+    // tests below would be vacuous for whatever it skipped.
+    for (const marker of FINANCIAL_YEAR_MARKERS) {
+      expect(phrases.some((phrase) => phrase.includes(marker))).toBe(true)
+    }
+    for (const separator of FINANCIAL_SPAN_SEPARATORS) {
+      expect(phrases.some((phrase) => phrase.includes(separator))).toBe(true)
+    }
+    for (const phrase of phrases) {
+      const parsed = parseAuDateRange(phrase, NOW)
+      expect({ phrase, pattern: parsed?.pattern, ...parsed?.range }).toEqual({
+        phrase,
+        pattern: "financial-year-span",
+        ...SPAN,
+      })
+    }
+  })
+
+  it("never declines a phrase its own regex matched", () => {
+    // The choke point. Returning `undefined` here is what handed the span to a
+    // pattern that reads one year, so the entry has to be total: matched means
+    // answered, for every spelling and for the malformed spans too.
+    const entry = RANGE_PATTERNS.find((pattern) => pattern.name === "financial-year-span")!
+    const phrases = [...admittedSpellings(), "FY 2024-2019", "FY 2019-2019", "FY2019-19"]
+    for (const phrase of phrases) {
+      const match = entry.regex.exec(phrase)
+      expect({ phrase, matched: match !== null }).toEqual({ phrase, matched: true })
+      const range = entry.resolve(match!, { now: NOW })
+      expect({ phrase, answered: range !== undefined }).toEqual({ phrase, answered: true })
+      expect({ phrase, ordered: range!.from < range!.to }).toEqual({ phrase, ordered: true })
+    }
+  })
+
+  it("reads the everyday two-year span as the same arithmetic", () => {
+    // "2020-21" is the two-year case of "first year opens it, last year closes
+    // it", not a separate rule. Reading a wider span as FY2019 *through* FY2024
+    // instead would make the opening date depend on the closing one: the window
+    // for "FY2019-2020" would open on 1 July 2019 and the one for "FY2019-2021"
+    // on 1 July 2018, walking the start backwards as the caller extends the end.
+    expect(parseAuDateRange("FY2020-21", NOW)!.range).toEqual({ from: "2020-07-01", to: "2021-06-30" })
+    expect(parseAuDateRange("FY2019-2020", NOW)!.range).toEqual({ from: "2019-07-01", to: "2020-06-30" })
+    expect(parseAuDateRange("FY2019-2021", NOW)!.range).toEqual({ from: "2019-07-01", to: "2021-06-30" })
+    // A single financial year still belongs to `financial-year`: no span, no
+    // steal, and FY21 is still the twelve months ending 30 June 2021.
+    expect(parseAuDateRange("FY21", NOW)!.pattern).toBe("financial-year")
+    expect(parseAuDateRange("the 2021 financial year", NOW)!.pattern).toBe("financial-year")
   })
 })
 

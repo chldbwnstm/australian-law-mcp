@@ -258,6 +258,33 @@ function namedYear(token: string): number {
   return value >= 70 ? 1900 + value : 2000 + value
 }
 
+/**
+ * The spellings that mark a hyphenated year span as *financial* years, and the
+ * separators such a span may be written with.
+ *
+ * Exported because the tests enumerate them: every phrase these two lists admit
+ * has to be answered by `financial-year-span` itself. A spelling added here and
+ * not answered there fails that test instead of silently leaking to a later
+ * pattern that reads one end of the span — which is precisely how "FY 2019-2024"
+ * came back as the twelve months ending 30 June 2019.
+ *
+ * Deliberately *not* shared with `year-to-year`, whose separator set is its own
+ * business: a bare "2015/2019" is not a calendar range, and widening that entry
+ * is not this entry's job.
+ */
+export const FINANCIAL_YEAR_MARKERS = ["FY", "financial year", "financial years"] as const
+export const FINANCIAL_SPAN_SEPARATORS = ["-", "–", "—", "/", "to"] as const
+
+/** Longest first, so "financial years" is never read as "financial year" + stray "s". */
+const FY_MARKER = `(?:${[...FINANCIAL_YEAR_MARKERS]
+  .sort((a, b) => b.length - a.length)
+  .map((marker) => marker.replace(/ /g, "\\s+"))
+  .join("|")})`
+
+const FY_SPAN_SEPARATOR = `\\s*(?:${FINANCIAL_SPAN_SEPARATORS.map((separator) =>
+  separator.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+).join("|")})\\s*`
+
 /** Range patterns, most specific first. */
 export const RANGE_PATTERNS: readonly RangePattern[] = [
   {
@@ -282,27 +309,48 @@ export const RANGE_PATTERNS: readonly RangePattern[] = [
     },
   },
   {
-    // "FY2020-21", "the 2020-21 financial year", "2020/21 FY". The marker has
-    // to appear on one side or the other: a bare "2015-2019" is a calendar
-    // range and belongs to `year-to-year` below, which is why this cannot
-    // simply be folded into it.
+    // "FY2020-21", "the 2020-21 financial year", "2020/21 FY" — and the wider
+    // "financial years 2019-2024", "FY2019 to FY2024". The marker has to appear
+    // on one side or the other: a bare "2015-2019" is a calendar range and
+    // belongs to `year-to-year` below, which is why this cannot simply be
+    // folded into it.
     //
-    // One financial year spans two calendar years and no more, so the closing
-    // year has to be the opening one plus one. Without that check the marker
-    // alone was enough to swallow a multi-year request: "financial years
-    // 2019-2024" resolved to the twelve months ending 30 June 2024 and the
-    // other five years asked about were dropped in silence. Anything wider
-    // falls through to `year-to-year`, which keeps the whole span.
+    // **This entry answers every phrase it matches.** It never returns
+    // `undefined` and it never hands a span down the table, because the
+    // patterns below read a single year and would answer a six-year question
+    // with twelve months of it. It used to do exactly that for anything wider
+    // than one financial year, and the damage was per-spelling, which is why
+    // ordering alone could not repair it: "FY 2019-2024" fell to
+    // `financial-year`'s `FY\s?(\d{2,4})` arm and came back as the year ending
+    // 30 June **2019**; the same span written "financial years 2019-2024"
+    // missed that arm (it wants the singular) and landed on `year-to-year`;
+    // "the 2019-2024 financial year" hit a third arm and came back as the year
+    // ending 30 June 2024. Three spellings of one question, three answers.
+    //
+    // Both years written are calendar years, and the period they name runs from
+    // 1 July of the first to 30 June of the last — one arithmetic at every
+    // width, of which the everyday "2020-21" is just the two-year case. The
+    // other reading of a wide span — FY2019 *through* FY2024, each named by the
+    // year it ends in — is rejected because it makes the opening date depend on
+    // the closing one: "FY2019-2020" would open on 1 July 2019 and
+    // "FY2019-2021" on 1 July 2018, walking the start of the window backwards
+    // as the caller extends its end.
     name: "financial-year-span",
     regex: new RegExp(
-      `\\b(?:FY|financial\\s+years?)\\s*${YEAR}\\s*[-/–—]\\s*${SPAN_END}\\b` +
-      `|\\b${YEAR}\\s*[-/–—]\\s*${SPAN_END}\\s+(?:financial\\s+year|FY)\\b`,
+      `\\b${FY_MARKER}\\s*${YEAR}${FY_SPAN_SEPARATOR}(?:${FY_MARKER}\\s*)?${SPAN_END}\\b` +
+      `|\\b${YEAR}${FY_SPAN_SEPARATOR}${SPAN_END}\\s+${FY_MARKER}\\b`,
       "i",
     ),
     resolve: (m) => {
-      const start = Number(m[1] ?? m[3])
-      const end = spanEndYear(start, m[2] ?? m[4])
-      return end === start + 1 ? financialYear(end) : undefined
+      const first = Number(m[1] ?? m[3])
+      const written = spanEndYear(first, m[2] ?? m[4])
+      // A span written backwards ("FY 2024-2019") names the same years, and
+      // "FY 2019-2019" still names a period; ordering the pair and giving it a
+      // floor of twelve months keeps this entry total, so there is no input
+      // that matches here and gets answered somewhere narrower.
+      const opens = Math.min(first, written)
+      const closes = Math.max(opens + 1, first, written)
+      return { from: financialYear(opens + 1).from, to: financialYear(closes).to }
     },
   },
   {

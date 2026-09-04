@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
+  DASH_LIKE,
   extractSectionRefs,
   formatRef,
   normaliseRef,
@@ -8,6 +9,7 @@ import {
   type RefKind,
   type SectionRef,
 } from "./section-ref.js"
+import { KIND_VOCAB } from "./section-ref-vocab.js"
 
 type Expected = Partial<SectionRef> & { kind: RefKind }
 
@@ -165,6 +167,64 @@ describe("a typographic hyphen is not a range dash", () => {
   })
 })
 
+// The Federal Register separates a heading's number from its title with an EM
+// DASH — all 284 navLabels of `__fixtures__/cca-document.ncx` do it, and so
+// does its body text. Reading that dash as a range dash made the scanner
+// swallow the heading: "Schedule 1—2019 measures" came back as the schedule
+// range `sch 1-2019`, "Part 1—2015 transitional provisions" as `pts 1–2015`
+// and "s 45 — 1 January 2011" as the fabricated ITAA-style `s 45-1`.
+//
+// The three lists below are the whole dash class, split by role. The first
+// test fails if a character is ever added to `DASH_LIKE` without being given
+// one, so a new dash cannot silently opt out of these cases.
+describe("a heading separator is not a range dash", () => {
+  const HYPHEN_SPELLINGS = ["-", "‐", "‑"]
+  const RANGE_DASHES = ["-", "‒", "–", "−"]
+  const HEADING_DASHES = ["—", "―"]
+  const codePoint = (dash: string) => `U+${dash.codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0")}`
+
+  it("gives every dash character this module folds a role", () => {
+    const classified = [...new Set([...HYPHEN_SPELLINGS, ...RANGE_DASHES, ...HEADING_DASHES])].sort()
+    expect(classified).toEqual([...new Set(["-", ...DASH_LIKE])].sort())
+  })
+
+  for (const dash of HEADING_DASHES) {
+    it(`reads ${codePoint(dash)} between a number and a title as a separator`, () => {
+      expect(extractSectionRefs(`Schedule 1${dash}2019 measures`).map(formatRef)).toEqual(["sch 1"])
+      expect(extractSectionRefs(`Part 1${dash}2015 transitional provisions`).map(formatRef)).toEqual(["pt 1"])
+      expect(extractSectionRefs(`Division 3${dash}30 day rule`).map(formatRef)).toEqual(["div 3"])
+      expect(extractSectionRefs(`Schedule 2${dash}The Australian Consumer Law`).map(formatRef)).toEqual(["sch 2"])
+      expect(extractSectionRefs(`s 45 ${dash} 1 January 2011`).map(formatRef)).toEqual(["s 45"])
+      expect(extractSectionRefs(`Part IVA${dash}News media and digital platforms`).map(formatRef)).toEqual(["pt IVA"])
+    })
+
+    // The other half of the trade, stated rather than left to be rediscovered:
+    // prose that writes a range with a heading dash (AGLC r 1.9 writes an en
+    // dash) scans as its first half — a reference the author did write —
+    // while the anchored parser still reads the range, because there the
+    // caller has said the whole string is one reference.
+    it(`scans a ${codePoint(dash)} range as its first half, and still parses it whole when anchored`, () => {
+      expect(extractSectionRefs(`ss 5${dash}6 of the Act`).map(formatRef)).toEqual(["ss 5"])
+      expect(normaliseRef(`ss 5${dash}6`)).toBe("ss 5–6")
+    })
+  }
+
+  for (const dash of RANGE_DASHES) {
+    it(`still scans a range written with ${codePoint(dash)}`, () => {
+      expect(extractSectionRefs(`ss 5${dash}6 of the Act`).map(formatRef)).toEqual(["ss 5–6"])
+      expect(extractSectionRefs(`ss 5 ${dash} 6 of the Act`).map(formatRef)).toEqual(["ss 5–6"])
+    })
+  }
+
+  for (const dash of HYPHEN_SPELLINGS) {
+    it(`still scans ${codePoint(dash)} as the hyphen inside a number`, () => {
+      expect(extractSectionRefs(`See s 355${dash}25 of the ITAA 1997.`).map(formatRef)).toEqual(["s 355-25"])
+      expect(extractSectionRefs(`Subdivision 152${dash}A applies.`).map(formatRef)).toEqual(["sub-div 152-A"])
+      expect(refToNcxLabelPattern(parseSectionRef("pt 2-1")!).test(`Part 2${dash}1${"—"}Misleading`)).toBe(true)
+    })
+  }
+})
+
 // `ss 355-25, 355-30` is the ITAA cited as a list: the plural belongs to the
 // list, not to a range. "Sections 355 to 25" cannot be looked up, and the
 // caller reports the failure as the provision not existing.
@@ -256,6 +316,150 @@ describe("long lettered sections", () => {
   it("drops a tail it cannot read instead of leaving a shorter reference behind", () => {
     expect(parseSectionRef("s 8AAZLGABCDEFGHIJ")).toBeNull()
     expect(extractSectionRefs("See s 8AAZLGABCDEFGHIJ.")).toEqual([])
+  })
+})
+
+// Commonwealth Parts carry a two- and three-letter tail: the CCA has Parts
+// IIIAA, IVBA, IVBB, XIAA, XICA and XICB (all navLabels in this repo's own
+// `__fixtures__/cca-document.ncx`) and the Crimes Act 1914 has Part IABA. A
+// one-letter tail rejected `pt IVBA` outright, and because the scanner's
+// right-edge guard refuses a truncated tail it dropped them out of a scanned
+// document silently — verify_citations then reported on the rest of the
+// document as though that citation had been checked.
+describe("roman Parts with a lettered tail", () => {
+  const REAL_PARTS = ["I", "IIA", "III", "IIIA", "IIIAA", "IV", "IVA", "IVBA", "IVBB", "VIIC", "XI", "XIAA", "XICA", "XICB", "IAB", "IABA"]
+  for (const number of REAL_PARTS) {
+    it(`parses pt ${number}`, () => {
+      expect(normaliseRef(`pt ${number}`), `pt ${number}`).toBe(`pt ${number}`)
+      expect(normaliseRef(`Part ${number}`), `Part ${number}`).toBe(`pt ${number}`)
+    })
+  }
+
+  it("finds them in prose instead of dropping them", () => {
+    expect(
+      extractSectionRefs("The bargaining code is in pt IVBA of the Competition and Consumer Act 2010 (Cth).").map(formatRef),
+    ).toEqual(["pt IVBA"])
+    expect(extractSectionRefs("Part IIIAA—The Australian Energy Regulator (AER)").map(formatRef)).toEqual(["pt IIIAA"])
+  })
+
+  it("addresses its own navLabel, never the Part it is a longer name than", () => {
+    const aer = "Part IIIAA—The Australian Energy Regulator (AER)"
+    const code = "Part IVBA—News media and digital platforms mandatory bargaining code"
+    expect(refToNcxLabelPattern(parseSectionRef("pt IIIAA")!).test(aer)).toBe(true)
+    expect(refToNcxLabelPattern(parseSectionRef("pt IIIA")!).test(aer)).toBe(false)
+    expect(refToNcxLabelPattern(parseSectionRef("pt IVBA")!).test(code)).toBe(true)
+    expect(refToNcxLabelPattern(parseSectionRef("pt IVB")!).test(code)).toBe(false)
+  })
+})
+
+// The tail is only safe to widen because the numeral in front of it is a real
+// numeral and the whole thing has to be capitalised. The scanner matches
+// case-insensitively — designations are written "Part", "part" and "PART" —
+// so without both rules every English word built from numeral letters becomes
+// a provision number, and each phantom routes to a lookup that answers
+// [NOT_FOUND] for a reference the document never contained.
+describe("a roman number is a numeral, in capitals", () => {
+  it("does not read an ordinary word after a designation as a roman number", () => {
+    for (const prose of [
+      "the rules can be amended",
+      "the order made under it",
+      "div id attribute",
+      "which sections mix the two",
+      "s civil",
+      "part dill",
+      "item did",
+    ]) {
+      expect(extractSectionRefs(prose).map(formatRef), prose).toEqual([])
+    }
+    expect(parseSectionRef("pt iva")).toBeNull()
+    expect(parseSectionRef("item can")).toBeNull()
+  })
+
+  // The same guard `statute-citations.ts` needs for `SIS`/`SDA`: an all-caps
+  // abbreviation must not become a pinpoint that inherits the cited Act.
+  it("does not read an everyday abbreviation as a Part number", () => {
+    expect(extractSectionRefs("The SDA and the RDA were both considered.")).toEqual([])
+    expect(parseSectionRef("s DA")).toBeNull()
+  })
+
+  it("still reads the roman pinpoints AGLC writes, and the bare lettered units", () => {
+    expect(normaliseRef("s IV")).toBe("s IV")
+    expect(normaliseRef("pt XIII")).toBe("pt XIII")
+    expect(normaliseRef("pt XXXIX")).toBe("pt XXXIX")
+    // `pt C` is the lettered structural unit, not the numeral 100 — no Part is
+    // numbered L, C, D or M, and reading those letters as numerals is what let
+    // "civil", "did" and "made" through.
+    expect(normaliseRef("pt C")).toBe("pt C")
+    expect(parseSectionRef("s C")).toBeNull()
+  })
+})
+
+// The other half of the same rule, and the one that decides whether widening
+// the roman tail was safe: a designation spelling *glued* to letters is not a
+// designation, it is the front of an ordinary all-capitals word. `SIS` (the
+// Superannuation Industry (Supervision) Act's own abbreviation) read as
+// `s IS`, `SIX` as `s IX`, `SCHIV` as `sch IV`, and once the tail reached
+// three letters `PARTIES` — which appears verbatim in the party block of every
+// judgment, and in this repo's own `sources/qld-judgments` fixture — read as
+// `pt IES`.
+//
+// The vocabulary is enumerated from `KIND_VOCAB` rather than listed here, so a
+// spelling added to the table tomorrow is covered the day it lands instead of
+// silently opting out of the rule.
+describe("a designation glued to letters is a word, not a pinpoint", () => {
+  const ROMAN_TAILS = [
+    "I", "II", "III", "IV", "V", "VI", "IX", "X", "XI", "XIII",
+    "IS", "IES", "IVA", "IAB", "IXA", "XICA", "IIIAA",
+  ]
+  const SPELLINGS = KIND_VOCAB.flatMap((entry) => entry.spellings)
+
+  it("covers every spelling the vocabulary table knows", () => {
+    // Guards the enumeration itself: if `KIND_VOCAB` were ever restructured so
+    // `spellings` stopped being the list of spellings, the loop below would
+    // quietly test nothing.
+    expect(SPELLINGS.length).toBeGreaterThanOrEqual(KIND_VOCAB.length)
+    expect(SPELLINGS).toContain("part")
+    expect(SPELLINGS).toContain("sch")
+  })
+
+  it("never reads a spelling glued to roman letters as a reference", () => {
+    const phantoms: string[] = []
+    for (const spelling of SPELLINGS) {
+      for (const tail of ROMAN_TAILS) {
+        const word = `${spelling}${tail}`.toUpperCase()
+        const scanned = extractSectionRefs(`The ${word} was considered.`).map(formatRef)
+        if (scanned.length > 0) phantoms.push(`${word} -> ${scanned.join(", ")}`)
+        const parsed = parseSectionRef(word)
+        if (parsed) phantoms.push(`parseSectionRef(${word}) -> ${formatRef(parsed)}`)
+      }
+    }
+    expect(phantoms).toEqual([])
+  })
+
+  it("names the abbreviations that motivated the rule", () => {
+    for (const word of ["SIS", "SIV", "SIX", "SI", "CHI", "RIX", "ARTIX", "APPIX", "SCHIV", "PARTIES"]) {
+      expect(extractSectionRefs(`The ${word} was considered.`).map(formatRef), word).toEqual([])
+      expect(parseSectionRef(word), word).toBeNull()
+    }
+  })
+
+  // The no-space tolerance only ever existed for what a keyboard produces, and
+  // that is still honoured: a number that starts with a digit needs no gap.
+  it("still tolerates the spaceless arabic pinpoint AGLC does not write", () => {
+    expect(normaliseRef("s18")).toBe("s 18")
+    expect(normaliseRef("s10AA")).toBe("s 10AA")
+    expect(normaliseRef("sch2 s18")).toBe("sch 2 s 18")
+    expect(normaliseRef("sch1 item4")).toBe("sch 1 item 4")
+    expect(extractSectionRefs("see s18 and ss5-6").map(formatRef)).toEqual(["s 18", "ss 5–6"])
+  })
+
+  it("still reads the spaced forms of the same words", () => {
+    expect(normaliseRef("s IS")).toBe("s IS")
+    expect(normaliseRef("pt IV")).toBe("pt IV")
+    expect(normaliseRef("sch IV")).toBe("sch IV")
+    expect(normaliseRef("pt B")).toBe("pt B")
+    expect(normaliseRef("sub-div B")).toBe("sub-div B")
+    expect(extractSectionRefs("Part IVBA—News media").map(formatRef)).toEqual(["pt IVBA"])
   })
 })
 
@@ -351,6 +555,35 @@ describe("refToNcxLabelPattern", () => {
   })
 })
 
+// A structural number continues past its first component in two ways, and a
+// guard that knew only the hyphen answered one Part with another. The
+// *Corporations Act 2001* has Chapter 5 with Parts 5.1 to 5.9 and no bare
+// Part 5 — the same shape as "Subdivision 152 does not exist".
+describe("refToNcxLabelPattern — a bare number is not a numbered subdivision of itself", () => {
+  const match = (input: string, label: string) =>
+    refToNcxLabelPattern(parseSectionRef(input)!).test(label)
+
+  it("refuses the dotted continuation as well as the hyphenated one", () => {
+    expect(match("pt 5", "Part 5.1—Arrangements and reconstructions")).toBe(false)
+    expect(match("pt 5", "Part 5.3A—Administration of a company's affairs")).toBe(false)
+    expect(match("pt 5", "Part 5-1—Enforcement")).toBe(false)
+    expect(match("pt 5", "Part 5‑1—Enforcement")).toBe(false)
+    expect(match("div 2", "Division 2.1—Something")).toBe(false)
+    expect(match("sub-div 152", "Subdivision 152.1—Something")).toBe(false)
+    expect(match("ch 9", "Chapter 9.4AAA—Whistleblowers")).toBe(false)
+  })
+
+  it("still matches the numbered Part that was asked for", () => {
+    expect(match("pt 5.1", "Part 5.1—Arrangements and reconstructions")).toBe(true)
+    expect(match("pt 5.1", "Part 5.10—Something else")).toBe(false)
+    expect(match("pt 5", "Part 5—Something")).toBe(true)
+    expect(match("pt 5", "Part 5 Something")).toBe(true)
+    // A stop the number does not continue through is 1900 typography, not a
+    // component separator, so it still matches.
+    expect(match("sch 1", "Schedule 1. Amendments")).toBe(true)
+  })
+})
+
 describe("refToNcxLabelPattern — the Constitution's 1900 typography", () => {
   const match = (input: string, label: string) =>
     refToNcxLabelPattern(parseSectionRef(input)!).test(label)
@@ -401,6 +634,30 @@ describe("extractSectionRefs", () => {
       `sub-div ${"9".repeat(2000)}-${"A".repeat(500)}`,
       `ss ${"5-".repeat(1000)}`,
       `s ${"A".repeat(3000)}`,
+    ]
+    const started = Date.now()
+    for (const text of evil) extractSectionRefs(text)
+    expect(Date.now() - started).toBeLessThan(1000)
+  })
+
+  // One string per dash role and one per branch of the roman numeral, because
+  // every one of them is compiled into the pattern that runs over documents.
+  it("does not backtrack catastrophically on adversarial dashes or roman numbers", () => {
+    const evil = [
+      `sch ${"1—".repeat(1000)}`,
+      `ss ${"5–".repeat(1000)}`,
+      `pt ${"2‑".repeat(1000)}`,
+      `s 45 ${"— 1 ".repeat(1000)}`,
+      `pt ${"IVBA".repeat(1000)}`,
+      `pt ${"I".repeat(3000)}`,
+      `pt ${"X".repeat(3000)}`,
+      // The gap between a designation and its number is the one unbounded
+      // quantifier the pattern still has, in both the schedule prefix and the
+      // designation, so each is fed whitespace that never reaches a number.
+      `s${" ".repeat(20000)}`,
+      `sch${" ".repeat(20000)}`,
+      `${"part ".repeat(5000)}`,
+      `sch${" ".repeat(5000)}s${" ".repeat(5000)}`,
     ]
     const started = Date.now()
     for (const text of evil) extractSectionRefs(text)

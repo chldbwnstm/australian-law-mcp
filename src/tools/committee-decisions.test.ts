@@ -1,7 +1,8 @@
+import { readFileSync } from "node:fs"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { AuApiClient } from "../lib/api-client.js"
 import { lawCache } from "../lib/cache.js"
-import type { SourceDocument, SourceSearchResult } from "../lib/sources/types.js"
+import type { SourceDocument, SourceHit, SourceSearchResult } from "../lib/sources/types.js"
 
 // The two source modules behind workplace / integrity / public_service are
 // stubbed so the `limit` and `full` behaviour can be asserted without a network
@@ -25,16 +26,31 @@ vi.mock("../lib/sources/integrity-sources.js", () => ({
   getMpcCaseStudy: (...a: unknown[]) => getMpcCaseStudy(...a),
 }))
 
+const committeeDecisions = await import("./committee-decisions.js")
 const {
+  canonicalAicmr,
   competitionLinks,
+  exactDeterminationHit,
   getCompetitionDecisionText,
   getIntegrityDecisionText,
+  getPrivacyDecisionText,
   getPublicServiceDecisionText,
   getWorkplaceDecisionText,
   searchCompetitionDecisions,
   searchIntegrityDecisions,
   searchWorkplaceDecisions,
-} = await import("./committee-decisions.js")
+} = committeeDecisions
+
+/**
+ * The OAIC determinations index exactly as recorded — `src/lib/sources/oaic.ts`
+ * is left real here, because the defect this pins lives in the seam between its
+ * keyword filter and the tool that reads the filter's output.
+ * Fixture: https://www.oaic.gov.au/privacy/privacy-assessments-and-decisions/
+ * privacy-decisions/privacy-determinations (captured for `oaic.test.ts`).
+ */
+const OAIC_INDEX = readFileSync(new URL("../lib/sources/__fixtures__/oaic-determinations.html", import.meta.url), "utf8")
+
+const oaicClient = { fetchHtml: async () => OAIC_INDEX } as unknown as AuApiClient
 
 const noNetworkClient = new Proxy({} as never, {
   get() {
@@ -187,5 +203,134 @@ describe("`full` returns the body verbatim for the domains that have one", () =>
     const whole = (await getIntegrityDecisionText(client, { id: "operation-wilson", full: true })).content[0].text
     expect(whole).not.toContain("⋯ omitted")
     expect(whole).toContain("[100] Paragraph 100 of the reasons.")
+  })
+})
+
+// ── the determination the caller asked for, or none ────────────────────────
+
+describe("get_decision_text[privacy] matches the citation exactly", () => {
+  // Reproduced before the fix, against this same recorded index: the OAIC page
+  // has no keyword parameter, so `oaic.searchDeterminations` filters locally
+  // and `oaic.filterHits` drops one-character tokens — asked for
+  // "[2026] AICmr 4" the needles degenerate to ["[2026]", "aicmr"] and every
+  // 2026 determination survives. The tool then took `hits[0]` and rendered
+  // "[2026] AICmr 40" (Monash IVF) under the citation the caller typed, with
+  // nothing in the output to say it was a different record.
+  const wrongForShortNumber: Array<[string, string]> = [
+    ["[2026] AICmr 4", "[2026] AICmr 40"],
+    ["[2025] AICmr 1", "[2025] AICmr 175"],
+    ["[2026] AICmr 2", "[2026] AICmr 22"],
+  ]
+
+  it.each(wrongForShortNumber)("does not answer %s with %s", async (asked, nearest) => {
+    const result = await getPrivacyDecisionText(oaicClient, { id: asked })
+    const text = result.content[0].text
+    expect(result.isError).toBe(true)
+    // The near miss may be *listed* as something that was on the page, but it
+    // must never be rendered as the determination that was asked for.
+    expect(text).not.toContain("=== ")
+    expect(text).not.toMatch(new RegExp(`Citation.{0,4}${nearest.replace(/[[\]]/g, "\\$&")}`))
+    expect(text).toContain(asked)
+    expect(text).toContain("[UPSTREAM_NO_DATA]")
+  })
+
+  it("names what was on the page instead, and warns against taking one of them", async () => {
+    const text = (await getPrivacyDecisionText(oaicClient, { id: "[2026] AICmr 4" })).content[0].text
+    expect(text).toContain("[2026] AICmr 40")
+    expect(text).toContain("none of which is [2026] AICmr 4")
+    expect(text).toContain("Do not treat any of these as the one you asked for")
+    expect(text).toMatch(/only rules out one page/i)
+  })
+
+  it("still returns the determination when the citation does match", async () => {
+    const result = await getPrivacyDecisionText(oaicClient, { id: "[2026] AICmr 40" })
+    const text = result.content[0].text
+    expect(result.isError).toBeFalsy()
+    expect(text).toContain("Monash IVF")
+    expect(text).toContain("[2026] AICmr 40")
+  })
+
+  it("reads a citation the caller typed without brackets as the same citation", async () => {
+    const result = await getPrivacyDecisionText(oaicClient, { id: "2026 AICmr 40" })
+    expect(result.isError).toBeFalsy()
+    expect(result.content[0].text).toContain("Monash IVF")
+  })
+})
+
+describe("canonicalAicmr / exactDeterminationHit", () => {
+  const hits: SourceHit[] = [
+    { source: "OAIC", title: "Vinomofo (Privacy) [2025] AICmr 175", citation: "[2025] AICmr 175", id: "[2025] AICmr 175", url: "u1" },
+    { source: "OAIC", title: "Someone (Privacy) [2025] AICmr 2", citation: "[2025] AICmr 2", id: "[2025] AICmr 2", url: "u2" },
+  ]
+
+  it("makes two spellings of one citation equal and two citations never equal", () => {
+    expect(canonicalAicmr("[2025]  AICmr  02")).toBe(canonicalAicmr("2025 aicmr 2"))
+    expect(canonicalAicmr("[2025] AICmr 2")).not.toBe(canonicalAicmr("[2025] AICmr 175"))
+    expect(canonicalAicmr("Operation Wilson")).toBeUndefined()
+  })
+
+  it("picks the exact citation, never the nearest", () => {
+    expect(exactDeterminationHit(hits, "[2025] AICmr 2")?.citation).toBe("[2025] AICmr 2")
+    expect(exactDeterminationHit(hits, "[2025] AICmr 17")).toBeUndefined()
+    expect(exactDeterminationHit(hits, "[2025] AICmr 1")).toBeUndefined()
+  })
+
+  it("falls back to an exact identifier match when the id carries no citation", () => {
+    const unnumbered: SourceHit[] = [{ source: "OAIC", title: "Some Determination", id: "some-determination", url: "u" }]
+    expect(exactDeterminationHit(unnumbered, "some-determination")?.id).toBe("some-determination")
+    expect(exactDeterminationHit(unnumbered, "some")).toBeUndefined()
+  })
+})
+
+describe("every domain getter answers with the record the caller named", () => {
+  // The class, enumerated: a getter resolves an id either by *addressing* the
+  // record (the id goes to the source verbatim) or by searching and then
+  // verifying the identifier. Nothing in between — "search, take the first
+  // hit" is what served a different determination as the one requested.
+  const GETTERS = [
+    "getWorkplaceDecisionText",
+    "getPrivacyDecisionText",
+    "getCompetitionDecisionText",
+    "getIntegrityDecisionText",
+    "getPublicServiceDecisionText",
+  ]
+
+  it("covers every get*DecisionText this module exports", () => {
+    const exported = Object.keys(committeeDecisions)
+      .filter((name) => /^get[A-Z].*DecisionText$/.test(name))
+      .sort()
+    // A sixth domain getter cannot be added without being classified here.
+    expect(exported).toEqual([...GETTERS].sort())
+  })
+
+  it("workplace addresses the FWC slug it was given", async () => {
+    fwcGetDecision.mockResolvedValue({ title: "Werner v Amcor", url: "u", metadata: [], text: "reasons" })
+    await getWorkplaceDecisionText(client, { id: "werner-v-amcor-2014-fwc-3013" })
+    expect(fwcGetDecision).toHaveBeenCalledWith(client, "werner-v-amcor-2014-fwc-3013")
+  })
+
+  it("integrity addresses the NACC anchor it was given", async () => {
+    getNaccOperation.mockResolvedValue({ name: "Operation Wilson", anchor: "operation-wilson", summary: "s", documents: [] })
+    await getIntegrityDecisionText(client, { id: "operation-wilson" })
+    expect(getNaccOperation).toHaveBeenCalledWith(client, "operation-wilson")
+  })
+
+  it("public_service addresses the MPC slug it was given", async () => {
+    getMpcCaseStudy.mockResolvedValue({ title: "Financial penalty too harsh", url: "u", text: "t" })
+    await getPublicServiceDecisionText(client, { id: "financial-penalty-too-harsh" })
+    expect(getMpcCaseStudy).toHaveBeenCalledWith(client, "financial-penalty-too-harsh")
+  })
+
+  it("competition renders no document at all — the source is blocked", async () => {
+    const result = await getCompetitionDecisionText(noNetworkClient, { id: "[2020] ACompT 1" })
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toContain("[UPSTREAM_BLOCKED]")
+  })
+
+  it("privacy searches, and so must verify the identifier of the hit it renders", async () => {
+    const wrong = await getPrivacyDecisionText(oaicClient, { id: "[2026] AICmr 4" })
+    expect(wrong.isError).toBe(true)
+    const right = await getPrivacyDecisionText(oaicClient, { id: "[2026] AICmr 40" })
+    expect(right.isError).toBeFalsy()
   })
 })

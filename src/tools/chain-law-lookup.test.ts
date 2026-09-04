@@ -441,3 +441,127 @@ describe("resolveChainBaseLaw — a rung that could not run", () => {
     expect(outage.failures?.map((failure) => failure.term)).toEqual(["C2004A99999"])
   })
 })
+
+// ── the two rankings the caller sees side by side ─────────────────────────
+
+/**
+ * `chain_full_research` prints "Legislation matching the question" ranked by
+ * `rankTitles` and then "Base law:" chosen by `rankFullTextCandidates`. Before
+ * the fix only the first scored `status`, so the list led with the in-force
+ * title while the chain's whole structural section was built on a repealed one
+ * — live 2026-09-04, `{query:"live export animal welfare requirements"}`
+ * headed the list with the *Export Control (Animals) Rules 2021* (InForce) and
+ * took as its base law the *Australian Meat and Live-stock Industry
+ * (Protection of Animal Welfare) Order 2011*, repealed three months after it
+ * was made, with no note saying so.
+ */
+describe("rankFullTextCandidates scores status, and scores it as rankTitles does", () => {
+  const asBaseLaw = (found: FrlTitle): ChainBaseLaw => ({
+    registerId: found.id,
+    name: found.name,
+    ...(found.collection ? { collection: found.collection } : {}),
+    ...(found.status ? { status: found.status } : {}),
+    ...(found.isPrincipal !== undefined ? { isPrincipal: found.isPrincipal } : {}),
+  })
+
+  it("the finding's minimal pair: the repealed Act no longer wins", () => {
+    const pair: ChainBaseLaw[] = [
+      { registerId: "F0000A00002", name: "Widget Safety Act 1990", status: "Repealed", isPrincipal: true, collection: "Act" },
+      { registerId: "F0000A00001", name: "Widget Act 2020", status: "InForce", isPrincipal: true, collection: "Act" },
+    ]
+    expect(rankFullTextCandidates("widget safety", pair).laws[0].registerId).toBe("F0000A00001")
+  })
+
+  it("status breaks a tie the same way in both rankers", () => {
+    // Identical names, so nothing but `status` can separate them. If the two
+    // functions ever weigh a status differently, the heads disagree here.
+    const STATUSES = ["InForce", "Repealed", "NotInForce", "Ceased", undefined] as const
+    for (const first of STATUSES) {
+      for (const second of STATUSES) {
+        if (first === second) continue
+        const titles: FrlTitle[] = [
+          { id: "F0000A00001", name: "Widget Safety Act 2020", collection: "Act", isPrincipal: true, ...(first ? { status: first } : {}) },
+          { id: "F0000A00002", name: "Widget Safety Act 2020", collection: "Act", isPrincipal: true, ...(second ? { status: second } : {}) },
+        ]
+        const label = `${String(first)} vs ${String(second)}`
+        const byTitles = rankTitles("widget safety act 2020", titles)[0].id
+        const byFullText = rankFullTextCandidates("widget safety act 2020", titles.map(asBaseLaw)).laws[0].registerId
+        expect(byFullText, label).toBe(byTitles)
+      }
+    }
+  })
+
+  it("the live pair: the in-force Rules beat the repealed Order in both rankings", () => {
+    // Both live records, in the Register's own relevance order (the repealed
+    // Order first, which is what the base law used to be taken from).
+    const live: FrlTitle[] = [
+      {
+        id: "F2011L00932",
+        name: "Australian Meat and Live-stock Industry (Protection of Animal Welfare) Order 2011",
+        collection: "LegislativeInstrument",
+        status: "Repealed",
+        isPrincipal: true,
+      },
+      {
+        id: "F2021L00319",
+        name: "Export Control (Animals) Rules 2021",
+        collection: "LegislativeInstrument",
+        status: "InForce",
+        isPrincipal: true,
+      },
+    ]
+    const query = "live export animal welfare requirements"
+    const ranked = rankFullTextCandidates(query, live.map(asBaseLaw))
+    expect(rankTitles(query, live)[0].id).toBe("F2021L00319")
+    expect(ranked.laws[0].registerId).toBe("F2021L00319")
+  })
+
+  it("a status the Register did not send is neutral, not 'not in force'", () => {
+    // The existing fixtures carry no `status`; scoring `undefined` as a penalty
+    // would silently re-order every one of them.
+    const unstated: ChainBaseLaw[] = [
+      { registerId: "C1938A00015", name: "Foreign Passports (Law Enforcement and Security) Act 2005", collection: "Act", isPrincipal: true },
+      { registerId: "C2004A00109", name: "Competition and Consumer Act 2010", collection: "Act", isPrincipal: true },
+    ]
+    const withInForce = unstated.map((law) => ({ ...law, status: "InForce" }))
+    expect(rankFullTextCandidates("consumer competition inquiry", unstated).laws.map((law) => law.registerId)).toEqual(
+      rankFullTextCandidates("consumer competition inquiry", withInForce).laws.map((law) => law.registerId),
+    )
+  })
+
+  it("says so out loud when the base law it picked is not in force", () => {
+    // A spent instrument can still be the right answer for a question about
+    // 2011 — but never a silent one.
+    const onlyRepealed: ChainBaseLaw[] = [
+      {
+        registerId: "F2011L00932",
+        name: "Australian Meat and Live-stock Industry (Protection of Animal Welfare) Order 2011",
+        collection: "LegislativeInstrument",
+        status: "Repealed",
+        isPrincipal: true,
+      },
+    ]
+    const notes = rankFullTextCandidates("live export animal welfare requirements", onlyRepealed).notes
+    expect(notes.join("\n")).toContain("is recorded as Repealed")
+    expect(notes.join("\n")).toContain("not current law")
+  })
+
+  it("names the in-force candidate it passed over, when there is one", () => {
+    // Overlap still outranks status, by design — so a repealed title whose name
+    // matches the question can still win, and then the alternative is named.
+    const pool: ChainBaseLaw[] = [
+      { registerId: "F0000A00002", name: "Widget Safety Standards Act 1990", status: "Repealed", isPrincipal: true, collection: "Act" },
+      { registerId: "F0000A00001", name: "Gadget Act 2020", status: "InForce", isPrincipal: true, collection: "Act" },
+    ]
+    const ranked = rankFullTextCandidates("widget safety standards", pool)
+    expect(ranked.laws[0].registerId).toBe("F0000A00002")
+    expect(ranked.notes.join("\n")).toContain("An in-force candidate was also found: Gadget Act 2020 [F0000A00001]")
+  })
+
+  it("adds no status note when the winner is in force", () => {
+    const pool: ChainBaseLaw[] = [
+      { registerId: "F0000A00001", name: "Widget Act 2020", status: "InForce", isPrincipal: true, collection: "Act" },
+    ]
+    expect(rankFullTextCandidates("widget", pool).notes.join("\n")).not.toContain("recorded as")
+  })
+})

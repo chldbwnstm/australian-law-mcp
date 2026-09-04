@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import { DASH_LIKE, extractSectionRefs, formatRef, parseSectionRef } from "../../lib/section-ref.js"
 import {
   extractStatuteCitations,
   findFullCites,
@@ -136,8 +137,9 @@ describe("extractStatuteCitations", () => {
   })
 
   it("keeps a pinpoint with no statute at all, rather than dropping it silently", () => {
-    const [cite] = extractStatuteCitations("The tribunal considered s 1234567 at length.", 5)
+    const [cite] = extractStatuteCitations("The tribunal considered s 61 at length.", 5)
     expect(cite?.attachedBy).toBe("none")
+    expect(cite?.pinpoint).toBe("s 61")
   })
 
   it("honours maxCitations", () => {
@@ -270,6 +272,282 @@ describe("all-caps abbreviations are not roman pinpoints", () => {
   it("still reads the roman pinpoints AGLC actually writes", () => {
     const cites = extractStatuteCitations("Constitution s 51(xx), pt IVA and s IV all apply.", 15)
     expect(cites.map((cite) => cite.pinpoint)).toEqual(["s 51(xx)", "pt IVA", "s IV"])
+  })
+})
+
+// One pinpoint, more than one provision. Reading only the first is the failure
+// mode this module is built against: the extractor is what `verify_citations`
+// counts, so a section dropped here is a section the report says was found and
+// checked when it was neither, under a `[VERIFIED]` banner.
+//
+// The table is the point. Every shape a writer uses lives in it, so a form that
+// is not handled is a failing row rather than a silent gap — the earlier fix
+// covered the dash and left "and", "to", "&" and the comma list behind.
+const MULTI_PROVISION_SHAPES: ReadonlyArray<[string, string[]]> = [
+  ["ss 45 and 46", ["ss 45", "s 46"]],
+  ["ss 45 & 46", ["ss 45", "s 46"]],
+  ["sections 45 and 46", ["ss 45", "s 46"]],
+  ["ss 45, 46", ["ss 45", "s 46"]],
+  ["ss 45, 46, 47", ["ss 45", "s 46", "s 47"]],
+  ["ss 45, 46 and 47", ["ss 45", "s 46", "s 47"]],
+  ["ss 45 to 46", ["ss 45–46"]],
+  ["ss 45-46", ["ss 45–46"]],
+  ["ss 45–46", ["ss 45–46"]],
+  ["ss 45 to 47 and 50", ["ss 45–47", "s 50"]],
+  ["ss 45AD and 45AF", ["ss 45AD", "s 45AF"]],
+  ["ss 355-25, 355-30", ["ss 355-25", "s 355-30"]],
+  ["pts IVA and IVB", ["pt IVA", "pt IVB"]],
+  ["regs 2.01, 2.02", ["regs 2.01", "reg 2.02"]],
+  // The bracketed form of the same list. A "to" here names its two ends: a
+  // bracketed range has no representation in `SectionRef`, and the members
+  // between them are citations the writer did not make.
+  ["sub-ss (2) and (3)", ["sub-s (2)", "sub-s (3)"]],
+  ["paras (a), (b) and (c)", ["para (a)", "para (b)", "para (c)"]],
+  ["sub-ss (2) to (4)", ["sub-s (2)", "sub-s (4)"]],
+]
+
+describe("a pinpoint that names more than one provision", () => {
+  it.each(MULTI_PROVISION_SHAPES)("reads every provision of %s", (pinpoint, expected) => {
+    const cites = extractStatuteCitations(`Fair Work Act 2009 (Cth) ${pinpoint} apply.`, 20)
+    expect(cites.map((cite) => cite.pinpoint)).toEqual(expected)
+    // Each one has to carry the Act, or it reaches the checker as "no statute
+    // named" and is reported as unchecked instead of checked.
+    expect(cites.every((cite) => cite.lawName === "Fair Work Act")).toBe(true)
+    expect(cites.every((cite) => cite.attachedBy !== "unread")).toBe(true)
+  })
+
+  it("counts and checks the invented member of a list, which is the whole point", () => {
+    const cites = extractStatuteCitations(
+      "Anti-competitive agreements are prohibited by Competition and Consumer Act 2010 (Cth) ss 45 and 999.",
+      20,
+    )
+    expect(cites.map((cite) => cite.pinpoint)).toEqual(["ss 45", "s 999"])
+    expect(cites[1].raw).toBe("Competition and Consumer Act 2010 (Cth) s 999")
+  })
+
+  it("attaches the Act that follows the whole list, not just its first member", () => {
+    const cites = extractStatuteCitations("ss 45 and 46 of the Competition and Consumer Act 2010 (Cth) were pleaded.", 20)
+    expect(cites.map((cite) => cite.pinpoint)).toEqual(["ss 45", "s 46"])
+    expect(cites.map((cite) => cite.lawName)).toEqual(["Competition and Consumer Act", "Competition and Consumer Act"])
+  })
+
+  it("carries the schedule of the list onto every member", () => {
+    const cites = extractStatuteCitations("Australian Consumer Law ss 18 and 29 apply.", 20)
+    expect(cites.map((cite) => cite.pinpoint)).toEqual(["sch 2 ss 18", "sch 2 s 29"])
+  })
+
+  // A claim describes the list, not either member of it. Matching it against
+  // one member's heading is how `✗ CONTENT_MISMATCH` — the verdict that calls
+  // correct prose a hallucination — gets invented out of correct writing.
+  it("does not attribute a claim about a list to one member of it", () => {
+    const cites = extractStatuteCitations(
+      "Under the Competition and Consumer Act 2010 (Cth) ss 45 and 46, anti-competitive conduct is prohibited.",
+      20,
+    )
+    expect(cites).toHaveLength(2)
+    expect(cites.every((cite) => cite.claim === undefined)).toBe(true)
+  })
+})
+
+// The reason the list was left unhandled for so long: a rule loose enough to
+// read "ss 45, 46" also reads the comma in ordinary prose, and a fabricated
+// citation reported as one the writer made is worse than a missing line.
+describe("a list never harvests ordinary prose", () => {
+  it("does not read the day of a date as a section", () => {
+    const singular = extractStatuteCitations("Under s 18, 3 March 2020 the applicant filed.", 20)
+    expect(singular.map((cite) => cite.pinpoint)).toEqual(["s 18"])
+
+    const plural = extractStatuteCitations("Fair Work Act 2009 (Cth) ss 45, 3 March 2020 was the filing date.", 20)
+    expect(plural.map((cite) => cite.pinpoint)).toEqual(["ss 45"])
+
+    const ordinal = extractStatuteCitations("Fair Work Act 2009 (Cth) ss 45, 3rd of March 2020 was the date.", 20)
+    expect(ordinal.map((cite) => cite.pinpoint)).toEqual(["ss 45"])
+  })
+
+  it("does not continue a list after a singular designation", () => {
+    const cites = extractStatuteCitations("Fair Work Act 2009 (Cth) s 45, 46 and 47 were mentioned.", 20)
+    expect(cites.map((cite) => cite.pinpoint)).toEqual(["s 45"])
+  })
+
+  // `(2020)` is a legal `SUBDIVISION_TOKEN`, so a bracketed list has the same
+  // harvest available to it: the year of a reported case, sitting after a
+  // citation, would become a subsection nobody cited.
+  it("does not read the year of a reported citation as a bracketed member", () => {
+    expect(
+      extractStatuteCitations("See Fair Work Act 2009 (Cth) ss 18, (2020) 15 ALJ 3.", 20).map((cite) => cite.pinpoint),
+    ).toEqual(["ss 18"])
+    expect(
+      extractStatuteCitations("Fair Work Act 2009 (Cth) sub-ss (2), (2020) 15 ALJ 3.", 20).map((cite) => cite.pinpoint),
+    ).toEqual(["sub-s (2)"])
+  })
+
+  it("does not continue a bracketed list after a singular designation", () => {
+    const cites = extractStatuteCitations("Fair Work Act 2009 (Cth) sub-s (2) and (3) apply.", 20)
+    expect(cites.map((cite) => cite.pinpoint)).toEqual(["sub-s (2)"])
+  })
+
+  it("does not read a year in a list of sections as a section", () => {
+    const cites = extractStatuteCitations("Fair Work Act 2009 (Cth) ss 45, 2010 amendments aside.", 20)
+    expect(cites.map((cite) => cite.pinpoint)).toEqual(["ss 45"])
+  })
+
+  it("stops at an item that does not keep the shape of the first — and says so", () => {
+    const cites = extractStatuteCitations("Fair Work Act 2009 (Cth) ss 45 and 46A apply.", 20)
+    expect(cites.map((cite) => cite.pinpoint)[0]).toBe("ss 45")
+    expect(cites.map((cite) => cite.attachedBy)).toContain("unread")
+    expect(cites.some((cite) => cite.raw.includes("46A"))).toBe(true)
+  })
+
+  it("reports the item a long list runs past rather than dropping it", () => {
+    const numbers = Array.from({ length: 15 }, (_, index) => 45 + index)
+    const cites = extractStatuteCitations(`Fair Work Act 2009 (Cth) ss ${numbers.join(", ")} apply.`, 40)
+    expect(cites.some((cite) => cite.attachedBy === "unread")).toBe(true)
+  })
+})
+
+// AGLC roman pinpoints are not exotic: 10 of the 16 Part labels of the *Crimes
+// Act 1914* carry a two- or three-letter tail, and six of the *Competition and
+// Consumer Act 2010*'s do — the six below are navLabels of this repo's own
+// `src/lib/__fixtures__/cca-document.ncx`. A tail this scanner cannot span is a
+// Part that never reaches the report at all.
+const ROMAN_PART_LABELS: ReadonlyArray<[string, string]> = [
+  ["Crimes Act 1914", "IAA"],
+  ["Crimes Act 1914", "IAAA"],
+  ["Crimes Act 1914", "IAAB"],
+  ["Crimes Act 1914", "IAAC"],
+  ["Crimes Act 1914", "IAB"],
+  ["Crimes Act 1914", "IABA"],
+  ["Crimes Act 1914", "IAC"],
+  ["Crimes Act 1914", "IACA"],
+  ["Crimes Act 1914", "IAD"],
+  ["Crimes Act 1914", "IAE"],
+  ["Competition and Consumer Act 2010", "IIIAA"],
+  ["Competition and Consumer Act 2010", "IVA"],
+  ["Competition and Consumer Act 2010", "IVBA"],
+  ["Competition and Consumer Act 2010", "XIAA"],
+  ["Competition and Consumer Act 2010", "XICA"],
+  ["Competition and Consumer Act 2010", "XICB"],
+]
+
+describe("roman Part numbers with a multi-letter tail", () => {
+  it.each(ROMAN_PART_LABELS)("reads %s Part %s", (act, part) => {
+    const cites = extractStatuteCitations(`${act} (Cth) Part ${part} sets out the regime.`, 10)
+    expect(cites.map((cite) => cite.pinpoint)).toEqual([`pt ${part}`])
+    expect(cites[0].lawName).toContain("Act")
+  })
+})
+
+// The scanner locates, the parser decides. Where the two disagree about how far
+// a number runs, the scanner wins — and every disagreement so far handed the
+// checker a *different, real* provision to tick the citation off against:
+// `s 8AAZLGA` read as `s 8AAZL`, the Register's own `s 355‑25` read as `s 355`,
+// `Subdiv 152-A` read as the `sub-div 152` that does not exist.
+const NUMBER_SHAPES = [
+  "s 18",
+  "s 10AA",
+  "s 8AAZLGA",
+  "s 355-25",
+  "s 355‑25",
+  "s 51(xx)",
+  "s 51(xxxvii)",
+  "sub-div 152-A",
+  "pt IVA",
+  "pt IIIAA",
+  "reg 2.01",
+  "r 42.02.2",
+  "cl 3",
+  "sch 2 s 18",
+  "ss 5-6",
+]
+
+describe("the scanner reads exactly what the parser reads", () => {
+  it.each(NUMBER_SHAPES)("does not truncate %s", (pinpoint) => {
+    const parsed = parseSectionRef(pinpoint)
+    expect(parsed).not.toBeNull()
+    const cites = extractStatuteCitations(`Taxation Administration Act 1953 (Cth) ${pinpoint} applies.`, 10)
+    expect(cites.map((cite) => cite.pinpoint)).toEqual([formatRef(parsed!)])
+    // The whole pinpoint, not a readable prefix of it: a prefix is another real
+    // provision, and a prefix is what the checker would report on.
+    expect(cites[0].raw.endsWith(pinpoint)).toBe(true)
+  })
+
+  // `section-ref.ts` gives every dash character exactly one of three roles —
+  // hyphen inside a number, "to" between two numbers, heading separator — and
+  // its own document scanner, `extractSectionRefs`, is where those roles are
+  // decided. This asserts the two scanners agree character by character, so a
+  // dash added to `DASH_LIKE` there cannot quietly change what this one
+  // harvests out of a document. (The em dash and the horizontal bar read as the
+  // first half on both sides, deliberately: `Schedule 1—2019 measures` is an
+  // FRL heading, not the range `sch 1-2019`.)
+  it.each([...DASH_LIKE])("agrees with the single source about the dash %s", (dash) => {
+    for (const pinpoint of [`s 355${dash}25`, `ss 5${dash}6`]) {
+      const cites = extractStatuteCitations(`Income Tax Assessment Act 1997 (Cth) ${pinpoint} applies.`, 10)
+      expect(cites.filter((cite) => cite.attachedBy === "unread")).toEqual([])
+      expect(cites.map((cite) => cite.pinpoint)).toEqual(extractSectionRefs(pinpoint).map(formatRef))
+    }
+  })
+})
+
+// The audit. A gap in the grammar is not a licence to say nothing: what this
+// module cannot read, it counts and names, so `verify_citations` cannot print
+// `[VERIFIED]` over a document it only partly read.
+describe("nothing located is dropped in silence", () => {
+  it("reports a number it cannot read instead of truncating it to one it can", () => {
+    const cites = extractStatuteCitations("The tribunal considered s 1234567 at length.", 5)
+    expect(cites).toHaveLength(1)
+    expect(cites[0].attachedBy).toBe("unread")
+    expect(cites[0].raw).toBe("s 1234567")
+    expect(cites[0].pinpoint).toContain("PARSE_ERROR")
+    expect(cites.some((cite) => cite.pinpoint === "s 1234")).toBe(false)
+  })
+
+  it("reports a letter tail longer than any real section rather than cutting it down", () => {
+    const cites = extractStatuteCitations("Taxation Administration Act 1953 (Cth) s 8AAZLGAX applies.", 5)
+    expect(cites.map((cite) => cite.attachedBy)).toEqual(["unread"])
+    expect(cites[0].raw).toBe("s 8AAZLGAX")
+  })
+
+  // The invariant every consumer of an unread citation depends on:
+  // `statute-check.ts` answers ⚠ before it reads `ref`, and `cite-check.ts`
+  // skips the citation entirely — both because there is no `lawName`. An unread
+  // fragment that carried one would be looked up as a provision nobody cited.
+  it("never attributes a statute to something it could not read", () => {
+    const texts = [
+      "The tribunal considered s 1234567 at length.",
+      "Taxation Administration Act 1953 (Cth) s 8AAZLGAX applies.",
+      "Fair Work Act 2009 (Cth) ss 45 and 46A apply.",
+      "Competition and Consumer Act 2010 (Cth) s 12345678901 applies.",
+    ]
+    for (const text of texts) {
+      const unread = extractStatuteCitations(text, 20).filter((cite) => cite.attachedBy === "unread")
+      expect(unread.length).toBeGreaterThan(0)
+      for (const cite of unread) {
+        expect(cite.lawName).toBeUndefined()
+        expect(cite.jurisdiction).toBeUndefined()
+        expect(cite.claim).toBeUndefined()
+      }
+    }
+  })
+
+  // The other half of the audit: a reading refused on purpose is accounted for,
+  // so it never comes back as an unread line. Without this the report would
+  // carry a `[PARSE_ERROR]` for every acronym and every titled instrument, and
+  // a warning that fires on everything is read as firing on nothing.
+  it("does not report the readings it refuses on purpose", () => {
+    const texts = [
+      "The SDA and the RDA were both considered.",
+      "Chapter SIX of the report deals with it.",
+      "SCHEDULE 2 s 18 of the CCA applies.",
+      "See Migration Regulations 1994 (Cth) reg 2.01 for the criteria.",
+      "Under the Superannuation Industry (Supervision) Act 1993 (Cth) SIS trustees owe covenants under s 52.",
+      "The employee was dismissed under the Fair Work Act 2009 (Cth) s 394, and the s 18-based claim in the " +
+        "Competition and Consumer Act 2010 (Cth) failed. See also the Act s 382 and pt IVA.",
+      "The rules can be amended; the item is not in issue; the tribunal made a decision in 2019.",
+    ]
+    for (const text of texts) {
+      const unread = extractStatuteCitations(text, 30).filter((cite) => cite.attachedBy === "unread")
+      expect(unread.map((cite) => cite.raw)).toEqual([])
+    }
   })
 })
 

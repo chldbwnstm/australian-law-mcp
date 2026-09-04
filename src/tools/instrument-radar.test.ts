@@ -1,9 +1,12 @@
-import { readFileSync } from "node:fs"
+import { readFileSync, readdirSync } from "node:fs"
+import { fileURLToPath } from "node:url"
 import { beforeEach, describe, expect, it } from "vitest"
 import { normalizeFrlVersion, type AuApiClient } from "../lib/api-client.js"
 import { lawCache } from "../lib/cache.js"
+import { parseSectionRef } from "../lib/section-ref.js"
 import type { FrlTitle, FrlVersion } from "../lib/types.js"
-import { instrumentRadar } from "./instrument-radar.js"
+import { enablingProvisionCall, instrumentRadar } from "./instrument-radar.js"
+import { requireRef } from "./statute-helpers/toc.js"
 
 const ACT_VERSIONS = (
   JSON.parse(readFileSync(new URL("./__fixtures__/frl-versions-cca.json", import.meta.url), "utf8")) as { value: unknown[] }
@@ -25,8 +28,31 @@ function version(start: string, registerId: string | null, compilation?: string)
   }
 }
 
-function client(opts: { instrumentVersions?: FrlVersion[]; acts?: FrlTitle[]; actVersions?: () => Promise<FrlVersion[]> } = {}): AuApiClient {
+function client(
+  opts: {
+    instrumentVersions?: FrlVersion[]
+    acts?: FrlTitle[]
+    actVersions?: () => Promise<FrlVersion[]>
+    /** Replace `affectingProvisions` on the recorded expansion with another real value. */
+    enablingProvision?: string | null
+  } = {},
+): AuApiClient {
   const acts = opts.acts ?? [CCA]
+  const authorisedBy =
+    opts.enablingProvision === undefined
+      ? AUTHORISED_BY
+      : {
+          ...AUTHORISED_BY,
+          value: [
+            {
+              ...AUTHORISED_BY.value[0],
+              authorisedBy: (AUTHORISED_BY.value[0].authorisedBy as Array<Record<string, unknown>>).map((row) => ({
+                ...row,
+                affectingProvisions: opts.enablingProvision,
+              })),
+            },
+          ],
+        }
   return {
     getTitle: async () => CCR,
     listVersions: async (id: string) => {
@@ -36,7 +62,7 @@ function client(opts: { instrumentVersions?: FrlVersion[]; acts?: FrlTitle[]; ac
     fetchJson: async (_host: string, path: string) =>
       path.includes("Search(criteria=")
         ? { "@odata.count": acts.length, value: acts }
-        : AUTHORISED_BY,
+        : authorisedBy,
   } as unknown as AuApiClient
 }
 
@@ -108,5 +134,155 @@ describe("instrument_radar refusals", () => {
     const versions = [version("2020-01-01", "F2020C00123", "12"), version("2026-09-01", null)]
     const text = (await run(client({ instrumentVersions: versions }))).content[0].text
     expect(text).toContain("Last compiled: 2026-09-01")
+  })
+})
+
+// ── a suggested call must be one the caller can actually run ───────────────
+
+/**
+ * `authorisedBy.affectingProvisions` exactly as the Federal Register returns
+ * it. Live-verified 2026-09-04 against `$expand=authorisedBy` for the
+ * Competition and Consumer Act, the Fair Work Act, the Corporations Act and the
+ * Migration Act: these are the 18 distinct values the four Acts' instruments
+ * carry. Eight of them — every one below the divider — are rejected outright by
+ * `parseSectionRef`, and before the fix each was interpolated verbatim into
+ * `get_provision_history({provision:"…"})`, so the suggestion the tool printed
+ * failed the moment the caller ran it.
+ */
+const REGISTER_ENABLING_PROVISIONS = [
+  // Parse as given.
+  "s 172",
+  "s 1",
+  "s 95AA",
+  "s 56BA",
+  "sch 2 s 134",
+  "s 269P",
+  "s 504",
+  "s 601QA",
+  "s 1364",
+  "s 41",
+  // Rejected by `parseSectionRef` — the eight that broke the follow-up call.
+  "s 134 of sch 2",
+  "s 134(1) of sch 2",
+  "s 109(1)(b) of sch 2",
+  "s 104(1) of sch 2",
+  "s 95X(1) and (2)",
+  "sch 2 (s 134(1))",
+  "s 202(5), 205(3), 737(1), 768BK(1A)",
+  "s 245J, 245K",
+  "s 140GBA(4), (5), (6A)",
+] as const
+
+/** Every `provision:"…"` argument the rendered output offers the caller. */
+function suggestedProvisions(text: string): string[] {
+  return [...text.matchAll(/provision:"([^"]*)"/g)].map((match) => match[1])
+}
+
+describe("instrument_radar never suggests a call its own parser would reject", () => {
+  it.each(REGISTER_ENABLING_PROVISIONS)("%s", async (raw) => {
+    const text = (await run(client({ enablingProvision: raw }))).content[0].text
+    // Reproduced before the fix by this same loop: the eight unparseable
+    // values came back as `provision:"s 134(1) of sch 2"` and friends, and
+    // `requireRef` on them throws `[INVALID_PARAMETER] Not a recognisable
+    // provision reference`.
+    for (const suggestion of suggestedProvisions(text)) {
+      expect(() => requireRef(suggestion), `${raw} → provision:"${suggestion}"`).not.toThrow()
+    }
+    // The Register's own wording is never lost, whichever branch was taken.
+    expect(text, raw).toContain(raw)
+  })
+
+  it("normalises the schedule forms rather than dropping them", async () => {
+    const text = (await run(client({ enablingProvision: "s 134(1) of sch 2" }))).content[0].text
+    expect(suggestedProvisions(text)).toEqual(["sch 2 s 134(1)"])
+    expect(text).toContain('the Register records the power as "s 134(1) of sch 2"')
+  })
+
+  it("says so when it narrowed a list to its first member", async () => {
+    const text = (await run(client({ enablingProvision: "s 245J, 245K" }))).content[0].text
+    expect(suggestedProvisions(text)).toEqual(["s 245J"])
+    expect(text).toContain("the first of the provisions it names, so check the others too")
+  })
+
+  it("suggests no call at all when nothing can be normalised, and says why", async () => {
+    // A value the Register could return that no rearrangement rescues.
+    const text = (await run(client({ enablingProvision: "the Act generally" }))).content[0].text
+    expect(suggestedProvisions(text)).toEqual([])
+    expect(text).toContain('The Register records the power as "the Act generally"')
+    expect(text).toContain("not a single provision reference")
+    expect(text).toContain("no get_provision_history call is suggested")
+  })
+
+  it("says there is nothing specific to check when the Register records no provision", async () => {
+    const text = (await run(client({ enablingProvision: null }))).content[0].text
+    expect(suggestedProvisions(text)).toEqual([])
+    expect(text).toContain("records no enabling provision for this Act")
+  })
+
+  it("leaves a value that already parses exactly as it is", async () => {
+    const text = (await run(client({ enablingProvision: "s 172" }))).content[0].text
+    expect(suggestedProvisions(text)).toEqual(["s 172"])
+    expect(text).not.toContain("the Register records the power as")
+  })
+})
+
+describe("enablingProvisionCall", () => {
+  it("returns a reference `requireRef` accepts, or nothing at all", () => {
+    for (const raw of REGISTER_ENABLING_PROVISIONS) {
+      const call = enablingProvisionCall(raw)
+      expect(call.provision, raw).toBeDefined()
+      expect(() => requireRef(call.provision as string), raw).not.toThrow()
+      expect(parseSectionRef(call.provision as string), raw).not.toBeNull()
+    }
+  })
+
+  it("keeps the Register's string whenever the call differs from it", () => {
+    expect(enablingProvisionCall("s 172")).toEqual({ provision: "s 172" })
+    expect(enablingProvisionCall("s 104(1) of sch 2")).toEqual({
+      provision: "sch 2 s 104(1)",
+      raw: "s 104(1) of sch 2",
+    })
+    expect(enablingProvisionCall("s 95X(1) and (2)")).toEqual({
+      provision: "s 95X(1)",
+      raw: "s 95X(1) and (2)",
+      narrowed: true,
+    })
+  })
+
+  it("normalises nothing it cannot verify", () => {
+    expect(enablingProvisionCall(undefined)).toEqual({})
+    expect(enablingProvisionCall("   ")).toEqual({})
+    expect(enablingProvisionCall("the Act generally")).toEqual({ raw: "the Act generally" })
+    expect(enablingProvisionCall("made under the Act")).toEqual({ raw: "made under the Act" })
+  })
+})
+
+describe("the sites that print a follow-up provision are enumerated", () => {
+  // The class, not the instance. Round 3's lesson: a fix applied site-by-site
+  // misses a site. Every `provision:"…"` this module emits must come from
+  // `enablingProvisionCall`, so a new suggestion cannot silently interpolate a
+  // raw Register string again.
+  const SOURCE = readFileSync(fileURLToPath(new URL("./instrument-radar.ts", import.meta.url)), "utf8")
+
+  it("every provision argument in the source is a verified one", () => {
+    const interpolations = [...SOURCE.matchAll(/provision:\\?"\$\{([^}]*)\}\\?"/g)].map((match) => match[1].trim())
+    expect(interpolations.length).toBeGreaterThan(0)
+    for (const expression of interpolations) {
+      expect(expression, `provision:"\${${expression}}"`).toMatch(/^call\.provision$/)
+    }
+  })
+
+  it("no sibling tool file in this directory was left interpolating a raw enabling provision", () => {
+    // Scoped to what this agent owns; `law-linkage.ts` has the same shape and
+    // is fixed by its own owner. Listing the offenders here means a *new* one
+    // in an owned file fails loudly.
+    const OWNED = ["instrument-radar.ts", "impact-map.ts"]
+    const directory = fileURLToPath(new URL("./", import.meta.url))
+    for (const name of readdirSync(directory).filter((file) => OWNED.includes(file))) {
+      const source = readFileSync(`${directory}${name}`, "utf8")
+      for (const match of source.matchAll(/provision:\\?"\$\{([^}]*)\}\\?"/g)) {
+        expect(match[1].trim(), `${name}: provision:"\${${match[1]}}"`).toMatch(/call\.provision|pinpoint|formatRef/)
+      }
+    }
   })
 })

@@ -26,12 +26,13 @@
 
 import { z } from "zod"
 import type { AuApiClient } from "../lib/api-client.js"
-import { ErrorCodes, LawApiError, formatToolError } from "../lib/errors.js"
+import { ErrorCodes, LawApiError, UpstreamBlockedError, formatToolError } from "../lib/errors.js"
 import { frlHumanUrl } from "../lib/external-links-map.js"
 import { lawCache, SEARCH_CACHE_TTL } from "../lib/cache.js"
 import type { FrlTitle, LooseToolResponse } from "../lib/types.js"
 import { frlSearchUrl, searchTitlesMatching } from "../lib/sources/frl-search.js"
 import { searchStateLaw, STATE_JURISDICTIONS, type StateJurisdiction } from "../lib/sources/state-legislation.js"
+import { getHostConfig } from "../lib/upstream-hosts.js"
 import { interleave, renderDocument, renderSearch } from "../lib/sources/render.js"
 import type { SourceHit, SourceSearchResult } from "../lib/sources/types.js"
 
@@ -234,6 +235,49 @@ export const SEARCHABLE_STATE_REGISTERS: readonly StateJurisdiction[] = STATE_JU
   (jurisdiction) => jurisdiction !== "NSW" && jurisdiction !== "SA",
 )
 
+/** Derived from the searchable set, so the two lists cannot disagree. */
+export const BLOCKED_STATE_REGISTERS: readonly StateJurisdiction[] = STATE_JURISDICTIONS.filter(
+  (jurisdiction) => !SEARCHABLE_STATE_REGISTERS.includes(jurisdiction),
+)
+
+/** Landing page of a blocked register, from the host table (the single source of bases). */
+const BLOCKED_REGISTER_HOSTS = { NSW: "nswLegislation", SA: "saLegislation" } as const
+
+function blockedRegisterUrl(jurisdiction: StateJurisdiction): string | undefined {
+  const key = (BLOCKED_REGISTER_HOSTS as Partial<Record<StateJurisdiction, "nswLegislation" | "saLegislation">>)[
+    jurisdiction
+  ]
+  return key ? getHostConfig(key).base : undefined
+}
+
+/**
+ * Every register asked for is one this server refuses to fetch.
+ *
+ * `searchStateLaw` throws `UpstreamBlockedError` for NSW and SA *before* it
+ * makes any request, and `Promise.allSettled` turns that into a rejection like
+ * any other. Flattening it into `[EXTERNAL_API_ERROR] … Transport failures
+ * only; retry` said three untrue things at once: that a transport failed, that
+ * retrying could help, and — by dropping `error.links` — that there was
+ * nowhere to look. `[UPSTREAM_BLOCKED]` is a different fact from
+ * `[EXTERNAL_API_ERROR]` and from `[NOT_FOUND]`, and it always travels with
+ * the deep links.
+ */
+function blockedRefusal(blocked: readonly UpstreamBlockedError[]): Error {
+  const single = blocked.length === 1 ? blocked[0] : undefined
+  // One register: hand back the register client's own error, so the label, the
+  // reason and the links are exactly what `errors.ts` renders for a refusal.
+  if (single) return single
+  return new LawApiError(
+    blocked.map((error) => error.message).join(" "),
+    ErrorCodes.UPSTREAM_BLOCKED,
+    [
+      "⚠️ Do not report this as 'no such university legislation'. These registers were never queried, so this " +
+        "response carries no evidence either way, and retrying will not change it.",
+      ...blocked.flatMap((error) => error.links.map((link) => `Open directly: ${link}`)),
+    ],
+  )
+}
+
 export async function searchUniversityRules(
   client: AuApiClient,
   input: SearchUniversityRulesInput,
@@ -267,20 +311,47 @@ export async function searchUniversityRules(
       "Some university rules are published only on the university's own website and appear in no " +
       "legislation register at all — absence here is not absence in law.",
     ]
+    const blocked: UpstreamBlockedError[] = []
     settled.forEach((outcome, index) => {
       if (outcome.status === "fulfilled") {
         results.push(outcome.value)
-      } else {
-        const reason = outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason)
-        notes.push(`${registers[index]} register: ${reason}`)
+        return
+      }
+      if (outcome.reason instanceof UpstreamBlockedError) blocked.push(outcome.reason)
+      const reason = outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason)
+      const label = outcome.reason instanceof UpstreamBlockedError ? `[${ErrorCodes.UPSTREAM_BLOCKED}] ` : ""
+      notes.push(`${label}${registers[index]} register: ${reason}`)
+      if (outcome.reason instanceof UpstreamBlockedError) {
+        for (const link of outcome.reason.links) notes.push(`  Open directly: ${link}`)
       }
     })
 
+    // The registers this server never asks — named even when the search
+    // succeeded elsewhere, because the schema promises links for them and
+    // because "not in these results" is not "not in Australian law".
+    const unsearched = BLOCKED_STATE_REGISTERS.filter((jurisdiction) => !registers.includes(jurisdiction))
+    if (unsearched.length > 0) {
+      notes.push(
+        `[${ErrorCodes.UPSTREAM_BLOCKED}] ${unsearched.join(" and ")} were not searched — those registers refuse ` +
+          "automated clients. Their university acts exist and open in a browser: " +
+          unsearched
+            .map((jurisdiction) => `${jurisdiction} ${blockedRegisterUrl(jurisdiction) ?? "(no link recorded)"}`)
+            .join(", "),
+      )
+    }
+
     if (results.length === 0) {
+      // A refusal is not a transport failure. Only when every register that
+      // failed failed for transport reasons is "retry" the right advice.
+      if (blocked.length > 0 && blocked.length === registers.length) throw blockedRefusal(blocked)
       throw new LawApiError(
         "No state legislation register answered the university-rules search.",
         ErrorCodes.API_ERROR,
-        ["⚠️ Transport failures only; retry, or name a single jurisdiction to isolate the problem."],
+        [
+          "⚠️ This is a lookup failure, not evidence that no such university legislation exists.",
+          "⚠️ Transport failures; retry, or name a single jurisdiction to isolate the problem.",
+          ...blocked.flatMap((error) => error.links.map((link) => `Open directly: ${link}`)),
+        ],
       )
     }
 

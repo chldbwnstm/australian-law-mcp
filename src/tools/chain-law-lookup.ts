@@ -277,6 +277,29 @@ const PRINCIPAL_POINTS = 25
 const ACT_POINTS = 20
 
 /**
+ * Status, weighted exactly as `rankTitles` weights it (`title-lookup.ts`:
+ * `InForce` +15, `Repealed` −10, anything else neutral, on a scale where
+ * `isPrincipal` is +25 and `collection === "Act"` is +20 — the same two numbers
+ * as here).
+ *
+ * The two rankings are shown to the caller side by side: `chain_full_research`
+ * prints "Legislation matching the question" ranked by `rankTitles` and then
+ * "Base law:" chosen by this function. Scoring status in one and not the other
+ * made them disagree in the worst possible direction — the list led with the
+ * in-force Act while the chain's whole structural section was built on a
+ * *repealed* instrument, with no note saying so. Live 2026-09-04, "live export
+ * animal welfare requirements" headed the list with the *Export Control
+ * (Animals) Rules 2021* (InForce) and took as its base law the *Australian
+ * Meat and Live-stock Industry (Protection of Animal Welfare) Order 2011*,
+ * repealed three months after it was made.
+ *
+ * Deliberately small, like the originals: status separates two otherwise equal
+ * candidates, it does not outrank a name that matches the question.
+ */
+const IN_FORCE_POINTS = 15
+const REPEALED_PENALTY = 10
+
+/**
  * Bigger than the largest overlap award, and deliberately so.
  *
  * An *amending* Act is not a weaker base law, it is the wrong kind of thing:
@@ -337,6 +360,10 @@ export function rankFullTextCandidates(
     if (law.isPrincipal) points += PRINCIPAL_POINTS
     else if (law.isPrincipal === false) points -= NON_PRINCIPAL_PENALTY
     if (law.collection === "Act") points += ACT_POINTS
+    // `undefined` is not "not in force": a status the Register did not send is
+    // neutral, exactly as in `rankTitles`.
+    if (law.status === "InForce") points += IN_FORCE_POINTS
+    else if (law.status === "Repealed") points -= REPEALED_PENALTY
     return { law, index, points, fraction }
   })
   // Stable on the upstream order, which *is* the relevance ranking.
@@ -363,6 +390,19 @@ export function rankFullTextCandidates(
       "⚠️ Base law chosen by full-text relevance alone — no word of your question appears in its name, and no " +
         "subject anchor matched. Verify it is the Act you meant before relying on the sections below." +
         (alternatives.length > 0 ? ` Alternatives considered: ${alternatives.join("; ")}.` : ""),
+    )
+  }
+
+  // A base law that is not in force can still be the right answer — a question
+  // about a 2011 transaction is answered by the instrument in force then — but
+  // it is never a silent one, because every section the chain reads off it is
+  // spent law.
+  if (winner && winner.law.status && winner.law.status !== "InForce") {
+    const live = laws.find((law) => law.status === "InForce")
+    notes.push(
+      `⚠️ The base law ${describe(winner.law)} is recorded as ${winner.law.status}, so the provisions below are ` +
+        "not current law." +
+        (live ? ` An in-force candidate was also found: ${describe(live)}.` : ""),
     )
   }
 

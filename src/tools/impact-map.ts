@@ -64,6 +64,14 @@ export const impactMapDescription =
 const HITS_SHOWN = 8
 /** Instruments listed. */
 const INSTRUMENTS_SHOWN = 10
+/**
+ * How many of the Act's in-force instruments are actually fetched and read for
+ * their enabling provision. One Register page; the CCA has 146 in force, the
+ * Corporations Act 410, so for a busy Act this is a **sample**, not a census —
+ * which is why every number derived from it is labelled at the point it is
+ * printed (`scanLabel` below).
+ */
+const INSTRUMENT_SCAN_TOP = 40
 /** Hard ceiling on the mermaid node count, so a busy section cannot blow the response. */
 const MERMAID_MAX_NODES = 18
 
@@ -123,7 +131,7 @@ export async function impactMap(apiClient: AuApiClient, input: ImpactMapInput): 
     const [traces, instruments, history] = await Promise.all([
       Promise.all(phrases.map((phrase) => backTrace(apiClient, phrase, { perSource: HITS_SHOWN }))),
       input.includeInstruments
-        ? enabledInstruments(apiClient, title.id, { top: 40 }).catch((error: unknown) => ({
+        ? enabledInstruments(apiClient, title.id, { top: INSTRUMENT_SCAN_TOP }).catch((error: unknown) => ({
             count: 0,
             titles: [] as RelatedTitle[],
             error: error instanceof Error ? error.message : String(error),
@@ -170,20 +178,36 @@ export async function impactMap(apiClient: AuApiClient, input: ImpactMapInput): 
     } else if ("error" in instruments) {
       lines.push(`▶ Instruments made under the Act: [UPSTREAM_NO_DATA] ${instruments.error} — not a finding that there are none.`)
     } else {
+      const scan = scanScope(instruments.count, instruments.titles.length)
       const enabledHere = instruments.titles.filter((instrument) =>
         provisionMatches(enablingProvisionFor(instrument.authorisedBy ?? [], title.id), ref),
       )
       lines.push(
         `▶ Legislative instruments in force under ${title.name}: ${instruments.count}` +
-          `${enabledHere.length > 0 ? `, of which ${enabledHere.length} name ${pinpoint} as the enabling provision` : ""}`,
+          `${
+            enabledHere.length > 0
+              ? `, of which ${enabledHere.length} of the ${scan.examined} ${scanLabel(scan)} name ${pinpoint} as ` +
+                "the enabling provision"
+              : ""
+          }`,
       )
+      if (scan.capped) {
+        // The count above is the Register's; every number after it is this
+        // window's. Without this line "2 of 146" is what a reader takes away.
+        lines.push(
+          `  ⚠️ Enabling-provision figures below cover only the ${scan.examined} instrument(s) this call read ` +
+            `(alphabetical, of ${scan.total} in force); the other ${scan.total - scan.examined} were never fetched. ` +
+            `Treat any tally of ${pinpoint} as a floor, not a total — use ` +
+            `get_enabled_instruments({registerId:"${title.id}"}) to page through the rest.`,
+        )
+      }
       for (const instrument of (enabledHere.length > 0 ? enabledHere : instruments.titles).slice(0, INSTRUMENTS_SHOWN)) {
         const enabling = enablingProvisionFor(instrument.authorisedBy ?? [], title.id)
         lines.push(`  • ${instrument.name} [${instrument.id}]${enabling ? ` — made under ${enabling}` : ""}`)
       }
       if (enabledHere.length === 0 && instruments.titles.length > 0) {
         lines.push(
-          `  ↳ None of the ${instruments.titles.length} instruments examined records ${pinpoint} as its enabling ` +
+          `  ↳ None of the ${scan.examined} ${scanLabel(scan)} records ${pinpoint} as its enabling ` +
             "provision; those listed are made under the Act generally.",
         )
       }
@@ -220,7 +244,12 @@ export async function impactMap(apiClient: AuApiClient, input: ImpactMapInput): 
         mermaid({
           root: `${shortName(title.name)} ${pinpoint}`,
           cases: merged.length,
-          instruments: "skipped" in instruments || "error" in instruments ? 0 : instruments.count,
+          // `undefined`, never `0`: the graph node for a scan that was skipped
+          // or failed upstream used to read "Instruments under the Act: 0",
+          // which is the absence claim this server exists not to make.
+          ...("skipped" in instruments || "error" in instruments
+            ? {}
+            : { instruments: scanScope(instruments.count, instruments.titles.length) }),
           families,
           amendments: history.rows.length,
         }),
@@ -239,6 +268,35 @@ export async function impactMap(apiClient: AuApiClient, input: ImpactMapInput): 
   } catch (error) {
     return formatToolError(error, "impact_map")
   }
+}
+
+/**
+ * What the enabling-provision figures were actually computed over.
+ *
+ * `enabledInstruments` returns the Register's whole `@odata.count` next to at
+ * most `$top` rows, so `count` is a census and `titles.length` is a sample. One
+ * derived tally printed beside the other reads as "2 of 146" when 106 titles
+ * were never fetched — which is why this is built once and every site that
+ * prints a derived number takes its wording from here.
+ */
+export interface ScanScope {
+  /** The Register's own count of in-force instruments under the Act. */
+  total: number
+  /** How many were actually fetched and read for their enabling provision. */
+  examined: number
+  /** True when `examined < total`: every derived number is a floor. */
+  capped: boolean
+}
+
+export function scanScope(total: number, examined: number): ScanScope {
+  return { total, examined, capped: examined < total }
+}
+
+/** The noun phrase for `examined`, which must never read as the whole corpus. */
+export function scanLabel(scan: ScanScope): string {
+  return scan.capped
+    ? `instrument(s) examined (of ${scan.total} in force — a capped scan)`
+    : "instrument(s) examined (all of them)"
 }
 
 /** Does an `authorisedBy` enabling provision (`"s 172"`, `"s 134(1) of sch 2"`) name this reference? */
@@ -282,7 +340,8 @@ function sanitise(value: string): string {
 function mermaid(p: {
   root: string
   cases: number
-  instruments: number
+  /** Absent when the scan was skipped or failed — which is not the same as none. */
+  instruments?: ScanScope
   families: readonly StatuteFamily[]
   amendments: number
 }): string {
@@ -295,7 +354,14 @@ function mermaid(p: {
     lines.push(`  P -->${note ? `|${sanitise(note)}|` : ""} ${id}`)
   }
   add("C", `Citing judgments: ${p.cases}`, "cited in")
-  add("I", `Instruments under the Act: ${p.instruments}`, "enables")
+  add(
+    "I",
+    p.instruments
+      ? `Instruments under the Act: ${p.instruments.total}` +
+        (p.instruments.capped ? ` (${p.instruments.examined} examined)` : "")
+      : "Instruments under the Act: not read",
+    "enables",
+  )
   add("A", `Endnote amendment rows: ${p.amendments}`, "amended by")
   for (const [index, family] of p.families.slice(0, 2).entries()) {
     add(`F${index}`, `${family.label} (${family.members.length} jurisdictions)`, family.relation)

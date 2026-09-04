@@ -156,6 +156,37 @@ describe("pointing, not answering", () => {
     expect(text).toContain('get_law_text(registerId="C2009A00028")')
   })
 
+  it("points the follow-up call at the schedule the named law IS", async () => {
+    // The flagship wrong answer. "ACL s 18" is CCA sch 2 s 18 ("Misleading or
+    // deceptive conduct"); the Act's own s 18 is "Meetings of Commission", and
+    // it returns real text, so a caller following the printed call has no way
+    // to tell they were sent to the wrong provision. `resolveLawAlias` above
+    // matches a whole string and sees nothing in this sentence, which is why
+    // the schedule has to come from the same reading the router uses.
+    const { api } = client([FW_ACT])
+    const text = (await run(api, { query: "ACL s 18 misleading conduct" })).content[0].text
+    expect(text).toContain('provision="sch 2 s 18"')
+    expect(text).not.toContain('provision="s 18"')
+    // And it says why, rather than silently substituting a different number.
+    expect(text).toContain("sch 2")
+    expect(text).toContain("Competition and Consumer Act 2010")
+    expect(text).toContain("Provision reference(s) read out of your question")
+  })
+
+  it("leaves a reference that already names its schedule alone", async () => {
+    const { api } = client([FW_ACT])
+    const text = (await run(api, { query: "ACL sch 2 s 18 misleading conduct" })).content[0].text
+    expect(text).toContain('provision="sch 2 s 18"')
+    expect(text).not.toContain("sch 2 sch 2")
+  })
+
+  it("adds no schedule when the law named is not one", async () => {
+    const { api } = client([FW_ACT])
+    const text = (await run(api, { query: "CCA s 45 cartel conduct" })).content[0].text
+    expect(text).toContain('provision="s 45"')
+    expect(text).not.toContain("sch 2")
+  })
+
   it("says these are pointers rather than an answer", async () => {
     const { api } = client([FW_ACT])
     expect((await run(api)).content[0].text).toContain("pointers, not an answer")
@@ -218,5 +249,18 @@ describe("the structured form chains use", () => {
       provisionHints: false,
     } as never)
     expect(structured.provisionRefs).toContain("s 524")
+  })
+
+  it("hands chains the schedule-scoped reference, not the bare one", async () => {
+    // `chain_full_research` and `chain_law_lookup` take this array and feed it
+    // to get_law_text. An unscoped "s 18" here is the same wrong provision one
+    // layer further from the caller.
+    const { api } = client([FW_ACT])
+    const structured = await searchAiLawStructured(api, {
+      query: "ACL s 18 misleading conduct",
+      limit: 10,
+      provisionHints: false,
+    } as never)
+    expect(structured.provisionRefs).toEqual(["sch 2 s 18"])
   })
 })

@@ -23,6 +23,7 @@
 import { z } from "zod"
 import type { AuApiClient } from "../lib/api-client.js"
 import { ErrorCodes, LawApiError, formatToolError } from "../lib/errors.js"
+import { ExecutionLimitError } from "../lib/execution-limits.js"
 import { htmlToText } from "../lib/provision-slicer.js"
 import { primaryLawMention, provisionParam } from "../lib/query-extract.js"
 import { truncateResponse } from "../lib/schemas.js"
@@ -134,12 +135,16 @@ export async function getBatchProvisions(
     let found = 0
     let missed = 0
     let upstream = 0
+    let budget = 0
+    let budgetMessage: string | undefined
 
     for (const task of tasks) {
       const block = await runTask(apiClient, task, input.maxCharsPerProvision)
       found += block.found
       missed += block.missed
       upstream += block.upstream
+      budget += block.budget
+      budgetMessage ??= block.budgetMessage
       sections.push(block.text)
     }
 
@@ -152,27 +157,47 @@ export async function getBatchProvisions(
         ? `\n[${ErrorCodes.UPSTREAM_NO_DATA}] ${upstream} of them failed because the Federal Register did not hand over ` +
           "the title, its table of contents or the volume text — an upstream failure, not evidence the provision is " +
           "absent. Retry before concluding anything."
+        : "") +
+      // A spent request budget is this server's own arithmetic, not the
+      // Register's behaviour: it is deterministic, it will recur on an
+      // identical call, and the remedy is the caller's, not the upstream's.
+      // Reported as [UPSTREAM_NO_DATA] "retry before concluding anything" it
+      // sent a model round the same failing call for ever.
+      (budget > 0
+        ? `\n[${ErrorCodes.INVALID_PARAM}] ${budget} of them were never requested because this request's own upstream ` +
+          `work budget ran out${budgetMessage ? ` (${budgetMessage})` : ""} — a limit inside this server, not a fact ` +
+          "about the Federal Register, and not evidence the provision is absent. Retrying this call unchanged will " +
+          "fail in exactly the same place: split it into smaller calls (fewer provisions, or fewer titles), or raise " +
+          "MCP_MAX_UPSTREAM_REQUESTS / MCP_MAX_TOTAL_UPSTREAM_BODY_BYTES."
         : "")
 
     return {
       content: [{ type: "text", text: truncateResponse([head, "", ...sections].join("\n")) }],
-      // Nothing was retrieved and the reason was upstream: this is a failed
-      // call, and the flag is what a chain reads (`chains.ts` secOrSkip) to
-      // print [NOT RETRIEVED] instead of rendering the block as data. A batch
-      // that kept some text stays a normal result — a partial answer is an
-      // answer — and carries the label above instead.
-      ...(upstream > 0 && found === 0 ? { isError: true } : {}),
+      // Nothing was retrieved and the reason was upstream or the budget: this
+      // is a failed call, and the flag is what a chain reads (`chains.ts`
+      // secOrSkip) to print [NOT RETRIEVED] instead of rendering the block as
+      // data. A batch that kept some text stays a normal result — a partial
+      // answer is an answer — and carries the label above instead.
+      ...(upstream + budget > 0 && found === 0 ? { isError: true } : {}),
     }
   } catch (error) {
     return formatToolError(error, "get_batch_provisions")
   }
 }
 
-async function runTask(
-  apiClient: AuApiClient,
-  task: Task,
-  maxChars: number,
-): Promise<{ text: string; found: number; missed: number; upstream: number }> {
+interface TaskResult {
+  text: string
+  found: number
+  missed: number
+  /** Provisions lost because the Register did not hand something over. */
+  upstream: number
+  /** Provisions never requested at all, because this request's budget was spent. */
+  budget: number
+  /** The budget error's own message, verbatim, for the summary line. */
+  budgetMessage?: string
+}
+
+async function runTask(apiClient: AuApiClient, task: Task, maxChars: number): Promise<TaskResult> {
   const label = task.registerId ?? task.query ?? "(unspecified title)"
   let titleId: string
   let titleName: string
@@ -191,13 +216,15 @@ async function runTask(
     // count to zero left an outage in the title or table-of-contents lookup
     // looking exactly like a tidy list of things that are not there: no
     // label, and no `isError` for a chain to read.
-    const { label: code, upstream } = unresolvedLabel(error)
+    const loss = classifyLoss(error)
     const message = error instanceof Error ? error.message : String(error)
     return {
-      text: `▶ ${label}\n[${code}] ${message}\n(${task.provisions.length} provision(s) skipped for this title.)`,
+      text: `▶ ${label}\n[${loss.label}] ${message}\n(${task.provisions.length} provision(s) skipped for this title.)`,
       found: 0,
       missed: task.provisions.length,
-      upstream: upstream ? task.provisions.length : 0,
+      upstream: loss.kind === "upstream" ? task.provisions.length : 0,
+      budget: loss.kind === "budget" ? task.provisions.length : 0,
+      ...(loss.kind === "budget" ? { budgetMessage: message } : {}),
     }
   }
 
@@ -206,10 +233,13 @@ async function runTask(
   const misses: string[] = []
   const volumes = new Map<string, string>()
   /** Volumes whose fetch failed, so thirty sections of one dead volume cost one attempt. */
-  const volumeErrors = new Map<string, string>()
+  const volumeErrors = new Map<string, { message: string; kind: LossKind }>()
   let found = 0
   /** Provisions lost to a volume the Register would not hand over — not absences. */
   let upstream = 0
+  /** Provisions never requested because the request's budget was already spent. */
+  let budget = 0
+  let budgetMessage: string | undefined
   /**
    * The alias may name a *schedule*: "ACL" **is** CCA sch 2, so a bare "s 18"
    * asked of it means sch 2 s 18, never the body's "Meetings of Commission".
@@ -237,8 +267,15 @@ async function runTask(
     if (html === undefined) {
       const alreadyFailed = volumeErrors.get(node.volumeDoc)
       if (alreadyFailed !== undefined) {
-        misses.push(`${formatRef(ref)} — ${node.volumeDoc} could not be read: ${alreadyFailed}`)
-        upstream++
+        misses.push(`${formatRef(ref)} — ${node.volumeDoc} could not be read: ${alreadyFailed.message}`)
+        // Same classification as the first failure: replaying a remembered
+        // error must not relabel a spent budget as an upstream outage.
+        if (alreadyFailed.kind === "budget") {
+          budget++
+          budgetMessage ??= alreadyFailed.message
+        } else {
+          upstream++
+        }
         continue
       }
       const volume = /document_(\d+)/.exec(node.volumeDoc)
@@ -261,9 +298,15 @@ async function runTask(
         // the Act". The caller reads that distinction off `upstream`.
         if (getRequestSignal()?.aborted) throw error
         const message = error instanceof Error ? error.message : String(error)
-        volumeErrors.set(node.volumeDoc, message)
+        const kind = classifyLoss(error).kind
+        volumeErrors.set(node.volumeDoc, { message, kind })
         misses.push(`${formatRef(ref)} — ${node.volumeDoc} could not be read: ${message}`)
-        upstream++
+        if (kind === "budget") {
+          budget++
+          budgetMessage ??= message
+        } else {
+          upstream++
+        }
         continue
       }
       volumes.set(node.volumeDoc, html)
@@ -296,28 +339,57 @@ async function runTask(
     lines.push("  Try another `date`, or check the reference with get_law_tree / parse_section_ref.")
   }
   lines.push(`(volumes read for this title: ${volumes.size})`)
-  return { text: lines.join("\n"), found, missed: misses.length, upstream }
+  return {
+    text: lines.join("\n"),
+    found,
+    missed: misses.length,
+    upstream,
+    budget,
+    ...(budgetMessage ? { budgetMessage } : {}),
+  }
 }
 
 /**
- * Which of the taxonomy's labels a failed title lookup earns, and whether the
- * provisions under it are counted as upstream losses.
+ * Why a provision is missing from the answer. Four causes, four remedies —
+ * and collapsing any two of them tells the caller to do the wrong thing.
+ */
+export type LossKind =
+  /** The Register answered and has no such record. The only one that is absence. */
+  | "absent"
+  /** Nothing was asked of the Register: the call itself was under-specified. */
+  | "invalid"
+  /** The Register was asked and did not hand it over. Retryable. */
+  | "upstream"
+  /** This server's own per-request budget was spent. Deterministic; not retryable. */
+  | "budget"
+
+/**
+ * Which of the taxonomy's labels a failed lookup earns, and which cause it is.
+ *
+ * Used at every site that turns an exception into a missing provision — the
+ * title/table-of-contents lookup, the volume fetch, and the replay of a volume
+ * error already remembered — so the three cannot classify the same exception
+ * differently.
  *
  * Only the Register's own `NOT_FOUND` is authoritative absence: it answered,
  * and its `Titles` collection — which holds every Commonwealth register id —
- * had no such row. A 500, a timeout, a spent budget, a blocked host or an
- * unreadable table of contents is a lookup that never happened, so those
- * provisions are upstream losses and the summary has to say so. An ambiguous
- * or missing parameter is neither: nothing was asked of the Register at all,
- * and telling the caller to retry would be wrong.
+ * had no such row. A 500, a timeout, a blocked host or an unreadable table of
+ * contents is a lookup that never happened, so those provisions are upstream
+ * losses and the summary has to say so. An ambiguous or missing parameter is
+ * neither: nothing was asked of the Register at all, and telling the caller to
+ * retry would be wrong. Nor is a spent execution budget: that is arithmetic
+ * inside this server, it recurs exactly on a repeated call, and its remedy —
+ * ask for less — belongs to the caller, so it is kept apart from the upstream
+ * label that invites a retry.
  */
-function unresolvedLabel(error: unknown): { label: string; upstream: boolean } {
+export function classifyLoss(error: unknown): { label: string; kind: LossKind } {
+  if (error instanceof ExecutionLimitError) return { label: ErrorCodes.INVALID_PARAM, kind: "budget" }
   const code = error instanceof LawApiError ? error.code : undefined
   // The in-body spelling of the absence label is `[NOT_FOUND]` throughout the
   // tools (search_all keys off exactly that), not the `ErrorCodes` value.
-  if (code === ErrorCodes.NOT_FOUND) return { label: "NOT_FOUND", upstream: false }
-  if (code === ErrorCodes.INVALID_PARAM) return { label: ErrorCodes.INVALID_PARAM, upstream: false }
-  return { label: ErrorCodes.UPSTREAM_NO_DATA, upstream: true }
+  if (code === ErrorCodes.NOT_FOUND) return { label: "NOT_FOUND", kind: "absent" }
+  if (code === ErrorCodes.INVALID_PARAM) return { label: ErrorCodes.INVALID_PARAM, kind: "invalid" }
+  return { label: ErrorCodes.UPSTREAM_NO_DATA, kind: "upstream" }
 }
 
 /** Slice one provision: this anchor to the next anchor of the same volume. */
