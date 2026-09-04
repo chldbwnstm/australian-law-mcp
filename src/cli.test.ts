@@ -12,7 +12,7 @@
  */
 
 import { describe, expect, it } from "vitest"
-import { categoriesOf, createProgram, knownCommands, separateFlags, toolsInCategory } from "./cli.js"
+import { categoriesOf, createProgram, headingFor, knownCommands, separateFlags, toolsInCategory } from "./cli.js"
 import { allTools } from "./tool-registry.js"
 import { extractOptionsFromSchema } from "./lib/cli-format.js"
 
@@ -98,6 +98,18 @@ describe("list --category", () => {
 
   it("returns nothing for a category that does not exist, rather than everything", () => {
     expect(toolsInCategory("zzz")).toEqual([])
+  })
+
+  // The filter used TOOL_CATEGORIES while the *headings* still came from
+  // cli-format's default `[Prefix]` reader, so `list --category "case law"`
+  // returned the right six tools and printed them all under "── Other ──".
+  it("prints the heading from the same table it filters on", () => {
+    expect(headingFor(allTools.find((tool) => tool.name === "search_cases")!)).toBe("case law")
+    expect(headingFor(allTools.find((tool) => tool.name === "search_rulings")!)).toBe("tax and rulings")
+  })
+
+  it("never falls back to the abandoned description-prefix bucket", () => {
+    expect(allTools.map(headingFor)).not.toContain("Other")
   })
 
   it("reports every category a tool belongs to", () => {

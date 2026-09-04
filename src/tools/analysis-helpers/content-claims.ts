@@ -50,9 +50,31 @@ const VERB = new RegExp(`^[\\s,]{0,4}(?:which |that |and )?(?:${CLAIM_VERBS})\\s
 /** `s 18 makes misleading or deceptive conduct unlawful` */
 const MAKES = /^[\s,]{0,4}(?:which |that |and )?makes?\s+([^.;\n]{3,60}?)\s+(?:unlawful|an offence|actionable|void|voidable)\b/i
 
+/** Past participles a writer uses when saying, in the passive, what a provision does. */
+const PASSIVE_PARTICIPLES =
+  "prohibited|forbidden|banned|governed|regulated|covered|created|defined|dealt with|set out|addressed|found|imposed|required"
+
 /** `misleading or deceptive conduct is prohibited by <cite>` */
-const PRECEDING_PASSIVE =
-  /(?:^|[.;:]\s|\band\s|\bbut\s)([A-Za-z][^.;:\n]{3,80}?)\s+(?:is|are|was|were)\s+(?:prohibited|forbidden|governed|regulated|covered|created|defined|dealt with|set out|addressed|found)\s+(?:by|in|under|at)\s*(?:the\s+)?$/i
+const PRECEDING_PASSIVE = new RegExp(
+  `(?:^|[.;:]\\s|\\band\\s|\\bbut\\s)([A-Za-z][^.;:\\n]{3,80}?)\\s+(?:is|are|was|were)\\s+(?:${PASSIVE_PARTICIPLES})\\s+(?:by|in|under|at)\\s*(?:the\\s+)?$`,
+  "i",
+)
+
+/**
+ * `Under the CCA s 18, misleading conduct is prohibited` — the mirror image of
+ * PRECEDING_PASSIVE, and the shape a model writing legal prose reaches for most
+ * often, because "Under <Act> <section>, …" is how the sentence starts. Without
+ * it the flagship trap this whole file exists for went uncaught: the claim was
+ * never extracted, so s 18 was ticked off on existence alone.
+ *
+ * The comma is required. `s 18 misleading conduct is prohibited` with no
+ * punctuation is not a sentence anyone writes, and matching it would let a
+ * citation swallow the subject of the *next* clause.
+ */
+const FOLLOWING_PASSIVE = new RegExp(
+  `^\\s{0,3},\\s{0,3}(?:where\\s+|under\\s+which\\s+)?([A-Za-z][^.;:\\n]{3,80}?)\\s+(?:is|are|was|were)\\s+(?:${PASSIVE_PARTICIPLES})\\b`,
+  "i",
+)
 /** `the prohibition on misleading or deceptive conduct in <cite>` */
 const PRECEDING_NOUN =
   /\b(?:prohibition|rule|provision|requirement|offence|duty|obligation|test|definition|ban)\s+(?:on|of|against|for|about)\s+([^.;:\n]{3,80}?)\s+(?:in|under|at)\s*(?:the\s+)?$/i
@@ -96,6 +118,9 @@ export function extractContentClaim(before: string, after: string): ContentClaim
     ["dash", DASHED.exec(after)],
     ["verb", VERB.exec(after)],
     ["verb", MAKES.exec(after)],
+    // Last of the `after` shapes: an active-voice description immediately after
+    // the pinpoint is the stronger evidence, so it wins where both could match.
+    ["verb", FOLLOWING_PASSIVE.exec(after)],
   ]
   for (const [source, match] of ordered) {
     if (!match) continue

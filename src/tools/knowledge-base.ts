@@ -2,7 +2,7 @@
  * Knowledge-base tools (7) — the Australian stand-in for the reference
  * server's terminology API cluster.
  *
- * There is no Australian 법령용어-style API (research §7), so these tools read
+ * There is no Australian statutory-terminology API (research §7), so these tools read
  * two sources and never pretend to a third: the bundled seed dictionary in
  * `lib/legal-terms-data.ts` and the scraped State Library of NSW plain-language
  * glossary. Every answer names which of the two it came from, and every empty

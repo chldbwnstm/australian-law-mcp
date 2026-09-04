@@ -24,8 +24,20 @@ export const DEFAULT_EXECUTION_LIMITS: ExecutionLimits = {
   // bounded retry recovery while stopping unbounded fan-out from one outer
   // MCP request.
   maxUpstreamRequests: 48,
-  maxUpstreamBodyBytes: 2 * 1024 * 1024,
-  maxTotalUpstreamBodyBytes: 8 * 1024 * 1024,
+  // Sized against the real upstream, not a round number. The Federal Register
+  // serves Act text as whole epub volumes — there is no per-section endpoint —
+  // and the volumes of a large Act are megabytes each: the Competition and
+  // Consumer Act's are 2.02 MiB and 4.1 MiB. A 2 MiB cap therefore made
+  // `get_law_text({registerId:"C2004A00109", provision:"sch 2 s 18"})` — the
+  // example in this server's own tool description — fail with an
+  // [EXTERNAL_API_ERROR] on a healthy upstream, which reads to a caller as
+  // "the ACL could not be found". 8 MiB clears every volume measured; nothing
+  // is buffered that a caller did not ask for, because a volume is only
+  // fetched once a provision inside it has been named.
+  maxUpstreamBodyBytes: 8 * 1024 * 1024,
+  // Four full-size volumes in one request: a chain legitimately reads a couple
+  // of Acts, and this is the ceiling that stops a fan-out from reading more.
+  maxTotalUpstreamBodyBytes: 32 * 1024 * 1024,
   maxToolResponseChars: 50_000,
 }
 

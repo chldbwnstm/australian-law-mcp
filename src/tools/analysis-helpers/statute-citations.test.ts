@@ -72,6 +72,26 @@ describe("extractStatuteCitations", () => {
     expect(cite.claim).toBe("misleading or deceptive conduct")
   })
 
+  // "Under <Act> <section>, <thing> is prohibited" is how a model actually
+  // writes the sentence. Before this shape was recognised the claim was never
+  // extracted, so the flagship trap — CCA s 18 is 'Meetings of Commission' —
+  // was ticked off on existence alone.
+  it("reads a claim that follows the pinpoint in the passive", () => {
+    const [cite] = extractStatuteCitations(
+      "Under the Competition and Consumer Act 2010 (Cth) s 18, misleading conduct is prohibited.",
+      5,
+    )
+    expect(cite.claim).toBe("misleading conduct")
+  })
+
+  it("does not manufacture a claim out of a bare comma clause", () => {
+    const [cite] = extractStatuteCitations(
+      "Under the Competition and Consumer Act 2010 (Cth) s 18, the applicant filed on 3 March.",
+      5,
+    )
+    expect(cite.claim).toBeUndefined()
+  })
+
   it("rewrites an ACL pinpoint into the schedule it actually lives in", () => {
     const [cite] = extractStatuteCitations("ACL s 18 prohibits misleading or deceptive conduct.", 5)
     expect(cite.pinpoint).toBe("sch 2 s 18")

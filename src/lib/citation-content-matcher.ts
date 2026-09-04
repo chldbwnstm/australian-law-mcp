@@ -185,8 +185,23 @@ export function matchCitationContent(claim: string, actual: string): ContentMatc
   // A claim too short for the substring floor is judged by containment: "meetings"
   // inside "meetings of commission" is agreement, and nothing longer is available
   // to measure.
+  //
+  // The score is coverage of the heading, not a flat 1. Containment is always a
+  // match, but it is not always the *best* match, and `bestHeadingMatch` ranks
+  // candidates by this number: "misleading conduct" sits inside ACL s 31
+  // ("Misleading conduct as to the nature etc. of employment") and a flat 1 made
+  // that beat ACL s 18 ("Misleading or deceptive conduct"), which is the
+  // provision the writer meant. Coverage scores the buried match 0.35 and leaves
+  // the paraphrase's 0.55 on top. A claim that is nearly the whole heading still
+  // scores near 1.
   if (c.length < MIN_EXACT_LEN && a.includes(c)) {
-    return { matched: true, method: "exact", score: 1, normalizedLenClaim: c.length, normalizedLenActual: a.length }
+    return {
+      matched: true,
+      method: "exact",
+      score: c.length / Math.max(1, a.length),
+      normalizedLenClaim: c.length,
+      normalizedLenActual: a.length,
+    }
   }
 
   const lcs = longestCommonSubstringLen(c, a)

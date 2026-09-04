@@ -12,6 +12,12 @@ import { DEFAULT_EXECUTION_LIMITS, RequestExecutionBudget } from "./execution-li
 // branch is cancelled too — and the cleanup code awaited it. Every case runs
 // against a local mock server so no upstream is touched.
 
+// The mechanism, not the shipped constant: these cases pin the *behaviour* at a
+// limit, so they carry their own 2 MiB cap rather than moving whenever
+// DEFAULT_EXECUTION_LIMITS is retuned for a bigger upstream volume. The default
+// itself is pinned separately, at the bottom of this file.
+const LIMITS = { ...DEFAULT_EXECUTION_LIMITS, maxUpstreamBodyBytes: 2 * 1024 * 1024, maxTotalUpstreamBodyBytes: 8 * 1024 * 1024 }
+
 const OVER = Buffer.from(`<?xml version="1.0"?><Law>${"x".repeat(2_400_000)}</Law>`, "utf8") // ~2.4 MB > 2 MiB
 const UNDER = Buffer.from(`<?xml version="1.0"?><Law>${"x".repeat(1_800_000)}</Law>`, "utf8") // ~1.8 MB < 2 MiB
 const WS_THEN_JSON = Buffer.from(" ".repeat(4096) + `{"Law":"ok"}`, "utf8")
@@ -42,7 +48,7 @@ beforeAll(async () => {
 afterAll(() => new Promise<void>((r) => server.close(() => r())))
 
 function withBudget<T>(work: () => Promise<T>): { run: Promise<T>; budget: RequestExecutionBudget } {
-  const budget = new RequestExecutionBudget(DEFAULT_EXECUTION_LIMITS)
+  const budget = new RequestExecutionBudget(LIMITS)
   return { budget, run: requestContext.run({ budget }, work) }
 }
 
@@ -51,9 +57,7 @@ const read = (url: string) => async () => readResponseText(await fetchWithRetry(
 describe("upstream body budget — over the limit is an error, not a hang", () => {
   it("ends immediately with an error carrying the observed size and the limit when Content-Length is over", async () => {
     const { run } = withBudget(read(`${base}?k=over`))
-    await expect(run).rejects.toThrow(
-      new RegExp(`${OVER.length}.*${DEFAULT_EXECUTION_LIMITS.maxUpstreamBodyBytes}`),
-    )
+    await expect(run).rejects.toThrow(new RegExp(`${OVER.length}.*${LIMITS.maxUpstreamBodyBytes}`))
   }, 6000)
 
   it("ends immediately on reaching the limit even without Content-Length (chunked)", async () => {
@@ -76,4 +80,24 @@ describe("large responses under the limit — no false positive, no double billi
     await expect(run).resolves.toContain(`{"Law":"ok"}`)
     expect(hits).toBe(1)                       // a false "empty body" reading would add a retry
   }, 6000)
+})
+
+describe("the shipped default clears the upstream it has to read", () => {
+  // The Federal Register has no per-section endpoint: `get_law_text` fetches a
+  // whole epub volume. Measured live, the Competition and Consumer Act's
+  // volumes are 2,113,536 and ~4.1M bytes, and its schedule 2 (the Australian
+  // Consumer Law) is the example in the tool's own description. A default below
+  // the largest volume turns that documented call into an [EXTERNAL_API_ERROR]
+  // against a perfectly healthy source.
+  const LARGEST_MEASURED_FRL_VOLUME_BYTES = 4_300_000
+
+  it("admits the largest measured Federal Register volume", () => {
+    expect(DEFAULT_EXECUTION_LIMITS.maxUpstreamBodyBytes).toBeGreaterThan(LARGEST_MEASURED_FRL_VOLUME_BYTES)
+  })
+
+  it("leaves room for a chain to read more than one of them", () => {
+    expect(DEFAULT_EXECUTION_LIMITS.maxTotalUpstreamBodyBytes).toBeGreaterThanOrEqual(
+      2 * DEFAULT_EXECUTION_LIMITS.maxUpstreamBodyBytes,
+    )
+  })
 })

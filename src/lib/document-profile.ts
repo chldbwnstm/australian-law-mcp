@@ -5,8 +5,9 @@
  * grab bag.
  *
  * Two Australian specifics shape the vocabulary. Documents here are numbered
- * `1.`, `1.1`, `Clause 4` or `Schedule 2` rather than the Korean `제N조`, so
- * clause splitting keys off decimal numbering. And the type profiles include
+ * `1.`, `1.1`, `Clause 4` or `Schedule 2` rather than with the reference
+ * server's Korean article marker, so clause splitting keys off decimal
+ * numbering rather than a leading glyph. And the type profiles include
  * the two documents an Australian self-represented litigant most often
  * arrives with — a letter of demand and a statement of claim — because
  * telling those apart from a contract changes every downstream suggestion.

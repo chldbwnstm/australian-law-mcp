@@ -1,7 +1,7 @@
 /**
  * Bundled Australian legal-term dictionary (research §7, "Terms KB").
  *
- * Australia has no equivalent of the Korean 법령용어 API, so the reference
+ * Australia has no equivalent of the Korean statutory-terminology API, so the reference
  * server's terminology tools have no upstream to call. This table is the
  * substitute, and its rules follow from that:
  *

@@ -69,11 +69,24 @@ export async function searchTreaties(
       notes.push(`Available facets: ${Object.keys(result.facets).join(", ")}`)
     }
 
+    // The follow-up hint carries the caller's own keyword and page back, because
+    // without them the lookup is a scan of page 1: the database has no
+    // single-record endpoint, so an id from page 3 is simply not found and the
+    // caller reads a [UPSTREAM_NO_DATA] as "no such treaty". A hard-coded
+    // example id here taught exactly the call that fails.
+    const page = result.page ?? input.page ?? 1
+    const followUp =
+      `get_treaty_text(id="<the id printed on the hit>"` +
+      (input.query ? `, keyword="${input.query}"` : "") +
+      (page > 1 ? `, page=${page}` : "") +
+      ") — pass the keyword and page back, or the id is looked for on page 1 only. " +
+      "Through the unified tool: get_decision_text({domain:\"treaties\", id:\"…\", options:{keyword:\"…\"}})."
+
     const text = renderSearch(result, {
       heading: "Australian Treaties Database (DFAT)",
       ...(input.query ? { query: input.query } : {}),
       notes,
-      followUp: 'get_treaty_text(id="3030") — the id printed on each hit',
+      followUp,
     })
     lawCache.set(cacheKey, text, SEARCH_CACHE_TTL)
     return { content: [{ type: "text", text }] }

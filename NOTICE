@@ -1,0 +1,113 @@
+australian-law-mcp
+
+The LICENSE (MIT) in this repository applies to the code written for this
+project. It does not apply to the legal material the tools retrieve, which is
+governed by the terms of each source below.
+
+================================================================================
+
+ARCHITECTURAL REFERENCE
+
+korean-law-mcp — https://github.com/chrisryugj/korean-law-mcp (MIT)
+
+This server is a re-implementation of that project's architecture for a
+different jurisdiction and a completely different set of upstreams. What was
+taken is design, not data: the two-list tool registry (every tool callable, ten
+advertised), the `discover_tools` → `execute_tool` meta-tool pair, the
+request-scoped execution budget, the bracket-labelled error taxonomy, the
+never-claim-absence rule for a source that could not be reached, the
+`legal_research` / `legal_analysis` aggregate entry points, and the two-layer
+citation content matcher in `src/lib/citation-content-matcher.ts` (exact
+longest-common-substring, then character-bigram Jaccard), which that project in
+turn ports from LexDiff.
+
+No Korean legal data, no upstream client and no source adapter is carried over.
+Every host in `src/lib/upstream-hosts.ts` is Australian and was researched,
+implemented and verified for this project.
+
+================================================================================
+
+DATA SOURCES
+
+This server holds no legal corpus. Every answer is fetched at call time from a
+keyless public Australian source and is attributed in the response itself.
+
+Commonwealth legislation
+  Federal Register of Legislation — https://www.legislation.gov.au/
+  Material on the Register is published by the Office of Parliamentary Counsel
+  under a Creative Commons Attribution 4.0 International licence (CC BY 4.0),
+  except for the Commonwealth Coat of Arms and any third-party material.
+  https://creativecommons.org/licenses/by/4.0/
+  This server retrieves that material unmodified and identifies the compilation
+  and register id it came from. Where the Register records that commenced
+  amendments are not yet incorporated, the response says so.
+
+Case law
+  NSW Caselaw — https://www.caselaw.nsw.gov.au/ (Department of Communities and
+    Justice, NSW)
+  High Court of Australia — https://www.hcourt.gov.au/
+  Queensland Judgments — https://www.queenslandjudgments.com.au/ (Incorporated
+    Council of Law Reporting for Queensland)
+
+State and Territory legislation
+  Queensland — https://www.legislation.qld.gov.au/
+  Tasmania — https://www.legislation.tas.gov.au/
+  Western Australia — https://www.legislation.wa.gov.au/
+  Victoria — https://www.legislation.vic.gov.au/
+  Northern Territory — https://legislation.nt.gov.au/
+  Australian Capital Territory — https://www.legislation.act.gov.au/
+
+Tribunals, regulators and registers
+  Australian Taxation Office Legal Database — https://www.ato.gov.au/law/
+  Fair Work Commission — https://www.fwc.gov.au/
+  Office of the Australian Information Commissioner — https://www.oaic.gov.au/
+  National Anti-Corruption Commission — https://www.nacc.gov.au/
+  Merit Protection Commissioner — https://www.mpc.gov.au/
+  Anti-Dumping Review Panel — https://www.industry.gov.au/
+  Department of Foreign Affairs and Trade, Australian Treaties Database —
+    https://docs.dfat.gov.au/
+  Parliament of Australia and ParlInfo — https://www.aph.gov.au/,
+    https://parlinfo.aph.gov.au/
+  State Library of NSW legal glossary — https://legalanswers.sl.nsw.gov.au/
+
+Each source's own terms of use govern the material it returns. Copyright in
+Australian judgments and in State and Territory legislation is held by the
+relevant Crown or reporting body; this server retrieves and reformats, it does
+not relicense.
+
+================================================================================
+
+SOURCES THIS SERVER DOES NOT FETCH
+
+These hosts are listed in `src/lib/upstream-hosts.ts` with `blocked: true`.
+The server builds deep links to them and never requests them:
+
+  AustLII and LawCite — https://www.austlii.edu.au/, https://lawcite.austlii.edu.au/
+    Cloudflare-gated, and AustLII asks automated clients to contact it first.
+  Federal Court of Australia — https://www.judgments.fedcourt.gov.au/
+    Cloudflare challenge on every request.
+  NSW legislation — https://legislation.nsw.gov.au/
+  SA legislation — https://www.legislation.sa.gov.au/
+    No public query surface; both registers discourage automated access.
+  ACCC and the Australian Competition Tribunal — https://www.accc.gov.au/
+    403 to non-browser clients.
+  Commonwealth Ombudsman — https://www.ombudsman.gov.au/
+    Cloudflare-gated.
+
+A blocked source is reported as `[UPSTREAM_BLOCKED]` with a link. It is never
+reported as an absence of the material.
+
+================================================================================
+
+DEPENDENCIES
+
+The npm dependencies declared in package.json are governed by their own
+licences. Run `npm ls --all` or `npx license-checker` to list them.
+
+================================================================================
+
+NOT LEGAL ADVICE
+
+This software retrieves and formats public legal material. It does not give
+legal advice, and nothing it returns is a substitute for reading the
+authorised text or consulting an Australian legal practitioner.

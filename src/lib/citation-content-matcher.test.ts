@@ -53,6 +53,22 @@ describe("matchCitationContent", () => {
     expect(result.score).toBeGreaterThan(0.25)
   })
 
+  // Both of these are matches. The question the score answers is which one
+  // `bestHeadingMatch` should offer as "the provision you meant", and burial in
+  // a longer heading is the weaker evidence: "misleading conduct" is a substring
+  // of ACL s 31 but a paraphrase of ACL s 18, and s 18 is what the writer meant.
+  it("ranks a tight paraphrase above a claim buried in a longer heading", () => {
+    const buried = matchCitationContent("misleading conduct", "Misleading conduct as to the nature etc. of employment")
+    const paraphrase = matchCitationContent("misleading conduct", "Misleading or deceptive conduct")
+    expect(buried.matched).toBe(true)
+    expect(paraphrase.matched).toBe(true)
+    expect(buried.score).toBeLessThan(paraphrase.score)
+  })
+
+  it("still scores containment near 1 when the claim is nearly the whole heading", () => {
+    expect(matchCitationContent("meetings of commission", "Meetings of Commission").score).toBeGreaterThan(0.9)
+  })
+
   it("REJECTS the flagship trap: misleading conduct vs the real CCA s 18 heading", () => {
     const result = matchCitationContent("misleading or deceptive conduct", "Meetings of Commission")
     expect(result.matched).toBe(false)

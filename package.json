@@ -68,7 +68,9 @@
   "files": [
     "build",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "NOTICE",
+    "CHANGELOG.md"
   ],
   "engines": {
     "node": ">=20.19.0"

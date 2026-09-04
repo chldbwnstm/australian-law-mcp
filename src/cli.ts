@@ -74,6 +74,17 @@ export function categoriesOf(name: string): string[] {
     .map(([category]) => category)
 }
 
+/**
+ * The heading a tool is printed under. Every list in this CLI has to use this
+ * one, or the two disagree: `cli-format`'s default categoriser reads a `[...]`
+ * prefix off the description, which is the taxonomy this project abandoned, and
+ * an Australian tool description has no such prefix — so that default silently
+ * files all 81 tools under "Other".
+ */
+export function headingFor(tool: McpTool): string {
+  return categoriesOf(tool.name)[0] ?? "other"
+}
+
 // ──────────────────────────────────────────────────────────────────────────
 // REPL
 // ──────────────────────────────────────────────────────────────────────────
@@ -137,7 +148,7 @@ async function runInteractive(): Promise<void> {
       return
     }
     if (input === "tools" || input === "list") {
-      printToolList(allTools, (tool) => categoriesOf(tool.name)[0] ?? "other")
+      printToolList(allTools, headingFor)
       rl.prompt()
       return
     }
@@ -282,7 +293,7 @@ export function createProgram(): Command {
       }
 
       printBanner(allTools.length)
-      printToolList(tools)
+      printToolList(tools, headingFor)
       console.log(fmt.dim(`  Direct call:  ${BIN} <tool> --param value`))
       console.log(fmt.dim(`  Plain English: ${BIN} "what does s 18 of the ACL say"`))
       console.log(fmt.dim(`  Interactive:   ${BIN}`))

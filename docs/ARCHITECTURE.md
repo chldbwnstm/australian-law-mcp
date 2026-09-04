@@ -1,14 +1,18 @@
 # Australian Law MCP — Architecture
 
-> Functional doppelganger of [korean-law-mcp](https://github.com/chrisryugj/korean-law-mcp) v4.12 for Australian law.
-> Reference clone: `/tmp/korean-law-mcp` (read-only). Research basis: `docs/research/*.md` (all endpoints live-verified 2026-09-03).
-> Tool surface: `docs/TOOL-MAPPING.md`.
+> **v0.1.0 — shipped.** Functional doppelganger of [korean-law-mcp](https://github.com/chrisryugj/korean-law-mcp) v4.12 for Australian law.
+> Reference clone: `/tmp/korean-law-mcp` (read-only). Research basis: `docs/research/*.md` (endpoints live-verified 2026-09-03; a few
+> relations the research did not settle were verified against the live upstream during implementation and are dated in the code that uses them —
+> see `src/tools/statute-helpers/instruments.ts`). End-to-end verification log: `docs/VERIFICATION.md`.
+> Tool surface: `docs/TOOL-MAPPING.md`. Tool reference: `docs/API.md`.
 
 ## Layering (ported 1:1 from the reference)
 
 ```
 MCP client (stdio / stateless Streamable HTTP)  |  CLI (natural-language router)
-        └── tool-registry.ts  (allTools[], 10 EXPOSED via ListTools, rest via execute_tool)
+        └── tool-registry.ts  (allTools[] = 81, 10 EXPOSED via ListTools; the rest stay
+              dispatchable by name through CallTool and are reached by discovery
+              through discover_tools → execute_tool)
               └── src/tools/*          (one file per tool cluster, Zod schemas)
                     └── src/lib/*      (routing, citation vocab, parsers, alias, cache)
                           └── upstream boundary (budgets, retry, body-shape miss detection,
@@ -20,7 +24,9 @@ Everything the reference learned stays in force here: a 200 with an HTML/empty b
 *miss shape*, not a success; an unreachable upstream is **never** reported as "does not
 exist" (`[UPSTREAM_NO_DATA]` vs `[UPSTREAM_BLOCKED]` vs `[NOT_FOUND]` are distinct);
 chains assemble partial results at the 45s deadline; every request shares one upstream
-budget (48 attempts / 2 MiB / 8 MiB).
+budget (48 attempts / 8 MiB per response / 32 MiB per request — `DEFAULT_EXECUTION_LIMITS`
+in `src/lib/execution-limits.ts`; the body figures are sized against the Federal Register's
+whole-volume epub delivery, not rounded).
 
 ## Upstream hosts (single source: `src/lib/upstream-hosts.ts`)
 
@@ -155,25 +161,38 @@ WAF block to `[UPSTREAM_BLOCKED]` with deep links, and never claim absence.
   current + `reasons[].markdown` amendment attribution + `isCurrent` vs `isLatest`
   unincorporated-amendments warning + rename handling (TPA→CCA must not read as repeal).
 - `impact_map` — provision → citing cases (full-text back-trace) + instruments made
-  under the act (FRL `enabledBy` search) + state application acts + mermaid graph.
+  under the act + state application acts + mermaid graph. The Act⇄instrument relation is
+  the `authorises(...)` / `authorisedby(...)` criteria plus `$expand=authorisedBy`
+  (`src/lib/frl-criteria.ts`) — the obvious spellings `enabledby`, `madeunder`, `enables`
+  and `authorizedby` all return 400, which is recorded in
+  `src/tools/statute-helpers/instruments.ts`.
 
 ## Build waves (agent assignments; file ownership is exclusive per wave-mate)
 
+**All waves are complete as of v0.1.0.** The table is kept as the record of who owned
+what, because file ownership explains why some clusters are shaped the way they are.
+
 | wave | agent | scope |
 |------|-------|-------|
-| 0 ✅ | scaffold | core lib ported, 64 tests |
-| 1 | B | `AuApiClient` + hosts + frl-criteria + ncx/section slicing + section-ref + case-citation + law-alias + au-dates + external-links-map (+tests, live smoke gated by env) |
-| 2 | C | statute tools: search_law, get_law_text, get_schedules, get_batch_provisions, compare_old_new, get_three_tier, historical, provision/law history, suggest_law_names, advanced_search, law_tree, statistics, system tree, linkage ×4, instrument_radar |
-| 2 | D | decision tools: 18 domains search/get pairs + per-source scrapers + unified-decisions dispatcher |
-| 2 | E | knowledge base ×7, legal terms, plain-language mapping, analyze_document port, external_links tool, parse_section_ref tool, search_all, search_ai_law |
-| 3 | F | verify_citations, cite_check, applicable_law, impact_map, legal_analysis |
-| 3 | G | chains ×8, legal_research, meta-tools, tool-registry, tool-profiles (V3_EXPOSED) |
-| 4 | H | CLI + query-router + route-patterns (English) + query-extract + scenario-rules |
-| 4 | I | index.ts, http-server, http-config, Dockerfile polish, setup wizard |
-| 5 | QA | integration, live smoke, README/API/DEVELOPMENT docs, npm pack sanity |
+| 0 ✅ | scaffold | core lib ported |
+| 1 ✅ | B | `AuApiClient` + hosts + frl-criteria + ncx/section slicing + section-ref + case-citation + law-alias + au-dates + external-links-map (+tests, live smoke gated by env) |
+| 2 ✅ | C | statute tools: search_law, get_law_text, get_schedules, get_batch_provisions, compare_old_new, get_three_tier, historical, provision/law history, suggest_law_names, advanced_search, law_tree, statistics, system tree, linkage ×4, instrument_radar |
+| 2 ✅ | D | decision tools: 18 domains search/get pairs + per-source scrapers + unified-decisions dispatcher |
+| 2 ✅ | E | knowledge base ×7, legal terms, plain-language mapping, analyze_document port, external_links tool, parse_section_ref tool, search_all, search_ai_law |
+| 3 ✅ | F | verify_citations, cite_check, applicable_law, impact_map, legal_analysis |
+| 3 ✅ | G | chains ×8, legal_research, meta-tools, tool-registry, tool-profiles (V3_EXPOSED) |
+| 4 ✅ | H | CLI + query-router + route-patterns (English) + query-extract + scenario-rules |
+| 4 ✅ | I | index.ts, http-server, http-config, Dockerfile polish, setup wizard |
+| 5 ✅ | QA | integration, live smoke, README/API/DEVELOPMENT docs, npm pack sanity |
 
 Rules for every coding agent: TypeScript strict; vitest tests ported/adapted per file
-(fixtures = recorded upstream responses, no live calls in `npm test`; live smoke scripts
-under `scripts/` gated by `LIVE=1`); files ~200 lines; English throughout; error labels
-in brackets; never invent upstream behavior — cite `docs/research/*` line for every
-endpoint used.
+(fixtures = recorded upstream responses, no live calls in `npm test`; the live smoke
+lives in `src/tools/decision-domains.live.test.ts` and is gated by `LIVE=1`); files
+~200 lines; English throughout; error labels in brackets; never invent upstream
+behaviour — cite a `docs/research/*` line for every endpoint used, or, where the
+research does not settle it, record the live verification and its date in the code
+that depends on it.
+
+As shipped: **95 test files, 1,708 offline tests, 18 live-gated.** See
+`docs/DEVELOPMENT.md` for the conventions and `docs/VERIFICATION.md` for the
+end-to-end run.
