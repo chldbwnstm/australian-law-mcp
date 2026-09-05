@@ -123,11 +123,27 @@ const RANGE_DASH_TEST = new RegExp(`[${RANGE_DASHES}${HEADING_DASHES}]`)
 /** Non-breaking and thin spaces: FRL text and pasted citations are full of them. */
 const ODD_SPACES = /[     ]/g
 
-function normaliseInput(input: string): { text: string; hadRangeDash: boolean } {
+/**
+ * U+2010/U+2011 are how the Federal Register prints the hyphen *inside* a
+ * number (`s 355‑25`), and FRL never writes a range with them — ranges are
+ * worded ("sections 5 to 6"). So text still carrying one arrived by copy and
+ * paste from the Register, and its hyphen pair is one ITAA-style number, not
+ * a range, whatever the designation's plurality says. Only the anchored
+ * parser can honour this: both the epub pipeline (`htmlToText`) and the NCX
+ * label normaliser fold these characters before the scanner runs.
+ */
+const NUMBER_HYPHEN_TEST = new RegExp(`[${HYPHEN_SPELLINGS}]`)
+
+function normaliseInput(input: string): {
+  text: string
+  hadRangeDash: boolean
+  hadNumberHyphen: boolean
+} {
   const collapsed = input.replace(ODD_SPACES, " ").replace(/\s+/g, " ").trim()
   return {
     text: collapsed.replace(DASH_REPLACE, "-"),
     hadRangeDash: RANGE_DASH_TEST.test(collapsed),
+    hadNumberHyphen: NUMBER_HYPHEN_TEST.test(collapsed),
   }
 }
 
@@ -168,8 +184,18 @@ const LETTER_RUN_MAX = 6
 /**
  * A provision number: an ITAA/ACL dotted-or-dashed form (`355-25`, `2.01`,
  * `42.02.2`, `2-1`), an ITAA structural form whose dash is followed by a
- * letter (`152-A`, `815-B`), a plain or lettered arabic number (`18`, `10AA`,
- * `8AAZLGA`), or a roman part number (`IVA`).
+ * letter (`152-A`, `815-B`, `83A-C`), a plain or lettered arabic number
+ * (`18`, `10AA`, `8AAZLGA`), or a roman part number (`IVA`).
+ *
+ * **Every component may carry letters, not just the last.** The Corporations
+ * Act numbers 125 of its Parts `2A.1` … `2N.5` (and `2F.1A`), and the ITAA
+ * 1997 names Subdivisions `83A-A` … `83A-E`; a digits-only rule for the front
+ * of a compound did not merely reject them — the scanner truncated
+ * `Part 2D.1` to the nonexistent `pt 2D`, and a citation checker then accused
+ * a correct citation of being invented. The letters of a *compound* number
+ * must be uppercase as every Act prints them (see
+ * `hasLowercaseCompoundLetters`), so scanning prose case-insensitively does
+ * not turn "5e-10" into a section.
  *
  * The lettered-dash tail is bounded tight and has to end the number: three
  * letters covers every real structural suffix (`152-A`, `815-B`, `38-BA`),
@@ -182,10 +208,11 @@ const LETTER_RUN_MAX = 6
  * pattern is compiled into the extraction regex that runs over whole
  * documents.
  */
+const NUMBER_COMPONENT = `\\d{1,4}[A-Za-z]{0,${LETTER_RUN_MAX}}`
 const NUMBER_PATTERN =
   `(?:${ROMAN_NUMBER}` +
-  `|\\d{1,4}(?:${NUMBER_SEP}\\d{1,4}){0,3}` +
-  `(?:${NUMBER_HYPHEN}[A-Za-z]{1,3}(?![A-Za-z0-9])|[A-Za-z]{0,${LETTER_RUN_MAX}}))`
+  `|${NUMBER_COMPONENT}(?:${NUMBER_SEP}${NUMBER_COMPONENT}){0,3}` +
+  `(?:${NUMBER_HYPHEN}[A-Za-z]{1,3}(?![A-Za-z0-9]))?)`
 
 /** `(2)(a)(ii)` — at most six levels, each one `SUBDIVISION_TOKEN`. */
 const SUBSECTION_PATTERN = `(?:\\s?\\(${SUBDIVISION_TOKEN}\\)){0,6}`
@@ -285,17 +312,21 @@ const RANGE_SPLIT = new RegExp(
 )
 
 /**
- * Letters that follow a dash inside a number — `152-A`, `815-B`, `IV-V`.
+ * Letters inside a *compound* number — `152-A`, `2D.1`, `83A-C`, `IV-V` —
+ * must be uppercase, as every real Act prints them.
  *
- * They must be uppercase, for the same reason a bare lettered unit must be
- * (see `LETTERED_STRUCTURAL`): lowercase would make "a s 3-in-1 test" and
- * "the s 18-based claim" provision numbers, and the caller would go on to
- * report them as provisions the Act does not contain.
+ * The reason is the same one `LETTERED_STRUCTURAL` has: lowercase would make
+ * "a s 3-in-1 test", "the s 18-based claim" and the scientific "5e-10"
+ * provision numbers, and the caller would go on to report them as provisions
+ * the Act does not contain. A number with no separator keeps the lowercase
+ * tolerance (`s 10aa` is what a keyboard produces, and `splitLetterSuffix`
+ * uppercases it), because a bare `10aa` has no prose reading to defend
+ * against.
  */
-const DASHED_LETTERS = new RegExp(`-([A-Za-z]{1,${LETTER_RUN_MAX + 2}})(?![A-Za-z])`, "g")
-
-function hasLowercaseDashedLetters(number: string): boolean {
-  return [...number.matchAll(DASHED_LETTERS)].some((m) => m[1] !== m[1].toUpperCase())
+function hasLowercaseCompoundLetters(number: string): boolean {
+  if (!/[.\-]/.test(number)) return false
+  const letters = number.match(/[A-Za-z]+/g) ?? []
+  return letters.some((run) => run !== run.toUpperCase())
 }
 
 /**
@@ -354,7 +385,7 @@ function runsBackwards(from: string, to: string): boolean {
  */
 export function parseSectionRef(input: string): SectionRef | null {
   if (!input) return null
-  const { text, hadRangeDash } = normaliseInput(input)
+  const { text, hadRangeDash, hadNumberHyphen } = normaliseInput(input)
   if (!text) return null
 
   const scheduleOnly = SCHEDULE_ONLY.exec(text)
@@ -400,10 +431,15 @@ export function parseSectionRef(input: string): SectionRef | null {
 
   // The hyphen decision. `NUMBER_PATTERN` is greedy, so `ss 5-6` arrives here
   // as the single number "5-6" and has to be split back out; `s 355-25` must
-  // not be. A range dash always means "to"; a hyphen only does after a plural.
+  // not be. A range dash always means "to"; a hyphen only does after a plural
+  // — and a U+2010/U+2011 hyphen never does, whatever the plurality: it is
+  // FRL typography, and FRL only ever sets it inside a number (see
+  // `NUMBER_HYPHEN_TEST`). Without that veto, pasting the Register's own
+  // "sections 165‑210 and 165‑211" read the real ITAA s 165-210 as the range
+  // 165–210 and reported a correct citation as a provision the Act lacks.
   let numberText = rawNumber
   let rangeEnd = spacedRangeEnd as string | undefined
-  if (!rangeEnd && (plural || hadRangeDash)) {
+  if (!rangeEnd && (plural || hadRangeDash) && !(hadNumberHyphen && !hadRangeDash)) {
     const split = RANGE_SPLIT.exec(rawNumber)
     if (split && !runsBackwards(split[1], split[2])) {
       numberText = split[1]
@@ -417,7 +453,7 @@ export function parseSectionRef(input: string): SectionRef | null {
     rangeEnd = undefined
   }
 
-  if (hasLowercaseDashedLetters(numberText)) return null
+  if (hasLowercaseCompoundLetters(numberText)) return null
 
   const { number, letterSuffix } = splitLetterSuffix(numberText)
 
@@ -455,9 +491,16 @@ export function formatRef(ref: SectionRef): string {
   }
 
   const subsections = ref.subsections.map((part) => `(${part})`).join("")
-  const core = BRACKETED_KINDS.has(ref.kind)
-    ? `${abbrev} (${number})`
-    : `${abbrev} ${number}${subsections}`
+  // A bracketed kind wraps its number only when the number IS the bracketed
+  // token (`sub-s (2)`, from the numberless "subsection (2)"). The
+  // drafting-standard `subsection 5(2)` carries the section number too, and
+  // wrapping *that* — `sub-s (5)` — renamed section 5's subsection (2) to
+  // subsection (5) and dropped the (2) entirely: a different provision,
+  // printed as the canonical form of a correct citation.
+  const core =
+    BRACKETED_KINDS.has(ref.kind) && ref.subsections.length === 0
+      ? `${abbrev} (${number})`
+      : `${abbrev} ${number}${subsections}`
   const range = ref.rangeEnd ? `–${ref.rangeEnd}` : ""
 
   const parts: string[] = []
@@ -490,8 +533,29 @@ function escapeForPattern(value: string): string {
  */
 const LABEL_HYPHEN = NUMBER_HYPHEN
 
+function labelNumber(value: string): string {
+  return escapeForPattern(value).replace(/-/g, LABEL_HYPHEN)
+}
+
+/**
+ * The number half of a label pattern — as an alternation when the reference
+ * carries a range.
+ *
+ * A hyphen pair after a plural parses as a range, but by the time text
+ * reaches the scanner nothing distinguishes a true range from an ITAA-style
+ * section *name*: the Register writes "sections 165‑210 and 165‑211" for two
+ * real sections whose serials exceed their division, `htmlToText` folds the
+ * U+2011 that would have said so, and `runsBackwards` cannot help a forward
+ * pair. The TOC is the only authority left, so the pattern asks it both
+ * questions, most specific first: an Act with a section literally named
+ * `165-210` answers with that section, an Act without one answers with the
+ * range's start — and a lookup that used to answer "no such provision" for a
+ * correctly cited ITAA section now cannot.
+ */
 function numberForLabel(ref: SectionRef): string {
-  return escapeForPattern(`${ref.number}${ref.letterSuffix ?? ""}`).replace(/-/g, LABEL_HYPHEN)
+  const number = `${ref.number}${ref.letterSuffix ?? ""}`
+  if (!ref.rangeEnd) return labelNumber(number)
+  return `(?:${labelNumber(`${number}-${ref.rangeEnd}`)}|${labelNumber(number)})`
 }
 
 /**
@@ -531,9 +595,9 @@ export function refToNcxLabelPattern(ref: SectionRef): RegExp {
   if (vocab.ncxLabel === "worded") {
     return new RegExp(`^${vocab.ncxWord}${gap}*${number}${LABEL_TAIL}`, "i")
   }
-  // A number-led label is always followed by whitespace and then the heading,
-  // optionally with a full stop between the two. The lookahead, not the anchor,
-  // is what keeps `s 1` away from `18`.
+  // A number-led label is followed by whitespace and then the heading,
+  // optionally with a full stop between the two — or by nothing at all. The
+  // lookahead, not the anchor, is what keeps `s 1` away from `18`.
   //
   // The optional stop is for the pre-Federation continued laws, which keep
   // their original typography: the *Commonwealth of Australia Constitution
@@ -542,7 +606,12 @@ export function refToNcxLabelPattern(ref: SectionRef): RegExp {
   // table's own note advertises `Australian Constitution s 51(xx)` as the way
   // to cite it. It is escaped and optional, so `s 51` still cannot reach `51A`
   // (no gap after the number) or `51.2` (no gap after the stop).
-  return new RegExp(`^${number}\\.?(?=${gap})`)
+  //
+  // The end-of-string arm is for the same Act's untitled sections: its real
+  // NCX labels ss 86 and 87 as the bare `"86."` and `"87."`, and a pattern
+  // that insisted on a heading answered "[NOT_FOUND] s 86 is not in the
+  // latest table of contents" about a section that is in it.
+  return new RegExp(`^${number}\\.?(?=${gap}|$)`)
 }
 
 /**
@@ -558,15 +627,68 @@ export function refToNcxLabelPattern(ref: SectionRef): RegExp {
  * matched as far as it went, so `s 8AAZLGA` was harvested as `s 8AAZL` — a
  * different section that really exists, and whose heading a citation checker
  * will happily tick the citation off against. A reference that does not end
- * where the match ends is not a reference this scanner reports.
+ * where the match ends is not a reference this scanner reports. The
+ * separator post-check below is the same rule for the *middle* of a number:
+ * a match followed by `.4` or `-B` stopped short of the number the author
+ * wrote (`Part 2D.1` once harvested as `pt 2D`), so it drops out whole.
+ * Lowercase after the separator stays harvestable — "the s 18-based claim"
+ * really does cite s 18, and no Act writes a number's letters in lowercase.
+ *
+ * The second pass is for the units the number grammar deliberately cannot
+ * say: bare lettered structural units (`Subdivision C`, `Division DA`).
+ * `ROMAN_NUMBER` refuses C/D/L/M so that scanned prose ("can", "did") cannot
+ * become a number, which means the main scanner cannot see the Crimes Act's
+ * real `Subdivision C` at all — it was dropped from scanned documents in
+ * silence. `parseSectionRef` applies the real rules (structural kind only,
+ * uppercase only), so this pass invents nothing the anchored grammar would
+ * refuse; overlaps (e.g. `Part IVA`, which both passes read) are settled by
+ * position, first and longest match wins.
  */
 export function extractSectionRefs(text: string): SectionRef[] {
   if (!text) return []
   const scanner = new RegExp(`(?<![A-Za-z])${REF_BODY}(?![0-9A-Za-z])`, "gi")
-  const out: SectionRef[] = []
+  // The separator check lives outside the scanner because the scanner is
+  // case-insensitive and this rule is not: `.4` or `-B` after a match is more
+  // number (drop the match whole rather than serve its front half), while
+  // `-based` is hyphenated prose and the match stands. As a post-check it
+  // also cannot make the engine backtrack into a shorter phantom the way an
+  // in-pattern lookahead would.
+  const continuesNumber = new RegExp(`^${NUMBER_SEP}[0-9A-Z]`)
+  const letteredScanner = new RegExp(
+    `(?<![A-Za-z])(${DESIGNATOR})\\s+([A-Za-z]{1,3})(?![0-9A-Za-z])`,
+    "gi",
+  )
+
+  const spans: Array<{ start: number; end: number; ref: SectionRef }> = []
   for (const match of text.matchAll(scanner)) {
+    const end = match.index + match[0].length
+    if (continuesNumber.test(text.slice(end, end + 2))) continue
     const ref = parseSectionRef(match[0].trim())
-    if (ref) out.push(ref)
+    if (ref) spans.push({ start: match.index, end, ref })
+  }
+  for (const match of text.matchAll(letteredScanner)) {
+    // `parseSectionRef` enforces most of what makes this safe in prose: only
+    // structural kinds are lettered, and only in uppercase ("part of" is not
+    // part "OF", "PARTIES" has no gap). ALL-CAPS prose is the one context
+    // where a short word slips past the uppercase gate — a judgment heading
+    // reading "PART WAS" is not part "WAS" — so a multi-letter unit must show
+    // the mixed-case typography every real citation uses ("Subdivision CA",
+    // "sub-div CA"). A single letter stays harvestable from any case:
+    // "SCHEDULE A" and "PART C" are how lettered schedules and parts are
+    // actually set in the documents that carry them.
+    const [, spelling, letters] = match
+    if (letters.length > 1 && spelling === spelling.toUpperCase()) continue
+    const ref = parseSectionRef(match[0].trim())
+    if (ref) spans.push({ start: match.index, end: match.index + match[0].length, ref })
+  }
+
+  spans.sort((a, b) => a.start - b.start || b.end - a.end)
+  const out: SectionRef[] = []
+  let coveredTo = -1
+  for (const span of spans) {
+    if (span.start < coveredTo) continue
+    out.push(span.ref)
+    coveredTo = span.end
   }
   return out
 }

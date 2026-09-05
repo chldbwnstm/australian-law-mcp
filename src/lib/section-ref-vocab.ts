@@ -120,19 +120,21 @@ export const SPELLING_ALTERNATION = [...spellingToKind.keys()]
   .join("|")
 
 /**
- * A roman structural number: the numeral, then up to three letters of tail —
- * `IV`, `IVA`, `XI`, `IIIAA`, `IVBA`, `XICA`, `IABA`.
+ * A roman structural number: the numeral, then up to four letters of tail —
+ * `IV`, `IVA`, `XI`, `IIIAA`, `IVBA`, `XICA`, `IABA`, `IAABA`.
  *
  * Both bounds are load-bearing.
  *
- * **The tail runs to three letters, not one.** The Commonwealth really does go
+ * **The tail runs to four letters, not one.** The Commonwealth really does go
  * that far: the *Competition and Consumer Act 2010* has Parts IIIAA, IVBA,
  * IVBB, XIAA, XICA and XICB (they are navLabels in this repo's own
- * `__fixtures__/cca-document.ncx`), and the *Crimes Act 1914* has Part IABA.
- * A one-letter tail did not merely reject `pt IVBA` — `section-ref.ts`'s
- * right-edge guard then dropped it out of a scanned document *silently*, so a
- * citation checker reported on the rest of the document as though that
- * citation had been checked.
+ * `__fixtures__/cca-document.ncx`), and the *Crimes Act 1914* has Parts IABA
+ * and IAABA — the four-letter one is a navLabel in
+ * `__fixtures__/crimes1914-document.ncx.gz`, and a three-letter cap rejected
+ * it outright. A one-letter tail did not merely reject `pt IVBA` —
+ * `section-ref.ts`'s right-edge guard then dropped it out of a scanned
+ * document *silently*, so a citation checker reported on the rest of the
+ * document as though that citation had been checked.
  *
  * **The numeral is a real numeral (I–XXXIX), not "letters drawn from
  * IVXLCDM".** The loose spelling is what made the tail dangerous to widen:
@@ -143,18 +145,22 @@ export const SPELLING_ALTERNATION = [...spellingToKind.keys()]
  * Chapter is numbered L, C, D or M (they would be 50, 100, 500 and 1000), so
  * dropping those letters costs nothing real and removes every one of those
  * readings: measured against `/usr/share/dict/words`, `[IVXLCDM]+[A-Z]{0,3}`
- * matches 2,005 ordinary English words and this pattern matches 237 — fewer
- * than the 188 of the old one-letter tail once its own `civil`/`dill` family
- * is taken out.
+ * matches 2,005 ordinary English words where the three-letter-tail form of
+ * this pattern matched 237. The tail's growth to four letters widens the raw
+ * word count again (`vista`, `ideas`), which is why the *case gate*
+ * (`romanNumbersAreCapitalised` in `section-ref.ts`) is the load-bearing
+ * defence: prose is lowercase, numerals are not, and every reading this
+ * pattern admits still dies there unless the writer capitalised it.
  *
  * A bare lettered unit (`pt C`, `sub-div B`) is not this pattern's business:
- * `LETTERED_STRUCTURAL` in `section-ref.ts` reads those, and only for the
- * structural kinds that really are lettered.
+ * `LETTERED_STRUCTURAL` in `section-ref.ts` reads those — and the document
+ * scanner runs its own lettered pass for them, because this pattern
+ * deliberately cannot say `C` or `D`.
  *
  * Wrapped in its own group and free of capturing groups: callers interpolate
  * it into alternations and read their own match indices.
  */
-export const ROMAN_NUMBER = "(?:(?:X{1,3}(?:IX|IV|V?I{0,3})|IX|IV|V?I{1,3}|V)[A-Z]{0,3})"
+export const ROMAN_NUMBER = "(?:(?:X{1,3}(?:IX|IV|V?I{0,3})|IX|IV|V?I{1,3}|V)[A-Z]{0,4})"
 
 /**
  * One bracketed subdivision token: `(2)`, `(a)`, `(ii)` — or a longer roman

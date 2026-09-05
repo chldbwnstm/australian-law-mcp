@@ -67,6 +67,22 @@ const CASES: Array<[input: string, expected: Expected, canonical: string]> = [
   ["cl 5", { kind: "clause", number: "5" }, "cl 5"],
   ["clause 5", { kind: "clause", number: "5" }, "cl 5"],
   ["art 12", { kind: "article", number: "12" }, "art 12"],
+  // ── compound numbers whose front carries a letter ─────────────────────
+  // The Corporations Act numbers 125 Parts this way (2A.1 … 2N.5), and the
+  // ITAA 1997 names Subdivisions 83A-A … 83A-E.
+  ["Part 2D.1", { kind: "part", number: "2D.1" }, "pt 2D.1"],
+  ["pt 2F.1A", { kind: "part", number: "2F.1A" }, "pt 2F.1A"],
+  ["Subdivision 83A-C", { kind: "subdivision", number: "83A-C" }, "sub-div 83A-C"],
+  ["sub-div 12A-C", { kind: "subdivision", number: "12A-C" }, "sub-div 12A-C"],
+  // Crimes Act 1914 Part IAABA: the widest real roman tail is four letters.
+  ["Part IAABA", { kind: "part", number: "IAABA" }, "pt IAABA"],
+  // ── the drafting-standard bracketed forms ─────────────────────────────
+  // `subsection 5(2)` is section 5's subsection (2); wrapping the 5 —
+  // `sub-s (5)` — renamed the provision and dropped the (2).
+  ["subsection 5(2)", { kind: "subsection", number: "5", subsections: ["2"] }, "sub-s 5(2)"],
+  ["paragraph 23(1)(a)", { kind: "paragraph", number: "23", subsections: ["1", "a"] }, "para 23(1)(a)"],
+  ["subparagraph 23(1)(a)(ii)", { kind: "subparagraph", number: "23", subsections: ["1", "a", "ii"] }, "sub-para 23(1)(a)(ii)"],
+  ["sub-reg 5(2)", { kind: "subregulation", number: "5", subsections: ["2"] }, "sub-reg 5(2)"],
 ]
 
 describe("parseSectionRef", () => {
@@ -662,5 +678,96 @@ describe("extractSectionRefs", () => {
     const started = Date.now()
     for (const text of evil) extractSectionRefs(text)
     expect(Date.now() - started).toBeLessThan(1000)
+  })
+})
+
+describe("compound numbers in scanned prose", () => {
+  it("harvests the whole number, never its front half", () => {
+    expect(
+      extractSectionRefs("Directors owe duties under Part 2D.1 of the Corporations Act 2001 (Cth)").map(formatRef),
+    ).toEqual(["pt 2D.1"])
+    expect(extractSectionRefs("The Corporations Act 2001 (Cth) pt 2D.1 imposes duties").map(formatRef)).toEqual([
+      "pt 2D.1",
+    ])
+    expect(extractSectionRefs("shares acquired under Subdivision 83A-C of the ITAA 1997").map(formatRef)).toEqual([
+      "sub-div 83A-C",
+    ])
+  })
+
+  it("drops a number it cannot read whole instead of truncating it", () => {
+    // Five components is past the grammar; serving "1.2.3.4" for it would be
+    // a different provision reported without a word about the dropped tail.
+    expect(extractSectionRefs("see r 1.2.3.4.5 of the rules")).toEqual([])
+  })
+
+  it("does not let scientific notation or lowercase prose become a compound number", () => {
+    expect(parseSectionRef("s 5e-10")).toBeNull()
+    expect(parseSectionRef("pt 2d.1")).toBeNull()
+    expect(extractSectionRefs("a tolerance of s 5e-10 units")).toEqual([])
+  })
+})
+
+describe("lettered structural units in scanned prose", () => {
+  it("harvests them, with their multi-letter names whole", () => {
+    expect(extractSectionRefs("see Subdivision C of Division 3 of Part 5.3B").map(formatRef)).toEqual([
+      "sub-div C",
+      "div 3",
+      "pt 5.3B",
+    ])
+    expect(extractSectionRefs("Subdivision CA—Reporting on exercise of powers").map(formatRef)).toEqual([
+      "sub-div CA",
+    ])
+    expect(extractSectionRefs("Division D of that Act applies").map(formatRef)).toEqual(["div D"])
+  })
+
+  it("does not read all-caps prose as a multi-letter unit", () => {
+    // "PART WAS" passes the uppercase gate that stops "part of"; the
+    // mixed-case rule is what tells a citation from a heading's words.
+    expect(extractSectionRefs("THE PART WAS DECIDED FIRST")).toEqual([])
+    expect(extractSectionRefs("THE RULES CAN BE AMENDED")).toEqual([])
+  })
+
+  it("still reads a single-letter unit from any case", () => {
+    expect(extractSectionRefs("SCHEDULE A—FORMS").map(formatRef)).toEqual(["sch A"])
+  })
+})
+
+describe("a plural hyphen pair that names one ITAA section", () => {
+  it("keeps the FRL's own typography whole: U+2011 is never a range", () => {
+    const ref = parseSectionRef("sections 165‑210")!
+    expect(ref.number).toBe("165-210")
+    expect(ref.rangeEnd).toBeUndefined()
+  })
+
+  it("finds the section a plural pair names, when the Act has it", () => {
+    // Scanned text has had its U+2011 folded (htmlToText does it), so
+    // "sections 165-210 and 165-211" is byte-identical to a range and parses
+    // as one. The label pattern asks the TOC both questions, most specific
+    // first — the lookup, not the guess, decides.
+    const [ref] = extractSectionRefs("for the purposes of sections 165-210 and 165-211")
+    expect(ref.rangeEnd).toBe("210")
+    const pattern = refToNcxLabelPattern(ref)
+    expect(pattern.test("165-210  The business continuity test—carrying on the same business")).toBe(true)
+    expect(pattern.test("165-211  The business continuity test—carrying on a similar business")).toBe(false)
+    expect(pattern.test("165-21  Some other section")).toBe(false)
+  })
+
+  it("still serves a genuine range by its start", () => {
+    const ref = parseSectionRef("ss 45-47")!
+    expect(ref.rangeEnd).toBe("47")
+    const pattern = refToNcxLabelPattern(ref)
+    expect(pattern.test("45 Contracts, arrangements or understandings")).toBe(true)
+    expect(pattern.test("47 Exclusive dealing")).toBe(false)
+  })
+})
+
+describe("refToNcxLabelPattern — a label that is only a number", () => {
+  it("matches the Constitution's untitled ss 86 and 87", () => {
+    // The real C2004Q00685 NCX labels them "86." and "87.", with no heading.
+    const pattern = refToNcxLabelPattern(parseSectionRef("s 86")!)
+    expect(pattern.test("86.")).toBe(true)
+    expect(pattern.test("86")).toBe(true)
+    expect(refToNcxLabelPattern(parseSectionRef("s 8")!).test("86.")).toBe(false)
+    expect(refToNcxLabelPattern(parseSectionRef("s 86")!).test("86.5  Other")).toBe(false)
   })
 })
