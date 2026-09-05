@@ -296,17 +296,9 @@ This software retrieves and formats public legal material. It does not give lega
 
 ---
 
-## Other ways to run it
-
-- **CLI.** `npm install -g --ignore-scripts --omit=optional au-law-mcp`, then `australian-law "what does s 18 of the ACL say"`. `australian-law explain "…"` shows where a question would go without running it; `australian-law` alone opens a REPL; `australian-law <tool> --<param>` calls a tool directly.
-- **Docker.** `docker build -t au-law-mcp .` then `docker run -p 3000:3000 -e MCP_AUTH_TOKEN=replace-with-a-secret au-law-mcp`. The image binds `0.0.0.0` because a container is a remote deployment, and it refuses to start without a token unless `MCP_ALLOW_UNAUTHENTICATED_REMOTE=1` is set deliberately.
-- **HTTP.** `au-law-mcp --mode http --port 8000`. Stateless Streamable HTTP: `POST /mcp` needs no session handshake, so replicas can sit behind one load balancer; `GET /` reports the tool counts and `GET /health` is a liveness probe, both open even when a token is set. The variables are below.
-
----
-
 ## Configuration reference
 
-All variables apply to `--mode http`; the stdio server needs none of them.
+These apply only when the server is started as an HTTP service (`--mode http`). The stdio server that Claude Desktop launches needs none of them.
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
