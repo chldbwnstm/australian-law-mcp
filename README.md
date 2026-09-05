@@ -1,6 +1,4 @@
-<p align="center">
-  <img src="docs/assets/logo.png" alt="australian-law-mcp — point-in-time Commonwealth law, citation-checked" width="800">
-</p>
+![australian-law-mcp — point-in-time Commonwealth law, citation-checked](docs/assets/logo.png)
 
 # Australian Law MCP
 
