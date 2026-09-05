@@ -64,7 +64,7 @@ AGLC r 3.1.4 requires the space.
 
 | Domain | Id format | Example |
 |---|---|---|
-| `cases` | `nsw:<hex>` · `hca:<slug>` · `qld:<numeric>` · or a bare MNC | `nsw:174af54a434669161f7da9d3`, `[2020] HCA 41` |
+| `cases` | `nsw:<hex>` · `hca:<slug>` · `qld:<numeric>`. The prefix is what routes the lookup, so a bare MNC is refused here — `get_case_text(citation=…)` is the citation path | `nsw:174af54a434669161f7da9d3`, `hca:potter-pseudonym-v-king` |
 | `constitutional` | High Court slug | `calidad-pty-ltd-v-seiko-epson-corporation` |
 | `admin_appeals` | `ncat:<hex>` · `qcat:<…>` · or a QCAT citation | `ncat:591a8d78e4b074a7c6e16046` |
 | `tax_tribunal` | ATO DocID | `AID/AID20161/00001` |
@@ -293,10 +293,32 @@ invalid or out of date.**
 | Parameter | Required | Description |
 |---|:---:|---|
 | `domain` | ✓ | One of the 18 (see README) |
-| `query` | | Search terms |
-| `limit` | | Results per page |
-| `page` | | 1-based |
-| `options` | | Domain-specific. `state_law` \| `university_rules`: `{jurisdiction}` (**required**) · `privacy`: `{page}` · `treaties`: `{keyword, page}` · `tax_tribunal` \| `tax_rulings`: `{asAt}` · `explanatory`: `{collection, verifyEs}` |
+| `query` | | Search terms. Required by every domain except `constitutional`, `privacy`, `integrity`, `public_service` and `treaties`, whose sources are browsable indexes. Omitted elsewhere the call comes back `[INVALID_PARAMETER]`: the target domain's own schema is checked before anything is fetched, so nothing was searched |
+| `limit` | | Maximum hits, 1–50, default 10 — this tool's own default, so a domain whose stand-alone tool defaults differently (`search_agency_rules` and `search_gazettes` default to 20) still gets 10 here. `constitutional` and `treaties` ignore it: their sources hand over a fixed page (12 and 20 rows), so move with `page` instead. For `privacy`, `integrity`, `public_service` and `workplace` it trims the page that was fetched rather than fetching more |
+| `page` | | 1-based. `competition`, `integrity`, `university_rules`, `state_law` and `explanatory` have no paging at all and ignore it |
+| `options` | | Domain-specific parameters — the table below is the whole of it. A key the target domain does not declare is neither rejected nor used: it is silently ignored. `domain`, `query`, `limit` and `page` are this tool's own parameters, so they are dropped from `options` and the response says which |
+
+**`options` by domain, for `search_decisions`.** Each row is what that domain's
+own Zod schema declares, which is what its handler reads.
+
+| Domain | Honoured `options` |
+|---|---|
+| `cases` | `{jurisdiction, court}` — `Cth`/`NSW`/`Qld`/… and a court token such as `NSWCA` |
+| `constitutional` | `{year, verifyCatchwords}` |
+| `admin_appeals` | `{tribunal, division}` — `ncat`/`qcat`/`all`, and an NCAT division token |
+| `tax_tribunal` | `{decisionImpactOnly}` — true by default |
+| `tax_rulings` · `interpretations` · `customs` | `{exactPhrase}` |
+| `workplace` | `{benchType}` — `full` or `single` |
+| `public_service` | `{facets}` |
+| `treaties` | `{facets, dateFilters}` |
+| `explanatory` | `{collection, verifyEs}` |
+| `state_law` | `{jurisdiction, field, includeRepealed}` — `jurisdiction` is **required** and the call is refused without it |
+| `university_rules` | `{jurisdiction}` — optional; omitted, `QLD`, `TAS`, `WA` and `NT` are searched together. `field` and `includeRepealed` are not read here, only by `state_law` |
+| `competition` · `privacy` · `integrity` · `agency_rules` · `gazettes` | `{}` — nothing beyond the four parameters above |
+
+No domain takes an `asAt` on the search side: point-in-time is a property of
+`get_decision_text` (see below). A date passed here is ignored in silence — the
+response carries no note about it, and the hits are today's.
 
 #### `get_decision_text`
 
@@ -304,8 +326,23 @@ invalid or out of date.**
 |---|:---:|---|
 | `domain` | ✓ | The same domain the id came from |
 | `id` | ✓ | The identifier printed by `search_decisions`. **Never an invented one** |
-| `full` | | `true` returns the body verbatim. Omitted shortens a long body from the middle, marking the exact number of characters removed |
-| `options` | | Same table as above. `treaties` needs `{keyword}` or the id is looked for on page 1 only |
+| `full` | | `true` returns the body verbatim. Omitted shortens a long body from the middle, marking the exact number of characters removed. Every domain that hands over a body honours it except `constitutional`, whose High Court reasons are shortened by their own renderer — that response says so and prints the judgment URL. `privacy`, `competition`, `agency_rules`, `gazettes`, `treaties` and `explanatory` return metadata and links, so there is no body to return verbatim |
+| `options` | | Domain-specific parameters, **not** the same set as `search_decisions` — the table below is the whole of it. `domain`, `id` and `full` are dropped from `options` with a note; anything a domain does not declare is silently ignored |
+
+**`options` by domain, for `get_decision_text`.**
+
+| Domain | Honoured `options` |
+|---|---|
+| `tax_tribunal` · `tax_rulings` · `interpretations` · `customs` | `{asAt}` — `YYYY-MM-DD`, the ATO's own point-in-time index, which is separate from the Register's compilation series |
+| `treaties` | `{keyword, page}` — the database has no single-record endpoint, so without the keyword that produced the id the lookup scans page 1 only |
+| `privacy` | `{page}` — the index page the determination is on, if it is not page 1 |
+| `state_law` · `university_rules` | `{jurisdiction}` — **required**; the id alone does not say which register it belongs to |
+| `cases` · `constitutional` · `admin_appeals` · `competition` · `workplace` · `integrity` · `public_service` · `agency_rules` · `gazettes` · `explanatory` | `{}` — nothing beyond the three parameters above |
+
+`get_case_text` also takes a `citation`, but `get_decision_text` always sets `id`
+and the id branch returns first, so a citation passed through `options` does
+nothing. For the citation path call
+`execute_tool(tool_name="get_case_text", params={citation:"[2020] HCA 41"})`.
 
 ### Meta (2)
 

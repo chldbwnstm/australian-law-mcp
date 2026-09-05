@@ -899,3 +899,214 @@ describe("extractSectionRefs", () => {
     expect(Date.now() - started).toBeLessThan(1000)
   })
 })
+
+// ---------------------------------------------------------------------------
+// The bare lettered series, measured rather than sampled.
+//
+// Round 5 set `SERIES_UNIT_LETTER` to `[A-H]{1,2}` from the tables of contents
+// of five Acts. Measured over all 126,207 navLabels of the 1,177 in-force
+// principal Commonwealth Acts (`document.ncx` for each, fetched from the
+// Federal Register on 2026-09-05) the real series runs A–N in runs of up to
+// three, and `[A-H]{1,2}` silently dropped 29 real units — including three of
+// the CCA's own. Each label below is quoted verbatim from that capture.
+//
+// "Silently" is the whole problem: `extractSectionRefs` did not report them as
+// unreadable, it reported a document without them, so `verify_citations`
+// counted its citations as though the Subdivision had never been cited.
+describe("bare lettered units past the front of the alphabet", () => {
+  const REAL_LABELS: Array<[label: string, expected: string]> = [
+    // Migration Act 1958 (C1958A00062) — Part 2 Division 3.
+    ["Subdivision AH—Limit on visas", "sub-div AH"],
+    ["Subdivision AI—Safe third countries", "sub-div AI"],
+    ["Subdivision AJ—Temporary safe haven visas", "sub-div AJ"],
+    ["Subdivision AL—Other provisions about protection visas", "sub-div AL"],
+    ["Subdivision AGA—Arrival control determinations", "sub-div AGA"],
+    // Customs Act 1901 (C1901A00006).
+    ["Subdivision J—General powers to monitor and audit", "sub-div J"],
+    ["Subdivision JA—Powers to monitor and audit—Australia-United States Free Trade Agreement", "sub-div JA"],
+    ["Subdivision K—Miscellaneous", "sub-div K"],
+    // Competition and Consumer Act 2010 (C2004A00109) — this repo's flagship
+    // Act has three of the units its own grammar could not read.
+    ["Subdivision J—Adverse publicity orders", "sub-div J"],
+    ["Subdivision K—Non-punitive orders", "sub-div K"],
+    ["Subdivision L—Orders (other than awards of damages) to redress loss or damage", "sub-div L"],
+    // Bankruptcy Act 1966 (C1966A00033).
+    ["Subdivision K—Rolled-over superannuation interests etc.", "sub-div K"],
+    // Veterans' Entitlements Act 1986 (C2004A03268) — the widest single
+    // letters in the statute book.
+    ["Subdivision M—Decision-making principles", "sub-div M"],
+    ["Subdivision N—Information management", "sub-div N"],
+    // Three-letter runs: Taxation Administration Act 1953 (C1953A00001) and
+    // Social Security (Administration) Act 1999 (C2004A00580).
+    ["Subdivision BAA—Offences relating to electronic sales suppression tools", "sub-div BAA"],
+    ["Subdivision DAA—Other State/Territory referrals", "sub-div DAA"],
+    ["Subdivision FAA—Time limit for claims for Disaster Recovery Allowance", "sub-div FAA"],
+  ]
+
+  it("harvests every lettered unit the register really prints", () => {
+    const missed: string[] = []
+    for (const [label, expected] of REAL_LABELS) {
+      const found = extractSectionRefs(label).map(formatRef)
+      if (found[0] !== expected) missed.push(`${JSON.stringify(label)} -> ${JSON.stringify(found)}`)
+    }
+    expect(missed).toEqual([])
+  })
+
+  // The sentence from the review that opened this: the Subdivision it is about
+  // was the one reference that did not come back.
+  it("keeps the lettered unit in a sentence that also names numbered ones", () => {
+    expect(extractSectionRefs("The applicant relied on Subdivision AL of Division 3 of Part 2.").map(formatRef))
+      .toEqual(["sub-div AL", "div 3", "pt 2"])
+    expect(extractSectionRefs("Subdivision AI of the Migration Act applies.").map(formatRef))
+      .toEqual(["sub-div AI"])
+    expect(extractSectionRefs("See Subdivision J and Subdivision K of Division 3.").map(formatRef))
+      .toEqual(["sub-div J", "sub-div K", "div 3"])
+  })
+
+  // The other edge of the same measurement. Widening the class is only safe
+  // because it stops where the register stops: `[A-Z]{1,3}` run over the same
+  // 126,207 labels matched 59 things that are not units, and these are the
+  // ones that came out of real recorded text.
+  it("still refuses the all-caps words one letter past the series", () => {
+    for (const prose of [
+      "SCHEDULE OF FEES",
+      "PART TO BE REPEALED",
+      "DIVISION OR PART",
+      "Part TWO",
+      "Division ONE",
+      // Two adjacent ITAA navLabels in this repo's own fixture: "…object of
+      // this Subdivision" followed by "CGT consequences".
+      "Application and object of this Subdivision CGT consequences",
+      "PART FWC",
+      "SCHEDULE PDF",
+      "SUBDIVISION TOTAL",
+      "PART SUBJECT TO",
+    ]) {
+      expect(extractSectionRefs(prose).map(formatRef), prose).toEqual([])
+    }
+  })
+
+  it("still needs the letters in capitals and off the designation", () => {
+    expect(extractSectionRefs("part of the agreement")).toEqual([])
+    expect(extractSectionRefs("division and control of the company")).toEqual([])
+    expect(extractSectionRefs("The PARTIES agreed.")).toEqual([])
+    expect(extractSectionRefs("Subdivision al")).toEqual([])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The hyphen ceiling belongs to the kinds that are numbered with a hyphen.
+//
+// `HYPHEN_RANGE_SPAN_MAX` was measured on ITAA 1997 *section* numbers, where a
+// plain hyphen really is part of the number. Applied to every kind it inverted
+// its own purpose: `items 1-30 of Schedule 2` became one schedule item
+// numbered "1-30", which no amending Act has, so a real range of thirty items
+// came back as an absence — and item ranges are routine in amending-Act and
+// explanatory-memorandum citations.
+//
+// Which kinds are hyphenated is measured, not assumed: over all 1,177 in-force
+// principal Acts the register prints a hyphen inside the number only for
+// Parts, Subdivisions and sections.
+describe("a wide hyphen range is only a number for the kinds numbered that way", () => {
+  it("reads a wide range of schedule items as the range it is", () => {
+    expect(normaliseRef("items 1-30")).toBe("items 1–30")
+    expect(normaliseRef("items 1-100")).toBe("items 1–100")
+    const ref = parseSectionRef("items 1-30")!
+    expect(ref.number).toBe("1")
+    expect(ref.rangeEnd).toBe("30")
+    expect(extractSectionRefs("Fair Work Act 2009 (Cth) items 1-30 of Schedule 2.").map(formatRef))
+      .toEqual(["items 1–30", "sch 2"])
+  })
+
+  it("reads a wide range of the other never-hyphenated kinds as a range too", () => {
+    expect(normaliseRef("chs 1-30")).toBe("chs 1–30")
+    expect(normaliseRef("divs 100-200")).toBe("divs 100–200")
+    expect(normaliseRef("schs 1-30")).toBe("schs 1–30")
+    expect(normaliseRef("cls 1-40")).toBe("cls 1–40")
+    expect(normaliseRef("rr 1-30")).toBe("rr 1–30")
+    expect(normaliseRef("regs 1-100")).toBe("regs 1–100")
+    expect(normaliseRef("arts 1-50")).toBe("arts 1–50")
+  })
+
+  // The rule the ceiling was built for is untouched. "165-212E  Entry history
+  // rule does not apply for the purposes of sections 165-210 and 165-211" is
+  // the ITAA's own navLabel.
+  it("still keeps a wide plain-hyphen pair whole for a kind that is hyphenated", () => {
+    expect(normaliseRef("ss 165-210")).toBe("ss 165-210")
+    expect(parseSectionRef("ss 165-210")!.rangeEnd).toBeUndefined()
+    expect(normaliseRef("pts 2-40")).toBe("pts 2-40")
+    expect(normaliseRef("sub-divs 100-200")).toBe("sub-divs 100-200")
+    // A paragraph's number is the section's, so it is hyphenated too. (AGLC
+    // brackets a bare paragraph pinpoint, hence the fields rather than the
+    // canonical form.)
+    expect(parseSectionRef("paras 230-395")!.number).toBe("230-395")
+    expect(parseSectionRef("paras 230-395")!.rangeEnd).toBeUndefined()
+    // An en dash still means "to" for those kinds, however wide.
+    expect(normaliseRef("ss 165–210")).toBe("ss 165–210")
+    // And a narrow hyphen range is still a range.
+    expect(normaliseRef("ss 5-6")).toBe("ss 5–6")
+    expect(normaliseRef("pts 2-3")).toBe("pts 2–3")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// A pair whose two halves are the same token is one number, not a range.
+//
+// The Australian Consumer Law really has a Part 2-2, 3-3, 4-4 and 5-5, and the
+// ITAA 1997 a section 1-1, 5-5, 15-15, 20-20 and 40-40 — 14 labels in this
+// repo's own recorded tables of contents, every one of which the plural form
+// read as the range "2 to 2", naming Part 2 instead. The corpus harness is
+// where they are counted; these are the named cases.
+describe("a degenerate pair is a number, not a range", () => {
+  it("reads two identical halves as the provision they spell", () => {
+    expect(normaliseRef("pts 2-2")).toBe("pts 2-2")
+    expect(normaliseRef("Parts 3-3")).toBe("pts 3-3")
+    expect(normaliseRef("ss 20-20")).toBe("ss 20-20")
+    expect(normaliseRef("ss 1-1")).toBe("ss 1-1")
+    expect(parseSectionRef("ss 40-40")!.rangeEnd).toBeUndefined()
+    // An en dash does not rescue it either: "sections 40 to 40" is not a range
+    // anyone writes, and s 40-40 is a section the ITAA has.
+    expect(normaliseRef("ss 40–40")).toBe("ss 40-40")
+  })
+
+  // Equality is only decidable where both halves are a bare number. Only the
+  // *leading* integer of a dashed ITAA number is comparable, and `ss 355-25 to
+  // 355-30` — a real range — has the same leading integer on both sides, so
+  // the test lives at the split rather than in `runsBackwards`.
+  // (`statute-citations.ts` spaces the join it builds for exactly this reason:
+  // unspaced, `355-25-355-30` is one four-component number to `NUMBER_PATTERN`
+  // and never reaches the range branch at all.)
+  it("still reads a spaced range whose two sides begin with the same number", () => {
+    expect(normaliseRef("ss 355-25 – 355-30")).toBe("ss 355-25–355-30")
+    expect(normaliseRef("ss 355-25 - 355-30")).toBe("ss 355-25–355-30")
+    const ref = parseSectionRef("ss 355-25 - 355-30")!
+    expect(ref.number).toBe("355-25")
+    expect(ref.rangeEnd).toBe("355-30")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The schedule branch answers before the range branch, and had no range
+// reading of its own: `schs 1–3` — a range spelled out with an en dash — came
+// back as one schedule named "1-3", which no Act has.
+describe("a schedule range is a range", () => {
+  it("reads a plural schedule pinpoint with a dash as a range", () => {
+    expect(normaliseRef("schs 1-3")).toBe("schs 1–3")
+    expect(normaliseRef("Schedules 1–3")).toBe("schs 1–3")
+    const ref = parseSectionRef("schs 1-3")!
+    expect(ref.kind).toBe("schedule")
+    expect(ref.number).toBe("1")
+    expect(ref.rangeEnd).toBe("3")
+    // It round-trips, so the canonical form is one this module can read back.
+    expect(normaliseRef(formatRef(ref))).toBe("schs 1–3")
+  })
+
+  it("still keeps a singular schedule pinpoint whole", () => {
+    expect(normaliseRef("sch 1-3")).toBe("sch 1-3")
+    expect(normaliseRef("sch 2")).toBe("sch 2")
+    expect(normaliseRef("sch 1 item 4")).toBe("sch 1 item 4")
+    // And the heading separator is still a separator, not a range dash.
+    expect(extractSectionRefs("Schedule 1—2019 measures").map(formatRef)).toEqual(["sch 1"])
+    expect(extractSectionRefs("Schedule 2—The Australian Consumer Law").map(formatRef)).toEqual(["sch 2"])
+  })
+})

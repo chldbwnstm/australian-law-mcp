@@ -491,6 +491,95 @@ describe("a list member is read or named — never dropped", () => {
   })
 })
 
+// A range the writer spelled out.
+//
+// "ss 100 to 140" is not ambiguous: the writer said which relation holds
+// between the two numbers, in a word. `section-ref.ts` has to be careful with a
+// *hyphenated* pair because a hyphen is also the character inside an ITAA-style
+// section number — `s 355-25` is one section, not 355 to 25 — and it resolves
+// that ambiguity by arithmetic and by width. Merging a "to" join with a hyphen
+// fed the writer's unambiguous sentence into that ambiguity rule: below the
+// width `ss 5 to 8` read as one range, above it `ss 100 to 140` came back as
+// `ss 100` and `s 140` — two citations to text the document does not contain,
+// with ss 101–139 neither read nor reported unread, and the reading flipping at
+// a number the writer never wrote.
+describe("a range written with the word 'to'", () => {
+  const TO_RANGES: ReadonlyArray<[string, string[]]> = [
+    ["Corporations Act 2001 (Cth) ss 100 to 140.", ["ss 100–140"]],
+    ["Fair Work Act 2009 (Cth) ss 340 to 378 apply.", ["ss 340–378"]],
+    ["Fair Work Act 2009 (Cth) ss 5 to 8 apply.", ["ss 5–8"]],
+    ["Fair Work Act 2009 (Cth) sch 2 ss 100 to 140 apply.", ["sch 2 ss 100–140"]],
+    ["Income Tax Assessment Act 1997 (Cth) ss 355-25 to 355-30 apply.", ["ss 355-25–355-30"]],
+    ["Fair Work Act 2009 (Cth) pts IV to VI apply.", ["pts IV–VI"]],
+    // The join does not have to sit on the head of the list.
+    ["Fair Work Act 2009 (Cth) ss 45, 100 to 140 apply.", ["ss 45", "ss 100–140"]],
+  ]
+
+  it.each(TO_RANGES)("reads %s as the range the writer wrote", (text, expected) => {
+    const cites = extractStatuteCitations(text, 20)
+    expect(cites.map((cite) => cite.pinpoint)).toEqual(expected)
+    expect(cites.every((cite) => cite.attachedBy !== "unread")).toBe(true)
+  })
+
+  // The mechanism, stated as the property the fix rests on: what the writer
+  // wrote decides the reading, and the width of the range decides nothing. The
+  // list deliberately straddles `section-ref.ts`'s 20-unit hyphen ceiling.
+  it.each([1, 3, 19, 20, 21, 40, 300])("reads a %i-section 'to' range the same way", (span) => {
+    const end = 100 + span
+    const cites = extractStatuteCitations(`Fair Work Act 2009 (Cth) ss 100 to ${end} apply.`, 20)
+    expect(cites.map((cite) => cite.pinpoint)).toEqual([`ss 100–${end}`])
+    // And the citation shown is the writer's own words, not a rebuilt half of
+    // them: `ss 100` is what the split used to print over a sentence that says
+    // "ss 100 to 140".
+    expect(cites[0].raw).toBe(`Fair Work Act 2009 (Cth) ss 100 to ${end}`)
+  })
+
+  // The contract this file depends on, pinned here rather than assumed: a
+  // `RANGE_DASHES` member between two numbers means "to" however far apart they
+  // are, which is why the merge hands the parser one. If `section-ref.ts` ever
+  // stops honouring that, this fails here instead of silently splitting ranges
+  // again three rounds later.
+  it("relies on a range dash meaning 'to' at any width", () => {
+    for (const [from, to] of [["5", "8"], ["100", "140"], ["1", "999"]]) {
+      const parsed = parseSectionRef(`ss ${from}–${to}`)
+      expect(parsed?.number).toBe(from)
+      expect(parsed?.rangeEnd).toBe(to)
+    }
+  })
+
+  // The other half of the invariant. A "to" that cannot be folded into one
+  // range is not two citations either: printing both ends reports the writer as
+  // having cited them singly and leaves everything between them unmentioned.
+  const UNREADABLE_RANGES: ReadonlyArray<[string, string]> = [
+    // Backwards: no range this could be.
+    ["Fair Work Act 2009 (Cth) ss 140 to 100 apply.", "ss 140"],
+    // A range end carrying a subsection has no reading as a range either — and
+    // the 39 sections in the middle are exactly what must not vanish.
+    ["Fair Work Act 2009 (Cth) ss 100 to 140(2) apply.", "ss 100"],
+  ]
+
+  it.each(UNREADABLE_RANGES)("counts and names the range it cannot read in %s", (text, head) => {
+    const cites = extractStatuteCitations(text, 20)
+    const read = cites.filter((cite) => cite.attachedBy !== "unread")
+    const unread = cites.filter((cite) => cite.attachedBy === "unread")
+    // The head keeps the words the document contains; the far end is named,
+    // not read, and never becomes a second citation of its own.
+    expect(read.map((cite) => cite.pinpoint)).toEqual([head])
+    expect(unread).toHaveLength(1)
+    expect(unread[0].pinpoint).toContain("PARSE_ERROR")
+    expect(unread[0].raw).toContain(" to ")
+    // An unread marker never carries a statute: every consumer treats one that
+    // does as a provision somebody cited.
+    expect(unread[0].lawName).toBeUndefined()
+  })
+
+  it("names both ends of a range it could not read", () => {
+    const [, unread] = extractStatuteCitations("Fair Work Act 2009 (Cth) ss 140 to 100 apply.", 20)
+    expect(unread.raw).toContain("140")
+    expect(unread.raw).toContain("100")
+  })
+})
+
 // AGLC roman pinpoints are not exotic: 10 of the 16 Part labels of the *Crimes
 // Act 1914* carry a two- or three-letter tail, and six of the *Competition and
 // Consumer Act 2010*'s do — the six below are navLabels of this repo's own

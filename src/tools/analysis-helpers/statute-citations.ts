@@ -737,6 +737,27 @@ function continuesList(headShape: NumberShape, shape: NumberShape): boolean {
 const MAX_LIST_ITEMS = 12
 
 /**
+ * The dash a `to` join is re-rendered with when its two ends are merged back
+ * into one reference for `parseSectionRef`.
+ *
+ * `section-ref.ts` gives the plain hyphen two roles at once — the character
+ * *inside* an ITAA-style number (`s 355-25`) and the range dash a keyboard
+ * produces — so a hyphenated pair is genuinely ambiguous and that module
+ * resolves it conservatively, by arithmetic and by width. A member of
+ * `RANGE_DASHES` has only the one role: between two numbers it always means
+ * "to" (AGLC r 1.9), whatever the two numbers are.
+ *
+ * Which is exactly the writer's own evidence here. Someone who typed "ss 100
+ * to 140" left nothing to disambiguate, so handing the parser a hyphen threw
+ * that evidence away and put the sentence through a rule written for a
+ * different problem: `ss 5 to 8` merged and `ss 100 to 140` came back as two
+ * citations, `ss 100` and `s 140`, neither of them text the document contains
+ * and neither of them saying a word about ss 101–139 — the reading changing
+ * silently at a width the writer never wrote.
+ */
+const RANGE_JOIN = "–"
+
+/**
  * How the next member of a multi-provision pinpoint may be joined to the last:
  * `ss 45 and 46`, `ss 45 & 46`, `ss 45, 46, 47`, `ss 45, 46 and 47`,
  * `ss 45 to 46`. Group 1 is the join, 2 the number, 3 any subsections.
@@ -1084,7 +1105,10 @@ export function extractStatuteCitations(text: string, maxCitations: number): Sta
     for (const item of scan.items) {
       const last = located[located.length - 1]
       if (item.joinsAsRange) {
-        const merged = `${last.source} - ${item.number}${item.subsections}`
+        // `RANGE_JOIN`, never a hyphen: the writer wrote "to", and the merge
+        // has to carry that signal to the parser rather than re-creating the
+        // ambiguity the word settled.
+        const merged = `${last.source} ${RANGE_JOIN} ${item.number}${item.subsections}`
         const mergedRef = parseSectionRef(merged)
         if (mergedRef?.rangeEnd) {
           last.source = merged
@@ -1092,6 +1116,16 @@ export function extractStatuteCitations(text: string, maxCitations: number): Sta
           last.end = item.end
           continue
         }
+        // A "to" the reader cannot fold into a range is not two citations.
+        // Splitting it reports both ends as provisions the writer cited singly
+        // — "ss 140 to 100" as `ss 140` and `s 100` — and says nothing at all
+        // about the span between them, which is the `[VERIFIED]`-over-unread
+        // failure this module exists to prevent. So the far end is located,
+        // counted and reported unread; the head keeps the words the document
+        // actually contains.
+        unread.push({ fragment: `${raw} … ${text.slice(last.end, item.end)}`, index: item.start })
+        accounted.push({ start: last.end, end: item.end })
+        continue
       }
       const source = item.bracketed
         ? `${singular} (${item.number})`

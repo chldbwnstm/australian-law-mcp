@@ -16,7 +16,11 @@
  *    abbreviation is the only signal present in the text, so that is what
  *    decides it — an en dash overrides, because it only ever means "to", while
  *    U+2010/U+2011 do not (they are how FRL prints a plain hyphen). Whatever
- *    the signal, a pair that runs backwards is never a range.
+ *    the signal, a pair that runs backwards is never a range, and neither is
+ *    one whose two halves are the same token (`Part 2-2` of the Australian
+ *    Consumer Law). The width ceiling that rescues `ss 165-210` is narrower
+ *    still: it belongs to the kinds the register really numbers with a dash,
+ *    so `items 1-30 of Schedule 2` stays the range of items it is.
  *  - **`s18` is tolerated on input and never produced on output.** AGLC r
  *    3.1.4 requires the space. Being strict on input would reject most real
  *    user typing; being loose on output would emit non-compliant citations.
@@ -27,6 +31,7 @@ import {
   PLURAL_SPELLINGS,
   ROMAN_NUMBER,
   SERIES_UNIT_LETTER,
+  SERIES_UNIT_LETTER_MAX,
   SPELLING_ALTERNATION,
   SUBDIVISION_TOKEN,
   isRomanNumber,
@@ -288,9 +293,12 @@ const LETTERED_STRUCTURAL = new RegExp(`^(${DESIGNATOR})\\s+([A-Z]{1,3})$`, "i")
  *    designation spelling is spelled out case-insensitively by hand and the
  *    letters are not, so `part of` and `division and` cannot match at all.
  *  - **The letters are `SERIES_UNIT_LETTER`, not `[A-Z]`.** A structural
- *    series is lettered from the front of the alphabet — A to H across all
- *    13,861 navLabels of the five Acts measured — so `SCHEDULE OF FEES` and
- *    `PART TO BE REPEALED` cannot read as `sch OF` or `pt TO`.
+ *    series is lettered from the front of the alphabet — A to N, in runs of at
+ *    most three, across all 126,207 navLabels of the 1,177 in-force principal
+ *    Commonwealth Acts (the measurement is in `section-ref-vocab.ts`) — so
+ *    `SCHEDULE OF FEES` and `PART TO BE REPEALED` cannot read as `sch OF` or
+ *    `pt TO`, while the *Migration Act 1958*'s `Subdivision AL` and the CCA's
+ *    own `Subdivision J` are read as the units they are.
  *
  * The anchored `LETTERED_STRUCTURAL` stays wider on purpose: there the caller
  * has already said the whole string is one reference, and there is no prose
@@ -309,7 +317,7 @@ function eitherCase(word: string): string {
 
 const LETTERED_STRUCTURAL_SCANNER = new RegExp(
   `(?<![A-Za-z])(?:${LETTERED_STRUCTURAL_SPELLINGS.map(eitherCase).join("|")})` +
-    `[\\s\\u00a0]+${SERIES_UNIT_LETTER}{1,2}(?![0-9A-Za-z])`,
+    `[\\s\\u00a0]+${SERIES_UNIT_LETTER}{1,${SERIES_UNIT_LETTER_MAX}}(?![0-9A-Za-z])`,
   "g",
 )
 
@@ -405,6 +413,12 @@ function romanNumbersAreCapitalised(...parts: Array<string | undefined>): boolea
  * right, or comes back honestly as not in the table of contents, whereas the
  * range reading is guaranteed nonsense and is reported as an absence. A
  * non-numeric side (`pt IV-V`) is never treated as backwards.
+ *
+ * Only the leading integer of each side is compared, because that is all a
+ * dashed ITAA number offers — which is why *equality* is not decided here.
+ * `ss 355-25 to 355-30` is a real range whose two sides both lead with 355;
+ * the pair that is not a range is the one whose two halves are the **same
+ * token**, and `resolveRange` tests that where it can see it.
  */
 function runsBackwards(from: string, to: string): boolean {
   const start = Number.parseInt(from, 10)
@@ -433,6 +447,9 @@ function runsBackwards(from: string, to: string): boolean {
  * The ceiling applies only to the plain hyphen. An en dash, or any of the
  * other `RANGE_DASHES`, only ever means "to" (AGLC r 1.9), so `ss 165–210`
  * with a real dash is still the range the writer asked for, however wide.
+ *
+ * It also applies only to the kinds that are numbered that way — see
+ * `HYPHENATED_NUMBER_KINDS`.
  */
 const HYPHEN_RANGE_SPAN_MAX = 20
 
@@ -441,6 +458,92 @@ function spansTooFarForAHyphen(from: string, to: string): boolean {
   const end = Number.parseInt(to, 10)
   if (!Number.isFinite(start) || !Number.isFinite(end)) return false
   return end - start > HYPHEN_RANGE_SPAN_MAX
+}
+
+/**
+ * The kinds whose *number* can itself contain a hyphen.
+ *
+ * `HYPHEN_RANGE_SPAN_MAX` exists only because an ITAA-style number is written
+ * with the character a keyboard also produces for a range. Applied to a kind
+ * whose numbering never carries a dash it does the opposite of its job:
+ * `items 1-30 of Schedule 2` — a routine form in amending-Act and explanatory
+ * memorandum citations — became one schedule item numbered "1-30", which no
+ * amending Act has, so a real range of thirty items came back as an absence.
+ * The ceiling was measured on ITAA 1997 *section* numbers, and that is the
+ * width of thing it may decide.
+ *
+ * Measured over the tables of contents of all 1,177 in-force principal
+ * Commonwealth Acts (`document.ncx` for each, fetched 2026-09-05): the only
+ * designations the register ever prints with a hyphen inside the number are
+ * `Part` (`Part 2-1`, 489 labels), `Subdivision` (`Subdivision 152-A`, 1,369)
+ * and the bare section number (`165-210`, 9,509). Chapters, Divisions, Schedules,
+ * Appendices and Orders are numbered with plain integers or roman numerals in
+ * every one of them; items, clauses, regulations, rules and articles have no
+ * structural navLabel at all and are numbered `4`, `4A` or dotted (`reg 2.01`,
+ * `r 42.02.2`) — never dashed. The three sub-designations are here because
+ * their pinpoint carries the *section's* number: `paragraph 230-395(2)(c)`.
+ *
+ * For every other kind a hyphen between two numbers has nothing to be part of,
+ * so it is the range the writer wrote, at whatever width.
+ */
+const HYPHENATED_NUMBER_KINDS: ReadonlySet<RefKind> = new Set<RefKind>([
+  "section", "subsection", "paragraph", "subparagraph", "part", "subdivision",
+])
+
+/**
+ * Decide whether a hyphenated number is one number or the two ends of a range.
+ *
+ * `NUMBER_PATTERN` is greedy, so `ss 5-6` arrives here as the single number
+ * "5-6" and has to be split back out; `s 355-25` must not be. A range dash
+ * always means "to"; a plain hyphen only does after a plural, and then only
+ * for a pair that can be read as a range at all.
+ *
+ * Shared by the two branches of `parseSectionRef` that can see a number:
+ * `schs 1–3` used to reach the schedule branch, which had no range reading of
+ * its own, and came back as one schedule named "1-3" — a schedule no Act has,
+ * from a citation that had spelled its range out with an en dash.
+ */
+function resolveRange(input: {
+  number: string
+  spacedRangeEnd?: string
+  kind: RefKind
+  plural: boolean
+  hadRangeDash: boolean
+  subsections: string[]
+}): { number: string; rangeEnd?: string } {
+  const { kind, plural, hadRangeDash, subsections } = input
+  const isNotARange = (from: string, to: string): boolean =>
+    runsBackwards(from, to) ||
+    // A range end never carries a bracketed subdivision: `paragraphs
+    // 230-395(2)(c)` is paragraph (c) of subsection (2) of one ITAA section,
+    // not "paragraphs 230 to 395" with a stray (2)(c) hanging off the end.
+    subsections.length > 0 ||
+    (!hadRangeDash && HYPHENATED_NUMBER_KINDS.has(kind) && spansTooFarForAHyphen(from, to))
+
+  let numberText = input.number
+  let rangeEnd = input.spacedRangeEnd
+  if (!rangeEnd && (plural || hadRangeDash)) {
+    const split = RANGE_SPLIT.exec(numberText)
+    // Two halves that are the same token are one number, never a range: the
+    // Australian Consumer Law really has a Part 2-2, 3-3, 4-4 and 5-5, and the
+    // ITAA 1997 a section 1-1, 5-5, 15-15, 20-20 and 40-40 — 14 labels in this
+    // repo's own recorded tables of contents. Read as ranges they name Part 2
+    // and section 1: a different provision, and one nobody cited. This is the
+    // one place equality can be tested, because both halves here are a bare
+    // `\d+[A-Za-z]*` — the real range `ss 355-25 to 355-30`, whose sides only
+    // *begin* the same, is a spaced range end and never reaches this branch.
+    if (split && split[1] !== split[2] && !isNotARange(split[1], split[2])) {
+      numberText = split[1]
+      rangeEnd = split[2]
+    }
+  }
+  if (rangeEnd && ((!plural && !hadRangeDash) || isNotARange(numberText, rangeEnd))) {
+    // A spaced hyphen after a singular designation is still part of the number,
+    // and so is a pair that is not a range — see `isNotARange`.
+    numberText = `${numberText}-${rangeEnd}`
+    rangeEnd = undefined
+  }
+  return { number: numberText, ...(rangeEnd ? { rangeEnd } : {}) }
 }
 
 /**
@@ -456,14 +559,23 @@ export function parseSectionRef(input: string): SectionRef | null {
   const scheduleOnly = SCHEDULE_ONLY.exec(text)
   if (scheduleOnly) {
     if (!romanNumbersAreCapitalised(scheduleOnly[1], scheduleOnly[2])) return null
-    const { number, letterSuffix } = splitLetterSuffix(scheduleOnly[1])
+    const schedulePlural = /^(?:schs|schedules)\b/i.test(text)
+    const resolved = resolveRange({
+      number: scheduleOnly[1],
+      kind: "schedule",
+      plural: schedulePlural,
+      hadRangeDash,
+      subsections: [],
+    })
+    const { number, letterSuffix } = splitLetterSuffix(resolved.number)
     return {
       kind: "schedule",
       number,
       ...(letterSuffix ? { letterSuffix } : {}),
       subsections: [],
       ...(scheduleOnly[2] ? { item: scheduleOnly[2] } : {}),
-      plural: /^(?:schs|schedules)\b/i.test(text),
+      ...(resolved.rangeEnd ? { rangeEnd: resolved.rangeEnd } : {}),
+      plural: schedulePlural,
       raw: text,
     }
   }
@@ -494,33 +606,17 @@ export function parseSectionRef(input: string): SectionRef | null {
   if (!romanNumbersAreCapitalised(rawNumber, schedule, spacedRangeEnd, item)) return null
   const plural = PLURAL_SPELLINGS.has(spelling.toLowerCase())
 
-  // The hyphen decision. `NUMBER_PATTERN` is greedy, so `ss 5-6` arrives here
-  // as the single number "5-6" and has to be split back out; `s 355-25` must
-  // not be. A range dash always means "to"; a hyphen only does after a plural,
-  // and then only for a pair that reads as a range — see `isNotARange`.
+  // The hyphen decision — `resolveRange` owns it, and the schedule branch
+  // above shares it.
   const subsections = parseSubsections(rawSubsections)
-  const isNotARange = (from: string, to: string): boolean =>
-    runsBackwards(from, to) ||
-    // A range end never carries a bracketed subdivision: `paragraphs
-    // 230-395(2)(c)` is paragraph (c) of subsection (2) of one ITAA section,
-    // not "paragraphs 230 to 395" with a stray (2)(c) hanging off the end.
-    subsections.length > 0 ||
-    (!hadRangeDash && spansTooFarForAHyphen(from, to))
-  let numberText = rawNumber
-  let rangeEnd = spacedRangeEnd as string | undefined
-  if (!rangeEnd && (plural || hadRangeDash)) {
-    const split = RANGE_SPLIT.exec(rawNumber)
-    if (split && !isNotARange(split[1], split[2])) {
-      numberText = split[1]
-      rangeEnd = split[2]
-    }
-  }
-  if (rangeEnd && ((!plural && !hadRangeDash) || isNotARange(numberText, rangeEnd))) {
-    // A spaced hyphen after a singular designation is still part of the number,
-    // and so is a pair that is not a range — see `isNotARange`.
-    numberText = `${numberText}-${rangeEnd}`
-    rangeEnd = undefined
-  }
+  const { number: numberText, rangeEnd } = resolveRange({
+    number: rawNumber,
+    spacedRangeEnd: spacedRangeEnd as string | undefined,
+    kind: vocab.kind,
+    plural,
+    hadRangeDash,
+    subsections,
+  })
 
   if (hasLowercaseDashedLetters(numberText)) return null
 
@@ -566,7 +662,10 @@ export function formatRef(ref: SectionRef): string {
   const number = `${ref.number}${ref.letterSuffix ?? ""}`
 
   if (ref.kind === "schedule") {
-    const head = `${abbrev} ${number}`
+    // The range is printed for the same reason every other kind's is: a form
+    // this module emits but cannot read back is a reference that changes
+    // provision every time it is round-tripped.
+    const head = `${abbrev} ${number}${ref.rangeEnd ? `–${ref.rangeEnd}` : ""}`
     return ref.item ? `${head} item ${ref.item}` : head
   }
 
