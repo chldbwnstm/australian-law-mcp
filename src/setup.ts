@@ -18,7 +18,7 @@
 import { existsSync } from "node:fs"
 import { mkdir, readFile, writeFile } from "node:fs/promises"
 import { homedir, platform } from "node:os"
-import { dirname, resolve } from "node:path"
+import { dirname, posix, win32 } from "node:path"
 import { stdin, stdout } from "node:process"
 import { createInterface } from "node:readline/promises"
 
@@ -36,6 +36,12 @@ export interface ClientConfig {
 
 export function detectClients(home = homedir(), os = platform(), cwd = process.cwd()): readonly ClientConfig[] {
   const clients: ClientConfig[] = []
+
+  // Paths follow the *target* platform named by `os`, not the host running
+  // this process: the parameter exists so tests can probe every client shape
+  // from any machine, and host-flavoured resolve() turned "/Users/x" into
+  // "C:\Users\x" the first time the suite ran on Windows.
+  const resolve = os === "win32" ? win32.resolve : posix.resolve
 
   const claudeDesktopPaths: Record<string, string> = {
     darwin: resolve(home, "Library/Application Support/Claude/claude_desktop_config.json"),
