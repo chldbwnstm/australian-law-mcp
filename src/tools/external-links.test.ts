@@ -59,6 +59,33 @@ describe("statute links", () => {
     expect(text).toContain("sch 2 s 18")
   })
 
+  it("carries the schedule in the addresses themselves, not only in the warning", async () => {
+    // A browser follows the URL, not the warning beside it: the AustLII
+    // search for 'ACL s 18' must go out as sch 2 s 18, and no section page
+    // may be built from a slug for a schedule provision — a consolidated-act
+    // section page is the body's provision.
+    const text = textOf(await run({ law: "ACL", provision: "s 18" }))
+    const urls = [...text.matchAll(/https?:\/\/\S+/g)].map((m) => decodeURIComponent(m[0]).replace(/\+/g, " "))
+    for (const url of urls.filter((url) => /\bs ?18\b/i.test(url))) {
+      expect(url).toMatch(/\bsch ?2\b/i)
+    }
+
+    const withSlug = textOf(await run({ law: "ACL", provision: "s 18", austliiSlug: "caca2010265" }))
+    expect(withSlug).not.toContain("/s18.html")
+    expect(withSlug).toContain("address the body of the Act")
+
+    const explicit = textOf(await run({ law: "CCA", provision: "sch 2 s 18", austliiSlug: "caca2010265" }))
+    expect(explicit).not.toContain("/s18.html")
+  })
+
+  it("keeps a lettered section's letters in the slug section page", async () => {
+    // s10.html is section 10 — a different, real section. AustLII spells its
+    // section pages in lowercase, and austliiSectionUrl folds the case.
+    const text = textOf(await run({ law: "CCA", provision: "s 10AA", austliiSlug: "caca2010265" }))
+    expect(text).toContain("/s10aa.html")
+    expect(text).not.toContain("/s10.html")
+  })
+
   it("normalises the provision reference in the heading", async () => {
     expect(textOf(await run({ law: "CCA", provision: "s18" }))).toContain("Competition and Consumer Act 2010 s 18")
   })

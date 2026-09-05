@@ -80,7 +80,18 @@ function statuteLinks(input: GetExternalLinksInput): Section | null {
 
   const resolution = input.law ? resolveLawAlias(input.law) : undefined
   const candidates = resolution?.candidates ?? []
-  const ref = input.provision ? parseSectionRef(input.provision) : null
+  const parsed = input.provision ? parseSectionRef(input.provision) : null
+
+  // The alias-schedule rewrite, applied to the reference itself: 'ACL s 18'
+  // means sch 2 s 18 of the CCA, and every address built below has to carry
+  // the schedule. A browser follows the URL, not a warning printed beside
+  // it, so a search that goes out as "…Act 2010 s 18" points at the body
+  // provision however clearly the next line says not to trust it.
+  const aliasSchedule = candidates.find((candidate) => candidate.sch)?.sch
+  const ref =
+    parsed && aliasSchedule && !parsed.schedule && parsed.kind !== "schedule"
+      ? { ...parsed, schedule: aliasSchedule }
+      : parsed
   const refText = ref ? formatRef(ref) : input.provision
 
   // Prefer the caller's id; otherwise take one only when the alias is
@@ -117,13 +128,17 @@ function statuteLinks(input: GetExternalLinksInput): Section | null {
       `(${candidates.map((c) => `${c.official} (${c.jurisdiction})`).join(", ")}). Ask which one — the section numbering differs.`,
     )
   }
-  const schedule = candidates.find((candidate) => candidate.sch)?.sch
-  if (schedule && ref && !ref.schedule) {
-    lines.push(`⚠️ '${input.law}' is schedule ${schedule} of that Act. A bare '${refText}' points at the body of the Act, which is a different provision — write 'sch ${schedule} ${refText}'.`)
+  if (parsed && ref !== parsed) {
+    lines.push(`⚠️ '${input.law}' is schedule ${aliasSchedule} of that Act, so '${formatRef(parsed)}' reads as '${refText}' and every link below carries the schedule. The body of the Act has its own ${formatRef(parsed)}, which is a different provision — name the Act itself to link that one.`)
   }
 
-  if (input.austliiSlug && refText) {
-    const section = ref?.number ?? String(input.provision)
+  if (input.austliiSlug && refText && ref?.schedule) {
+    // A section page under a consolidated-act slug addresses the *body* of
+    // the Act — for a schedule provision it is the wrong provision's page,
+    // and this tool does not hand over confident wrong addresses.
+    lines.push(`AustLII section pages under a consolidated-act slug address the body of the Act, so none is built for ${refText}. Search instead (browser only): ${austliiSearchUrl(`${officialName ?? ""} ${refText}`.trim(), ["au/legis"])}`)
+  } else if (input.austliiSlug && refText) {
+    const section = ref ? `${ref.number}${ref.letterSuffix ?? ""}` : String(input.provision)
     lines.push(`AustLII section page (browser only): ${austliiSectionUrl(input.austliiSlug, section)}`)
   } else if (refText) {
     lines.push(`AustLII section slug not supplied, so no section URL is given (it is generated, not derivable). Search instead (browser only): ${austliiSearchUrl(`${officialName ?? ""} ${refText}`.trim(), ["au/legis"])}`)

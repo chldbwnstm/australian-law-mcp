@@ -463,8 +463,8 @@ describe("bare concept queries", () => {
  *    body s 18's heading and operative words absent — however it fetched them;
  *  - or, for a tool that answers *about* a provision without serving its
  *    text, the SUBJECT its answer names;
- *  - or, for a link builder, the addresses it hands to a browser (pinned as an
- *    explicitly failing test below while `get_external_links` has that defect).
+ *  - or, for a link builder, the addresses it hands to a browser — every URL
+ *    that pinpoints the section must carry the schedule.
  *
  * The schemas in `allTools` decide who is in scope: a tool added tomorrow with
  * a law-ish field and a provision-ish field is swept in the moment it is
@@ -606,12 +606,11 @@ type OutcomeContract =
   /** The tool answers *about* the provision: the subject it names must be the schedule's. */
   | { outcome: "names_schedule_subject"; subject: RegExp }
   /**
-   * The tool has an open defect in the outcome it owns. It still runs the
-   * universal assertions in the main test; the owned outcome is pinned as an
-   * explicitly FAILING test below, which flips the moment the tool is fixed —
-   * a pin cannot silently rot into an exemption.
+   * The tool hands addresses to a browser: every URL that pinpoints s 18
+   * must carry the schedule, because the browser follows the URL, not any
+   * warning printed beside it.
    */
-  | { outcome: "pinned_defect"; defect: string }
+  | { outcome: "addresses_carry_schedule" }
 
 /**
  * What each in-scope tool owes for "ACL" + "s 18", on top of the universal
@@ -633,12 +632,7 @@ const IN_SCOPE: Record<string, OutcomeContract> = {
   chain_amendment_track: { outcome: "names_schedule_subject", subject: /Text of sch 2 s 18/ },
   impact_map: { outcome: "names_schedule_subject", subject: /Provision: sch 2 s 18 — "Misleading or deceptive conduct"/ },
   legal_analysis: { outcome: "names_schedule_subject", subject: /Provision: sch 2 s 18 — "Misleading or deceptive conduct"/ },
-  get_external_links: {
-    outcome: "pinned_defect",
-    defect:
-      "builds its AustLII section search at the bare 's 18' and only warns beside it — the URL a browser follows " +
-      "still points research at the body provision. Fix: qualify the reference in the addresses themselves.",
-  },
+  get_external_links: { outcome: "addresses_carry_schedule" },
 }
 
 async function runWithAclSection18(tool: RegistryTool): Promise<{ text: string; asked: string[]; threw?: string }> {
@@ -765,33 +759,25 @@ describe("the alias's schedule, across the whole registry", () => {
           text,
           `${tool.name} does not name sch 2 s 18 as the subject of its answer (expected ${String(contract.subject)}).`,
         ).toMatch(contract.subject)
+      } else if (contract.outcome === "addresses_carry_schedule") {
+        const urls = [...text.matchAll(/https?:\/\/\S+/g)].map((match) =>
+          decodeURIComponent(match[0]).replace(/\+/g, " "),
+        )
+        const pinpointed = urls.filter((url) => /\bs ?18\b/i.test(url))
+        expect(
+          pinpointed.length,
+          `${tool.name} built no s 18 address at all — this contract no longer tests anything; re-examine it.`,
+        ).toBeGreaterThan(0)
+        for (const url of pinpointed) {
+          expect(
+            url,
+            `${tool.name}: a browser follows the URL, not the warning beside it — a section-18 address for an ` +
+              "ACL question must carry the schedule.",
+          ).toMatch(/\bsch ?2\b/i)
+        }
       }
-      // pinned_defect: universals above still apply; the outcome the tool owns
-      // is pinned in its own explicitly-failing test below.
     }
   }, 60_000)
-
-  it.fails(
-    "OPEN DEFECT (pinned): get_external_links must qualify the addresses it builds, not just warn beside them — " +
-      "when this starts failing the tool is fixed: delete this pin and give it a real contract",
-    async () => {
-      const tool = (allTools as RegistryTool[]).find((entry) => entry.name === "get_external_links")
-      expect(tool).toBeDefined()
-      const { text, threw } = await runWithAclSection18(tool!)
-      expect(threw).toBeUndefined()
-      // The outcome this tool owns is the URLs: a browser follows the address,
-      // not the warning printed beside it. Today the AustLII search goes out
-      // as "...Act 2010 s 18" — pointed at the body provision.
-      const urls = [...text.matchAll(/https?:\/\/\S+/g)].map((match) =>
-        decodeURIComponent(match[0]).replace(/\+/g, " "),
-      )
-      const pinpointed = urls.filter((url) => /\bs ?18\b/i.test(url))
-      expect(pinpointed.length, "no URL pinpoints s 18 at all — the pin no longer tests anything; re-examine it").toBeGreaterThan(0)
-      for (const url of pinpointed) {
-        expect(url, "a section-18 address for an ACL question must carry the schedule").toMatch(/\bsch ?2\b/i)
-      }
-    },
-  )
 
   it("scopes a provision read out of the question itself, in every tool that reads one", async () => {
     // The other half of the class, and the one round 3 missed: a tool with no
