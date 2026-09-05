@@ -19,7 +19,9 @@
 import { z } from "zod"
 import type { AuApiClient } from "../lib/api-client.js"
 import { ErrorCodes, LawApiError, formatToolError } from "../lib/errors.js"
+import { mentionForTitle, primaryLawMention, provisionParam } from "../lib/query-extract.js"
 import { truncateResponse } from "../lib/schemas.js"
+import { formatRef } from "../lib/section-ref.js"
 import { frlHumanUrl } from "../lib/external-links-map.js"
 import type { ToolResponse } from "../lib/types.js"
 import { collectionLabel, titleAnnotations } from "./statute-helpers/format.js"
@@ -161,9 +163,28 @@ export async function getInstrumentProvisions(
       return ok(lines.join("\n"))
     }
 
-    const ref = requireRef(input.provision)
+    const asked = requireRef(input.provision)
+    // An alias can name a *schedule of an Act*, and this tool is reachable
+    // with one: `query:"ACL"` resolves through the alias table to the CCA
+    // itself, and this handler then printed the alias note — which spells the
+    // trap out — and served the body's s 18 ("Meetings of Commission") under
+    // it. Same rewrite as get_law_text (`query-extract.provisionParam`),
+    // bounded by `mentionForTitle` to the title this call actually resolved;
+    // an explicit `sch N` from the caller keeps its own, and a plain
+    // instrument name (no alias schedule) changes nothing.
+    const mention = mentionForTitle(input.query ? primaryLawMention(input.query) : undefined, instrument.id)
+    const scoped = provisionParam(asked, mention)
+    const rewritten = scoped !== formatRef(asked)
+    const ref = rewritten ? requireRef(scoped) : asked
+    if (rewritten) {
+      lines.push(
+        `Read "${input.provision}" as "${scoped}": "${input.query}" names sch ${mention?.sch ?? "?"} of this title, ` +
+          "so the bare reference would have returned the body provision instead.",
+      )
+      lines.push("")
+    }
     if (!locate(ref, entries)) {
-      lines.push(`[NOT_FOUND] ${input.provision} is not in this instrument's table of contents.`)
+      lines.push(`[NOT_FOUND] ${formatRef(ref)} is not in this instrument's table of contents.`)
       lines.push("")
       lines.push(
         "Instruments differ in how they number: regulations use 'reg', rules use 'r', standards often use 's'. " +
@@ -172,7 +193,7 @@ export async function getInstrumentProvisions(
       return ok(lines.join("\n"))
     }
 
-    const provision = await apiClient.getProvision(instrument.id, input.provision, date)
+    const provision = await apiClient.getProvision(instrument.id, rewritten ? scoped : input.provision, date)
     lines.push(`${provision.ref} — ${provision.heading}`)
     if (provision.breadcrumb.length > 0) lines.push(`In: ${provision.breadcrumb.join(" › ")}`)
     lines.push(`Source: ${frlHumanUrl(instrument.id, date)}`)

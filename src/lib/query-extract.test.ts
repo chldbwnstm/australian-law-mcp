@@ -11,7 +11,7 @@
 
 import { readFileSync } from "node:fs"
 import { describe, expect, it } from "vitest"
-import { allTools } from "../tool-registry.js"
+import { allTools, unwrapZodEffects } from "../tool-registry.js"
 import type { AuApiClient } from "./api-client.js"
 import { normalizeFrlVersion } from "./api-client.js"
 import { lawCache } from "./cache.js"
@@ -440,7 +440,8 @@ describe("bare concept queries", () => {
 // ──────────────────────────────────────────────────────────────────────────
 
 /**
- * Every tool that takes (law words, provision) must apply the alias's schedule.
+ * Every tool that takes (law words, provision) must answer "ACL" + "s 18"
+ * with SCHEDULE 2's s 18 — asserted as an OUTCOME, not as a call shape.
  *
  * This block is the reason `scopeProvisionsToLaw` exists. The ACL **is**
  * schedule 2 of the *Competition and Consumer Act 2010*, so "ACL" + "s 18"
@@ -449,46 +450,51 @@ describe("bare concept queries", () => {
  * schedule hands back a confident wrong answer with nothing in it that looks
  * wrong.
  *
- * The rewrite was patched into `law-text.ts`, `batch-provisions.ts`,
- * `provision-history.ts` and `route-patterns.ts` one tool at a time, and three
- * review rounds running a *different* tool was found without it. Site-by-site
- * does not converge, so the check is enumerated instead of listed: the schemas
- * in `allTools` decide who is in scope, and a tool added tomorrow with a
- * law-ish field and a provision-ish field is in scope the moment it is
- * registered.
+ * An earlier version of this guard asserted only on the `getProvision` ledger
+ * plus a `"sch 2 s 18"` substring. That was vacuous for every tool that slices
+ * volume HTML itself (`get_batch_provisions`, `get_provision_history`,
+ * `impact_map`, the chains, …): they never call `getProvision`, so the ledger
+ * check passed over an empty list, and the substring was satisfied by the
+ * alias *note* alone — a future tool could print the note and then serve the
+ * body's s 18 out of `document_1.html` and still pass. So the substantive
+ * assertions here are on what the recorded fixtures make distinguishable:
+ *
+ *  - the TEXT a tool serves: the schedule s 18's operative words present, the
+ *    body s 18's heading and operative words absent — however it fetched them;
+ *  - or, for a tool that answers *about* a provision without serving its
+ *    text, the SUBJECT its answer names;
+ *  - or, for a link builder, the addresses it hands to a browser (pinned as an
+ *    explicitly failing test below while `get_external_links` has that defect).
+ *
+ * The schemas in `allTools` decide who is in scope: a tool added tomorrow with
+ * a law-ish field and a provision-ish field is swept in the moment it is
+ * registered, and FAILS until someone writes it a contract in `IN_SCOPE` —
+ * there is no skip path and no exemption ledger.
+ *
+ * The drive uses the ACL because that is the alias the recorded fixtures cover
+ * (the CCA's real NCX and volume slices, captured 2026-09-03 — provenance in
+ * `__fixtures__/PROVENANCE.txt`). The other schedule-carrying alias, the
+ * National Credit Code (sch 1 of the NCCPA), is asserted at the
+ * `scopeProvisionsToLaw` choke point above; a second registry-wide drive would
+ * need recorded NCCPA fixtures, which cannot be derived from the CCA's without
+ * hand-writing them.
  *
  * A lib test reaching up to `tool-registry.ts` inverts the usual layering, and
  * that is the point — the registry is the only place that knows every tool, and
  * this rule is worth less than nothing if it is enforced only over the tools
  * somebody remembered to list.
- *
- * What it proves for each tool: it never asks the Register for the *body's*
- * s 18, and it says `sch 2 s 18` somewhere in its answer. What it does not
- * prove: that a tool building a deep link rewrites the link itself rather than
- * warning beside it (`get_external_links` passes on the warning alone).
  */
 const LAW_FIELD = /^(?:query|lawName|law|act|title|name)$/
 const PROVISION_FIELD = /^provisions?$/
 
 /**
- * Tools that do NOT apply the schedule, verified 2026-09-04.
- *
- * This is a ledger of open bugs, not a list of exemptions — each entry is a
- * tool that answers "ACL s 18" with the body's s 18 today. **Delete the line
- * when you fix the tool.** Adding a line is how a new tool opts out of the one
- * rule this project's flagship example exists to state, so a reviewer should
- * treat a new entry the way they would treat a new `@ts-expect-error`.
+ * Zod object shape, defensively: the tests must not go quietly vacuous on a
+ * zod upgrade. `unwrapZodEffects` first, because a wrapper hides the shape:
+ * `legal_research` sits behind `z.preprocess`, read no fields, and so was
+ * silently OUT of this guard's scope until the schema was unwrapped.
  */
-const KNOWN_GAPS: Record<string, string> = {
-  get_instrument_provisions:
-    "parses `provision` with parseSectionRef and never consults `query` — prints the alias note, then serves the body provision under it.",
-  get_historical_law:
-    "same shape: requireRef(input.provision) with no mention, so a point-in-time read of 'ACL s 18' is the body's s 18 as at that date.",
-}
-
-/** Zod object shape, defensively: the tests must not go quietly vacuous on a zod upgrade. */
 function schemaFields(schema: unknown): string[] {
-  const holder = schema as { shape?: unknown; _def?: { shape?: unknown } }
+  const holder = unwrapZodEffects(schema) as { shape?: unknown; _def?: { shape?: unknown } }
   const shape = holder?.shape ?? holder?._def?.shape
   const resolved = typeof shape === "function" ? (shape as () => object)() : shape
   return resolved ? Object.keys(resolved as object) : []
@@ -564,17 +570,78 @@ function registerStub(asked: string[]): AuApiClient {
 
 /**
  * Fields the harness fills so a tool gets far enough to use the provision at
- * all. Only ever a neutral value for a field whose *absence* short-circuits the
- * handler — `get_historical_law` refuses without a date, `legal_analysis`
- * without a mode.
+ * all. Only ever a neutral value for a field whose *absence* short-circuits
+ * the handler or routes it away from the provision — `get_historical_law`
+ * refuses without a date, `legal_analysis` without a mode, and
+ * `legal_research` defaults to `full_research`, which never touches
+ * `provisions` (`law_system` is its provision-carrying leg).
  */
 const NEUTRAL_FIELDS: Record<string, unknown> = {
   date: "2020-01-01",
   fromDate: "2026-01-15",
   mode: "impact_map",
+  task: "law_system",
 }
 
-async function runWithAclSection18(tool: RegistryTool): Promise<{ text: string; asked: string[] }> {
+/**
+ * The two s 18s, as the recorded fixtures serve them (case-sensitive, and
+ * checked against the fixtures below so a re-captured fixture cannot silently
+ * blunt the assertions):
+ *
+ *  - sch 2 s 18 lives in `document_4` and its operative words are the
+ *    misleading-conduct prohibition;
+ *  - the body's s 18 lives in `document_1` under "Meetings of Commission".
+ *
+ * The alias table's own note spells the trap out in *lower case* ("meetings
+ * of Commission"), so these exact strings can only come from served text —
+ * a tool cannot satisfy or trip them by printing the note.
+ */
+const SCHEDULE_S18_TEXT = "misleading or deceptive or is likely to mislead or deceive"
+const BODY_S18_HEADING = "Meetings of Commission"
+const BODY_S18_TEXT = "convene such meetings of the Commission"
+
+type OutcomeContract =
+  /** The tool serves provision text: the schedule's words must be in it. */
+  | { outcome: "serves_schedule_text" }
+  /** The tool answers *about* the provision: the subject it names must be the schedule's. */
+  | { outcome: "names_schedule_subject"; subject: RegExp }
+  /**
+   * The tool has an open defect in the outcome it owns. It still runs the
+   * universal assertions in the main test; the owned outcome is pinned as an
+   * explicitly FAILING test below, which flips the moment the tool is fixed —
+   * a pin cannot silently rot into an exemption.
+   */
+  | { outcome: "pinned_defect"; defect: string }
+
+/**
+ * What each in-scope tool owes for "ACL" + "s 18", on top of the universal
+ * assertions (no bare `s 18` to the Register, no body-provision text served,
+ * the `sch 2 s 18` rewrite visible). Keyed by tool name; the enumeration test
+ * holds this table equal to the live in-scope set, so a new (law, provision)
+ * tool FAILS until it gets a line here — there is no skip and no exemption.
+ */
+const IN_SCOPE: Record<string, OutcomeContract> = {
+  get_law_text: { outcome: "serves_schedule_text" },
+  get_batch_provisions: { outcome: "serves_schedule_text" },
+  get_instrument_provisions: { outcome: "serves_schedule_text" },
+  get_historical_law: { outcome: "serves_schedule_text" },
+  applicable_law: { outcome: "serves_schedule_text" },
+  chain_law_system: { outcome: "serves_schedule_text" },
+  legal_research: { outcome: "serves_schedule_text" },
+  get_provision_history: { outcome: "names_schedule_subject", subject: /Amendment history of sch 2 s 18/ },
+  compare_old_new: { outcome: "names_schedule_subject", subject: /Text of sch 2 s 18/ },
+  chain_amendment_track: { outcome: "names_schedule_subject", subject: /Text of sch 2 s 18/ },
+  impact_map: { outcome: "names_schedule_subject", subject: /Provision: sch 2 s 18 — "Misleading or deceptive conduct"/ },
+  legal_analysis: { outcome: "names_schedule_subject", subject: /Provision: sch 2 s 18 — "Misleading or deceptive conduct"/ },
+  get_external_links: {
+    outcome: "pinned_defect",
+    defect:
+      "builds its AustLII section search at the bare 's 18' and only warns beside it — the URL a browser follows " +
+      "still points research at the body provision. Fix: qualify the reference in the addresses themselves.",
+  },
+}
+
+async function runWithAclSection18(tool: RegistryTool): Promise<{ text: string; asked: string[]; threw?: string }> {
   lawCache.clear()
   const input: Record<string, unknown> = {}
   for (const field of schemaFields(tool.schema)) {
@@ -589,30 +656,81 @@ async function runWithAclSection18(tool: RegistryTool): Promise<{ text: string; 
     const result = await tool.handler(registerStub(asked), parsed)
     return { text: result.content.map((part) => part.text).join("\n"), asked }
   } catch (error) {
-    return { text: `threw: ${error instanceof Error ? error.message : String(error)}`, asked }
+    // Not folded into `text`: a tool this harness cannot drive is a FAILING
+    // test with this message attached, never a silently weaker assertion.
+    return { text: "", asked, threw: error instanceof Error ? error.message : String(error) }
   }
 }
 
 describe("the alias's schedule, across the whole registry", () => {
-  it("finds the tools that take a law and a provision", () => {
-    // Guards the enumeration itself: a zod upgrade that changes `.shape` would
-    // otherwise leave every test below passing over an empty list.
-    const found = toolsWith(
-      (fields) => fields.some((f) => LAW_FIELD.test(f)) && fields.some((f) => PROVISION_FIELD.test(f)),
-    ).map((tool) => tool.name)
-    expect(found).toEqual(
-      expect.arrayContaining(["get_law_text", "get_batch_provisions", "get_provision_history", "compare_old_new"]),
-    )
-    expect(found.length).toBeGreaterThanOrEqual(10)
+  it("the fixtures keep the two s 18s distinguishable — the guard of the guard", () => {
+    // If a re-captured fixture, a marker typo or a rewritten alias note ever
+    // stops these holding, every outcome assertion below would still run and
+    // prove nothing; this is the test that makes that loud instead of quiet.
+    expect(CCA_VOL4).toContain(SCHEDULE_S18_TEXT)
+    expect(CCA_VOL4).not.toContain(BODY_S18_HEADING)
+    expect(CCA_VOL4).not.toContain(BODY_S18_TEXT)
+    expect(CCA_VOL1).toContain(BODY_S18_HEADING)
+    expect(CCA_VOL1).toContain(BODY_S18_TEXT)
+    expect(CCA_VOL1).not.toContain(SCHEDULE_S18_TEXT)
+    // The notes the tools print about the alias must satisfy or trip nothing
+    // by themselves — that vacuity is exactly what this guard was rebuilt for.
+    const aliasNote = resolveLawAlias("ACL").candidates[0]?.notes ?? ""
+    const rewriteNote = scopeProvisionsToLaw({ query: "ACL", provisions: ["s 18"] }).note ?? ""
+    expect(aliasNote.length).toBeGreaterThan(20)
+    expect(rewriteNote.length).toBeGreaterThan(20)
+    for (const note of [aliasNote, rewriteNote]) {
+      expect(note).not.toContain(SCHEDULE_S18_TEXT)
+      expect(note).not.toContain(BODY_S18_HEADING)
+      expect(note).not.toContain(BODY_S18_TEXT)
+    }
   })
 
-  it("every one of them reads 'ACL' + 's 18' as sch 2 s 18", async () => {
+  it("the in-scope set is exactly the contracted set — a new (law, provision) tool fails here until it gets an outcome contract", () => {
+    // Also guards the enumeration itself: a zod upgrade that changed `.shape`
+    // would read [] fields off every tool and shrink `found` to nothing, which
+    // this equality reports instead of letting the outcome test loop over an
+    // empty list.
+    const found = toolsWith(
+      (fields) => fields.some((f) => LAW_FIELD.test(f)) && fields.some((f) => PROVISION_FIELD.test(f)),
+    )
+      .map((tool) => tool.name)
+      .sort()
+    expect(
+      found,
+      "The live registry's (law, provision) tools and the IN_SCOPE contract table have diverged. " +
+        "A name only in the left list is a new in-scope tool: give it an OutcomeContract (and make it pass the " +
+        "outcome test) — do not exempt it. A name only in the right list is a stale contract: delete it.",
+    ).toEqual(Object.keys(IN_SCOPE).sort())
+  })
+
+  it("every in-scope tool answers 'ACL' + 's 18' with schedule 2 — the outcome, not the call shape", async () => {
     const candidates = toolsWith(
       (fields) => fields.some((f) => LAW_FIELD.test(f)) && fields.some((f) => PROVISION_FIELD.test(f)),
-    ).filter((tool) => KNOWN_GAPS[tool.name] === undefined)
+    )
+    // Belt to the enumeration test's braces: this loop must never quietly run
+    // over nothing.
+    expect(candidates.length).toBeGreaterThanOrEqual(13)
 
     for (const tool of candidates) {
-      const { text, asked } = await runWithAclSection18(tool)
+      const contract = IN_SCOPE[tool.name]
+      if (!contract) {
+        expect.fail(
+          `${tool.name} takes a law and a provision but has no outcome contract — add it to IN_SCOPE and make it ` +
+            "pass this test. There is no skip path: an undriven tool is exactly where the body-for-schedule " +
+            "substitution hides.",
+        )
+      }
+      const { text, asked, threw } = await runWithAclSection18(tool)
+      expect(
+        threw,
+        `${tool.name} could not be driven by this harness — fix the input table (NEUTRAL_FIELDS) or the tool. ` +
+          "A tool the harness cannot drive fails; it is never skipped.",
+      ).toBeUndefined()
+
+      // Universal, for every contract kind: the Register must never be asked
+      // for the body's s 18, the body provision's text must never be served,
+      // and the rewrite must be visible (a silent substitution is its own trap).
       const bodySection = asked.filter((provision) => /^s\.?\s*18$/i.test(provision.trim()))
       expect(
         bodySection,
@@ -621,27 +739,59 @@ describe("the alias's schedule, across the whole registry", () => {
       ).toEqual([])
       expect(
         text,
+        `${tool.name} served the BODY s 18's heading for an ACL question — the exact confusion this project exists ` +
+          "to prevent. However this tool fetches text (getProvision or its own volume slice), the alias's schedule " +
+          "must be applied first.",
+      ).not.toContain(BODY_S18_HEADING)
+      expect(
+        text,
+        `${tool.name} served the BODY s 18's operative text for an ACL question.`,
+      ).not.toContain(BODY_S18_TEXT)
+      expect(
+        text,
         `${tool.name} never says "sch 2 s 18" — it either dropped the schedule or applied it silently. ` +
           "Route (query|lawName, provision) through scopeProvisionsToLaw() and print its note.",
       ).toContain("sch 2 s 18")
+
+      // The contract: what THIS tool's answer must positively establish.
+      if (contract.outcome === "serves_schedule_text") {
+        expect(
+          text,
+          `${tool.name} claims to serve provision text but the schedule s 18's operative words are not in its ` +
+            "answer — the alias note alone does not satisfy this guard.",
+        ).toContain(SCHEDULE_S18_TEXT)
+      } else if (contract.outcome === "names_schedule_subject") {
+        expect(
+          text,
+          `${tool.name} does not name sch 2 s 18 as the subject of its answer (expected ${String(contract.subject)}).`,
+        ).toMatch(contract.subject)
+      }
+      // pinned_defect: universals above still apply; the outcome the tool owns
+      // is pinned in its own explicitly-failing test below.
     }
   }, 60_000)
 
-  it("keeps the ledger of tools that still drop it honest", () => {
-    // A stale entry is worse than none: it would silently exempt a tool that no
-    // longer has the field, or a name that no longer exists.
-    const candidates = new Set(
-      toolsWith(
-        (fields) => fields.some((f) => LAW_FIELD.test(f)) && fields.some((f) => PROVISION_FIELD.test(f)),
-      ).map((tool) => tool.name),
-    )
-    for (const name of Object.keys(KNOWN_GAPS)) {
-      expect(candidates.has(name), `${name} is listed as a known gap but is no longer such a tool — delete the entry`).toBe(
-        true,
+  it.fails(
+    "OPEN DEFECT (pinned): get_external_links must qualify the addresses it builds, not just warn beside them — " +
+      "when this starts failing the tool is fixed: delete this pin and give it a real contract",
+    async () => {
+      const tool = (allTools as RegistryTool[]).find((entry) => entry.name === "get_external_links")
+      expect(tool).toBeDefined()
+      const { text, threw } = await runWithAclSection18(tool!)
+      expect(threw).toBeUndefined()
+      // The outcome this tool owns is the URLs: a browser follows the address,
+      // not the warning printed beside it. Today the AustLII search goes out
+      // as "...Act 2010 s 18" — pointed at the body provision.
+      const urls = [...text.matchAll(/https?:\/\/\S+/g)].map((match) =>
+        decodeURIComponent(match[0]).replace(/\+/g, " "),
       )
-      expect(KNOWN_GAPS[name].length, `${name}'s ledger entry must say what is wrong`).toBeGreaterThan(20)
-    }
-  })
+      const pinpointed = urls.filter((url) => /\bs ?18\b/i.test(url))
+      expect(pinpointed.length, "no URL pinpoints s 18 at all — the pin no longer tests anything; re-examine it").toBeGreaterThan(0)
+      for (const url of pinpointed) {
+        expect(url, "a section-18 address for an ACL question must carry the schedule").toMatch(/\bsch ?2\b/i)
+      }
+    },
+  )
 
   it("scopes a provision read out of the question itself, in every tool that reads one", async () => {
     // The other half of the class, and the one round 3 missed: a tool with no
@@ -655,6 +805,7 @@ describe("the alias's schedule, across the whole registry", () => {
     )
     expect(swept.map((tool) => tool.name)).toContain("search_ai_law")
 
+    const driven: string[] = []
     for (const tool of swept) {
       lawCache.clear()
       const input: Record<string, unknown> = {}
@@ -669,6 +820,7 @@ describe("the alias's schedule, across the whole registry", () => {
       } catch {
         continue // A tool this stub cannot satisfy prints no follow-up call at all.
       }
+      driven.push(tool.name)
       const hinted = [...text.matchAll(/provision\s*[:=]\s*"([^"]{1,24})"/g)].map((match) => match[1].trim())
       expect(
         hinted.filter((provision) => /^s\.?\s*29$/i.test(provision)),
@@ -680,5 +832,11 @@ describe("the alias's schedule, across the whole registry", () => {
         `${tool.name} asked the Register for the body's s 29 for a question about the ACL.`,
       ).toEqual([])
     }
+    // The `continue` above is a real hole — a tool that throws is silently out
+    // of this sweep — so at least the named exemplar must always have been
+    // driven, or the whole loop may have quietly asserted nothing.
+    expect(driven, "search_ai_law threw against the stub, so this sweep no longer checks its exemplar").toContain(
+      "search_ai_law",
+    )
   }, 60_000)
 })

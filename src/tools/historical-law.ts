@@ -20,7 +20,9 @@
 import { z } from "zod"
 import type { AuApiClient } from "../lib/api-client.js"
 import { ErrorCodes, LawApiError, formatToolError } from "../lib/errors.js"
+import { mentionForTitle, primaryLawMention, provisionParam } from "../lib/query-extract.js"
 import { truncateResponse } from "../lib/schemas.js"
+import { formatRef } from "../lib/section-ref.js"
 import { frlHumanUrl } from "../lib/external-links-map.js"
 import type { FrlVersion, ToolResponse } from "../lib/types.js"
 import { formatVersionLine, isoDay, reasonLine, titleAnnotations } from "./statute-helpers/format.js"
@@ -207,9 +209,28 @@ export async function getHistoricalLaw(apiClient: AuApiClient, input: GetHistori
       return ok(lines.join("\n"), input.maxChars)
     }
 
-    const ref = requireRef(input.provision)
+    const asked = requireRef(input.provision)
+    // An alias can name a *schedule*, and a point-in-time read makes dropping
+    // it worse than usual: "ACL" + "s 18" + a date returned the body's s 18
+    // ("Meetings of Commission") AS IT STOOD THEN, under a title line the
+    // caller reads as the Australian Consumer Law. Same rewrite as
+    // get_law_text and get_provision_history (`query-extract.provisionParam`),
+    // reused so the point-in-time path cannot drift from the latest-text path;
+    // `mentionForTitle` bounds it to the Act the alias actually names, and an
+    // explicit `sch N` from the caller keeps its own.
+    const mention = mentionForTitle(input.query ? primaryLawMention(input.query) : undefined, title.id)
+    const scoped = provisionParam(asked, mention)
+    const rewritten = scoped !== formatRef(asked)
+    const ref = rewritten ? requireRef(scoped) : asked
+    if (rewritten) {
+      lines.push(
+        `Read "${input.provision}" as "${scoped}": "${input.query}" names sch ${mention?.sch ?? "?"} of this Act, ` +
+          "so the bare reference would have returned the body provision as it stood then instead.",
+      )
+      lines.push("")
+    }
     if (!locate(ref, entries)) {
-      lines.push(`[NOT_FOUND] ${input.provision} is not in this compilation's table of contents.`)
+      lines.push(`[NOT_FOUND] ${formatRef(ref)} is not in this compilation's table of contents.`)
       lines.push("")
       lines.push(
         "⚠️ For a historical compilation this is informative: the provision may not have existed yet, or may have " +
@@ -219,7 +240,7 @@ export async function getHistoricalLaw(apiClient: AuApiClient, input: GetHistori
       return ok(lines.join("\n"), input.maxChars)
     }
 
-    const provision = await apiClient.getProvision(title.id, input.provision, dateSegment)
+    const provision = await apiClient.getProvision(title.id, rewritten ? scoped : input.provision, dateSegment)
     lines.push(`${provision.ref} — ${provision.heading}`)
     if (provision.breadcrumb.length > 0) lines.push(`In: ${provision.breadcrumb.join(" › ")}`)
     lines.push("")
