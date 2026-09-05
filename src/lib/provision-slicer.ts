@@ -157,6 +157,59 @@ function placeOf(entry: NcxEntry): string {
     : "directly under the Act itself, in no Chapter or Part (where an enacting Act's covering clauses sit)"
 }
 
+/** `"111J"` → `[111, "J"]`, for ordering; dotted/dashed tails are ignored. */
+function numberKey(number: string): [number, string] {
+  const match = /^(\d{1,4})([A-Za-z]*)/.exec(number)
+  return match ? [Number(match[1]), match[2].toUpperCase()] : [Number.NaN, ""]
+}
+
+function keyNotAbove(a: [number, string], b: [number, string]): boolean {
+  return a[0] < b[0] || (a[0] === b[0] && a[1] <= b[1])
+}
+
+/**
+ * Is this entry part of a numbered run that *restarts* the count — a Small
+ * Business Guide, an appendix, a set of forms — rather than the Act's own
+ * section sequence?
+ *
+ * An Act's body numbering is monotone in document order: an insertion is
+ * `105A` after `105`, never a second `9`. The Corporations Act's Part 1.5
+ * numbers its guide paragraphs 1–12 *between* ss 111J and 111K, so those
+ * twelve are internally consistent but restart the document's count — and a
+ * bare `s 9` never means one of them, which makes "this compilation numbers
+ * 9 more than once" a false ambiguity warning on the second-most-cited Act
+ * in the country. The run, not the entry, is what restarts: its first
+ * numbered member sits at or below the last number the document reached
+ * before it.
+ *
+ * The comparison stays inside the entry's own citation namespace — rooted
+ * material (an enacting Act's covering clauses) and contained material (the
+ * Act's own sections) count separately. The Constitution's ss 1–9 open the
+ * *contained* stream, so they restart nothing and both they and the covering
+ * clauses they shadow keep their mutual ambiguity note; only a run that
+ * doubles back on its own stream, the way no compiled body section ever
+ * does, is front-or-back matter rather than the Act.
+ */
+function inRestartedRun(entry: NcxEntry, entries: readonly NcxEntry[]): boolean {
+  const first = entries.find(
+    (other) => other.parent === entry.parent && leadingNumber(other.label) !== undefined,
+  )
+  if (!first) return false
+  const firstNumber = leadingNumber(first.label)
+  if (firstNumber === undefined) return false
+
+  const rooted = structuralAncestors(first).length === 0
+  const before = entries.slice(0, entries.indexOf(first))
+  for (let i = before.length - 1; i >= 0; i--) {
+    if (isInsideSchedule(before[i])) continue
+    if ((structuralAncestors(before[i]).length === 0) !== rooted) continue
+    const previous = leadingNumber(before[i].label)
+    if (previous === undefined) continue
+    return keyNotAbove(numberKey(firstNumber), numberKey(previous))
+  }
+  return false
+}
+
 /**
  * Name an unresolvable ambiguity in the served text, or `undefined` when there
  * is none.
@@ -177,8 +230,15 @@ export function duplicateNumberNote(entry: NcxEntry, entries: readonly NcxEntry[
 
   // Cheapest test first: most labels are worded and fail `leadingNumber`
   // outright, so the ancestor walk runs only for the handful of numbered ones.
+  // A twin inside a restarted run is not a peer: `s 9` never means the ninth
+  // paragraph of a guide, so warning about it manufactures an ambiguity the
+  // citation does not have.
   const peers = entries.filter(
-    (other) => other !== entry && leadingNumber(other.label) === number && !isInsideSchedule(other),
+    (other) =>
+      other !== entry &&
+      leadingNumber(other.label) === number &&
+      !isInsideSchedule(other) &&
+      !inRestartedRun(other, entries),
   )
   if (peers.length === 0) return undefined
 

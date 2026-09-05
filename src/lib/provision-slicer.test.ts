@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { join, relative } from "node:path"
+import { gunzipSync } from "node:zlib"
 import { describe, expect, it } from "vitest"
 import { sliceSubtree } from "../tools/statute-helpers/toc.js"
 import { parseNcx } from "./ncx-parser.js"
@@ -313,6 +314,49 @@ describe("duplicateNumberNote — the ambiguity is named, never silent", () => {
     expect(leadingNumber("86.")).toBe("86")
     expect(leadingNumber("Part IV—Restrictive trade practices")).toBeUndefined()
     expect(leadingNumber("Endnotes")).toBeUndefined()
+  })
+})
+
+describe("duplicateNumberNote — a guide that restarts at 1 is not an ambiguity", () => {
+  // The real Corporations Act 2001 NCX (see __fixtures__/PROVENANCE.txt):
+  // Part 1.5's Small Business Guide numbers its paragraphs 1–12 between
+  // ss 111J and 111K, so eleven real section numbers (ss 1–7, 9, 11, 12)
+  // have a same-numbered twin there. "Corporations Act s 9" is unambiguous —
+  // nobody cites a guide paragraph as `s 9` — and the warning that "no
+  // reference form distinguishes it" was false on the second-most-cited Act
+  // in the country.
+  const corporations = parseNcx(
+    gunzipSync(
+      readFileSync(new URL("./__fixtures__/corporations-document.ncx.gz", import.meta.url)),
+    ).toString("utf-8"),
+  )
+
+  it("serves the Dictionary for s 9 with no false warning", () => {
+    const entry = findNavPoint(ref("s 9"), corporations)!
+    expect(entry.label).toMatch(/^9\s+Dictionary/)
+    expect(duplicateNumberNote(entry, corporations)).toBeUndefined()
+  })
+
+  it("stays quiet for every number the guide reuses", () => {
+    for (const number of ["1", "2", "3", "4", "5", "6", "7", "11", "12"]) {
+      const entry = findNavPoint(ref(`s ${number}`), corporations)!
+      expect(duplicateNumberNote(entry, corporations), `s ${number}`).toBeUndefined()
+    }
+  })
+
+  it("still names the Constitution's covering-clause twins in the real NCX", () => {
+    // The restart rule must not eat the one duplication that is real: the
+    // covering clauses open the rooted stream and the Constitution's own
+    // sections open the contained stream, so neither restarts anything.
+    const constitution = parseNcx(
+      gunzipSync(
+        readFileSync(new URL("./__fixtures__/constitution-document.ncx.gz", import.meta.url)),
+      ).toString("utf-8"),
+    )
+    const body = findNavPoint(ref("s 7"), constitution)!
+    expect(duplicateNumberNote(body, constitution)).toContain('Ask for it as "cl 7".')
+    const covering = findNavPoint(ref("cl 7"), constitution)!
+    expect(duplicateNumberNote(covering, constitution)).toContain('Ask for it as "s 7".')
   })
 })
 
