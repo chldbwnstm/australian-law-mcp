@@ -451,6 +451,38 @@ cd /tmp/packtest && npm init -y && npm install ./au-law-mcp-*.tgz
 is why no fixture, test or source map is in the tarball — and also why a new runtime data
 file would silently be missing until someone installs the package.
 
+### MCP Bundle
+
+```bash
+npm run build:mcpb          # → release/au-law-mcp-<version>.mcpb
+```
+
+One file a lawyer installs by opening it: Claude for macOS and Windows ships its own Node
+runtime, so the bundle needs no `npx`, no terminal and no Node install. The script builds
+`build/` fresh, stages it in `dist-mcpb/` beside `package.json` (which `src/version.ts`
+resolves at runtime), installs production dependencies there with
+`npm ci --omit=dev --ignore-scripts`, writes `manifest.json`, and packs the lot.
+
+Nothing in that manifest is typed twice. The version, description, licence, repository and
+keywords come from `package.json`, the runtime floor from `engines.node`, and the ten
+advertised tools from `build/tool-registry.js` filtered by `V3_EXPOSED` — the same set
+`ListTools` answers with. A hand-written manifest drifts, and the only symptom is a store
+listing that disagrees with the server it installs.
+
+`scripts/verify-mcpb.mjs` then runs against the **packed file**, not the staging directory:
+it unpacks the `.mcpb` into a temp directory, starts `node build/index.js` there exactly as
+the manifest's `mcp_config` would, and speaks MCP stdio at it. That proves the entry point
+resolves its dependencies from the bundled `node_modules`, that `serverInfo.version` still
+matches `package.json` (so the staged `package.json` is where `version.ts` looks), that
+`tools/list` returns exactly the tools the manifest advertises, and that nothing but
+JSON-RPC reaches stdout — one stray `console.log` corrupts the framing. It exits non-zero
+on any failure, which fails the build.
+
+Attach `release/au-law-mcp-<version>.mcpb` to the GitHub release. Signing is optional and
+not done here: `npx -y @anthropic-ai/mcpb sign --self-signed release/au-law-mcp-<version>.mcpb`
+produces a self-signed bundle, which Claude Desktop still shows as an unverified publisher —
+it changes the warning wording, not the trust decision.
+
 ---
 
 ## Related documents

@@ -21,31 +21,23 @@
 
 ---
 
-## Connect it to Claude Desktop
+## Install in Claude Desktop
 
-Three steps. No API key.
+No terminal, no Node.js. Claude Desktop ships its own runtime.
 
-1. **Install Node.js 20.19 or later** from [nodejs.org](https://nodejs.org/) if you do not have it. Check with `node --version`.
-2. **Run the setup wizard** in a terminal (Terminal on Mac, PowerShell on Windows):
+1. **Download** `au-law-mcp-1.0.0.mcpb` from the [latest release](https://github.com/chldbwnstm/australian-law-mcp/releases/latest).
+2. **Open the file.** Claude Desktop shows an install dialog — or drag it onto Settings → Extensions. Click **Install**.
+3. **Start a new chat.** `australian-law` is in the tools menu. Try: *"what does s 18 of the ACL say"*.
 
-   ```bash
-   npx -y --ignore-scripts au-law-mcp setup
-   ```
+There is no API key: every source is a keyless public register. Everything runs on your own machine; nothing you ask goes through a third-party server.
 
-   It finds Claude Desktop's config file, adds an `australian-law` entry, and leaves any other servers in that file untouched.
-3. **Quit Claude Desktop completely and reopen it.** In a new chat the tools menu now lists `australian-law`. Try: *"what does s 18 of the ACL say"*.
+<details>
+<summary>Developer alternative (needs Node.js 20.19+)</summary>
 
-If the wizard cannot find Claude Desktop, paste this into the config file yourself and restart:
+`npx -y --ignore-scripts au-law-mcp setup` writes the entry into Claude Desktop, Claude Code, Cursor, VS Code, Windsurf, Zed or Gemini CLI — whichever it finds, leaving other servers in the file untouched. To add it by hand instead:
 
 ```json
-{
-  "mcpServers": {
-    "australian-law": {
-      "command": "npx",
-      "args": ["-y", "au-law-mcp"]
-    }
-  }
-}
+{"mcpServers":{"australian-law":{"command":"npx","args":["-y","au-law-mcp"]}}}
 ```
 
 | | Config file |
@@ -53,7 +45,7 @@ If the wizard cannot find Claude Desktop, paste this into the config file yourse
 | Windows | `%APPDATA%\Claude\claude_desktop_config.json` |
 | Mac | `~/Library/Application Support/Claude/claude_desktop_config.json` |
 
-The same entry works in Claude Code, Cursor, VS Code, Windsurf, Zed and Gemini CLI, and the wizard detects those clients too.
+</details>
 
 ---
 

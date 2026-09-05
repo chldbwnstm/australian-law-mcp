@@ -94,6 +94,13 @@ notice are listed here.
 
 ### Added
 
+- **A Claude Desktop MCP Bundle** (`npm run build:mcpb` →
+  `release/au-law-mcp-<version>.mcpb`), so the server installs by opening one
+  file — no terminal, no `npx` and no Node.js on the user's machine, because
+  Claude for macOS and Windows ships its own runtime. The manifest is generated
+  from `package.json` and from `V3_EXPOSED`, never hand-written, and the build
+  fails unless the packed bundle unpacks, starts and answers `tools/list` with
+  exactly the ten tools it advertises.
 - **A real-corpus grammar harness** (`src/lib/section-ref.corpus.test.ts`) that
   reads recorded Federal Register tables of contents verbatim out of
   `__fixtures__/` and asserts the four properties above over every label in

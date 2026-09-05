@@ -30,6 +30,7 @@
   "scripts": {
     "clean": "node ./scripts/clean-build.mjs",
     "build": "npm run clean && tsc",
+    "build:mcpb": "node ./scripts/build-mcpb.mjs",
     "watch": "tsc --watch",
     "start": "node build/index.js",
     "start:http": "node build/index.js --mode http",
