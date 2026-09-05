@@ -405,6 +405,68 @@ describe("a list never harvests ordinary prose", () => {
   })
 })
 
+// Round 5: refusing to read one member used to end the whole scan, so every
+// member after the first refusal vanished with no unread line — and a bare
+// "52" carries no designation, so not even the `PINPOINT_SHAPE` audit could
+// find it again. `verify_citations` then printed `[VERIFIED]` over a sentence
+// it had only partly read. A refusal is a fact about one member, never a
+// licence to stop reading the list.
+describe("a refused member never takes the rest of the list with it", () => {
+  it("covers every member after a shape change, not only the first mismatch", () => {
+    const cites = extractStatuteCitations("The Trade Practices Act 1974 (Cth) ss 51AC, 52 and 53 were considered.", 20)
+    expect(cites.map((cite) => cite.pinpoint)).toContain("ss 51AC")
+    const unread = cites.filter((cite) => cite.attachedBy === "unread")
+    expect(unread.some((cite) => cite.raw.includes("52"))).toBe(true)
+    expect(unread.some((cite) => cite.raw.includes("53"))).toBe(true)
+  })
+
+  it("keeps reading same-shape members past a mismatched one", () => {
+    const cites = extractStatuteCitations("Fair Work Act 2009 (Cth) ss 45, 45D and 46 apply.", 20)
+    expect(cites.map((cite) => cite.pinpoint)).toContain("ss 45")
+    expect(cites.map((cite) => cite.pinpoint)).toContain("s 46")
+    expect(cites.some((cite) => cite.attachedBy === "unread" && cite.raw.includes("45D"))).toBe(true)
+  })
+
+  // A range joined onto a member that was never read must not fold down onto
+  // the last member that was: "ss 45, 46A to 50" is not "ss 45–50", and
+  // inventing that range would be a citation the writer did not make.
+  it("never folds a range onto a member it did not read", () => {
+    const cites = extractStatuteCitations("Fair Work Act 2009 (Cth) ss 45, 46A to 50 apply.", 20)
+    expect(cites.map((cite) => cite.pinpoint)).not.toContain("ss 45–50")
+    expect(
+      cites.some((cite) => cite.attachedBy === "unread" && cite.raw.includes("46A") && cite.raw.includes("50")),
+    ).toBe(true)
+  })
+
+  // Round 5: past MAX_LIST_ITEMS the scanner returned at the thirteenth
+  // continuation, so only that one was reported unread and everything after it
+  // disappeared — "14 checked of 14 found" over a sentence naming twenty.
+  it("covers every member past the ceiling, not only the first one refused", () => {
+    const numbers = Array.from({ length: 20 }, (_, index) => 340 + index)
+    const cites = extractStatuteCitations(`The Fair Work Act 2009 (Cth) ss ${numbers.join(", ")} apply.`, 40)
+    const read = cites.filter((cite) => cite.attachedBy !== "unread")
+    const unread = cites.filter((cite) => cite.attachedBy === "unread")
+    for (const number of numbers) {
+      const covered =
+        read.some((cite) => cite.ref.number === String(number)) ||
+        unread.some((cite) => cite.raw.includes(String(number)))
+      expect(covered, `s ${number} was neither read nor reported unread`).toBe(true)
+    }
+  })
+
+  it("covers every bracketed member past the ceiling", () => {
+    const tokens = [..."abcdefghijklmno"].map((letter) => `(${letter})`)
+    const cites = extractStatuteCitations(`Fair Work Act 2009 (Cth) paras ${tokens.join(", ")} apply.`, 40)
+    const read = cites.filter((cite) => cite.attachedBy !== "unread")
+    const unread = cites.filter((cite) => cite.attachedBy === "unread")
+    for (const token of tokens) {
+      const covered =
+        read.some((cite) => cite.pinpoint === `para ${token}`) || unread.some((cite) => cite.raw.includes(token))
+      expect(covered, `para ${token} was neither read nor reported unread`).toBe(true)
+    }
+  })
+})
+
 // AGLC roman pinpoints are not exotic: 10 of the 16 Part labels of the *Crimes
 // Act 1914* carry a two- or three-letter tail, and six of the *Competition and
 // Consumer Act 2010*'s do — the six below are navLabels of this repo's own

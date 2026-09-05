@@ -675,13 +675,14 @@ function overlapSweep(spans: readonly Span[]): (span: Span) => boolean {
  * The shape of a provision number, which is the signal a list continuation is
  * judged against.
  *
- * A list continues only while its items keep the shape of the first, because
- * the alternative — accepting whatever number follows a comma — harvests
- * ordinary prose: "under s 18, 3 March 2020" would yield a citation to `s 3`,
- * and a fabricated citation reported as one the reader wrote is worse than a
- * missed one. Same-shape is the narrow rule; anything else is either stopped
- * (a bare number, which is what prose looks like) or reported unread (a number
- * carrying letters or separators, which prose does not look like).
+ * A member is read only while it keeps the shape of the first, because the
+ * alternative — accepting whatever number follows a comma — harvests ordinary
+ * prose: "under s 18, 3 March 2020" would yield a citation to `s 3`, and a
+ * fabricated citation reported as one the reader wrote is worse than a missed
+ * one. Same-shape is the narrow rule for *reading*; a mismatched member is
+ * reported unread, never read and never dropped. Only the prose guards — a
+ * date, an ordinal, a year — may end the list, because what they match is not
+ * a member at all.
  */
 type NumberShape = "roman" | "compound" | "lettered" | "plain" | "other"
 
@@ -733,7 +734,7 @@ interface ListItem extends Span {
 interface ListScan {
   items: ListItem[]
   /** Located, provision-shaped, and deliberately not read — reported, never dropped. */
-  unread?: Span
+  unread: Span[]
 }
 
 /**
@@ -742,10 +743,22 @@ interface ListScan {
  * Only ever called after a **plural** designation (`ss`, `sections`, `pts`):
  * the plural is the writer's own signal that more than one provision is named,
  * and without it "s 18, 3 March 2020" is a section and a date.
+ *
+ * A refusal is a fact about one member, never a licence to stop reading. The
+ * earlier version returned at the first member it would not read, and every
+ * member after it vanished — a bare "52" carries no designation, so not even
+ * the `PINPOINT_SHAPE` audit could find it again, and `verify_citations`
+ * printed `[VERIFIED]` over "ss 51AC, 52 and 53" having read one of the three.
+ * So the scan always runs to the end of the list: only the prose guards end
+ * it, and every member is read or lands in an unread span. Adjacent unread
+ * members merge into one span, so a long refused tail is one reported line
+ * naming all of it rather than thirteen.
  */
 function scanProvisionList(text: string, from: number, headShape: NumberShape, headNumber: string): ListScan {
   const items: ListItem[] = []
+  const unread: Span[] = []
   let cursor = from
+  let lastWasUnread = false
   for (;;) {
     LIST_ITEM.lastIndex = cursor
     const match = LIST_ITEM.exec(text)
@@ -756,23 +769,28 @@ function scanProvisionList(text: string, from: number, headShape: NumberShape, h
 
     if (DATE_TAIL.test(text.slice(end, end + 12)) || ORDINAL.test(number)) break
     const shape = numberShape(number)
-    if (shape !== headShape) {
-      // A bare number that does not match the first item's shape is what prose
-      // looks like; a lettered, dotted or roman one is not, so that one is
-      // reported rather than silently discarded.
-      if (shape === "plain" || shape === "other") break
-      return { items, unread: { start, end } }
-    }
     if (shape === "plain" && YEAR_ONLY.test(number) && !YEAR_ONLY.test(headNumber)) break
-    // The ceiling is on the work, never on what the reader admits to: a list
-    // that runs past it stops here and says so, because a citation dropped for
-    // being the thirteenth is exactly as unchecked as one nobody could parse.
-    if (items.length >= MAX_LIST_ITEMS) return { items, unread: { start, end } }
 
-    items.push({ number, subsections: match[3], joinsAsRange: /\bto\b/.test(match[1]), start, end })
+    // Three refusals, all reported: a shape the head's rule will not read; the
+    // ceiling — which is on the work, never on what the reader admits to,
+    // because a citation dropped for being the thirteenth is exactly as
+    // unchecked as one nobody could parse; and a range joined onto an unread
+    // member — folding "46A to 50" down onto the last member that *was* read
+    // would fabricate a range the writer never wrote.
+    const joinsAsRange = /\bto\b/.test(match[1])
+    if (shape !== headShape || items.length >= MAX_LIST_ITEMS || (lastWasUnread && joinsAsRange)) {
+      if (lastWasUnread) unread[unread.length - 1].end = end
+      else unread.push({ start, end })
+      lastWasUnread = true
+      cursor = end
+      continue
+    }
+
+    items.push({ number, subsections: match[3], joinsAsRange, start, end })
+    lastWasUnread = false
     cursor = end
   }
-  return { items }
+  return { items, unread }
 }
 
 /**
@@ -802,17 +820,29 @@ function tokenShape(token: string): "digits" | "letters" | "other" {
 
 function scanBracketList(text: string, from: number, headToken: string): ListScan {
   const items: ListItem[] = []
+  const unread: Span[] = []
   const headShape = tokenShape(headToken)
-  if (headShape === "other") return { items }
+  if (headShape === "other") return { items, unread }
   let cursor = from
+  let lastWasUnread = false
   for (;;) {
     BRACKET_ITEM.lastIndex = cursor
     const match = BRACKET_ITEM.exec(text)
     if (!match) break
     const end = BRACKET_ITEM.lastIndex
     const token = match[2]
-    if (tokenShape(token) !== headShape || YEAR_ONLY.test(token)) break
-    if (items.length >= MAX_LIST_ITEMS) return { items, unread: { start: end - token.length - 2, end } }
+    // A year is the prose guard here — "(2020) 15 ALJ 3" — and ends the list.
+    // A mismatched token or one past the ceiling is a member refused, and the
+    // same rule as the numbered form applies: reported, never dropped, and the
+    // scan carries on to the end of the list.
+    if (YEAR_ONLY.test(token)) break
+    if (tokenShape(token) !== headShape || items.length >= MAX_LIST_ITEMS) {
+      if (lastWasUnread) unread[unread.length - 1].end = end
+      else unread.push({ start: end - token.length - 2, end })
+      lastWasUnread = true
+      cursor = end
+      continue
+    }
     items.push({
       number: token,
       subsections: "",
@@ -821,9 +851,10 @@ function scanBracketList(text: string, from: number, headToken: string): ListSca
       start: end - token.length - 2,
       end,
     })
+    lastWasUnread = false
     cursor = end
   }
-  return { items }
+  return { items, unread }
 }
 
 /**
@@ -936,15 +967,15 @@ export function extractStatuteCitations(text: string, maxCitations: number): Sta
     const headShape = numberShape(headNumber)
     const plural = PLURAL_SPELLINGS.has(spelling.toLowerCase())
     const bracketToken = match[5]
-    let scan: ListScan = { items: [] }
+    let scan: ListScan = { items: [], unread: [] }
     if (plural && numberText && headShape !== "other") scan = scanProvisionList(text, end, headShape, headNumber)
     else if (plural && bracketToken) scan = scanBracketList(text, end, bracketToken)
     // An unread continuation is reported with the head of its pinpoint in
     // front, so the report shows `ss 45 … 46A` rather than a bare "46A" that
     // names no designation and cannot be found in the text again.
-    if (scan.unread) {
-      unread.push({ fragment: `${raw} … ${text.slice(scan.unread.start, scan.unread.end)}`, index: scan.unread.start })
-      accounted.push(scan.unread)
+    for (const span of scan.unread) {
+      unread.push({ fragment: `${raw} … ${text.slice(span.start, span.end)}`, index: span.start })
+      accounted.push(span)
     }
 
     const singular = kindForSpelling(spelling)?.singular ?? spelling
