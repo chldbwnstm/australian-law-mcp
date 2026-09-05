@@ -21,6 +21,42 @@
 
 ---
 
+## Connect it to Claude Desktop
+
+Three steps. No API key.
+
+1. **Install Node.js 20.19 or later** from [nodejs.org](https://nodejs.org/) if you do not have it. Check with `node --version`.
+2. **Run the setup wizard** in a terminal (Terminal on Mac, PowerShell on Windows):
+
+   ```bash
+   npx -y --ignore-scripts au-law-mcp setup
+   ```
+
+   It finds Claude Desktop's config file, adds an `australian-law` entry, and leaves any other servers in that file untouched.
+3. **Quit Claude Desktop completely and reopen it.** In a new chat the tools menu now lists `australian-law`. Try: *"what does s 18 of the ACL say"*.
+
+If the wizard cannot find Claude Desktop, paste this into the config file yourself and restart:
+
+```json
+{
+  "mcpServers": {
+    "australian-law": {
+      "command": "npx",
+      "args": ["-y", "au-law-mcp"]
+    }
+  }
+}
+```
+
+| | Config file |
+|---|---|
+| Windows | `%APPDATA%\Claude\claude_desktop_config.json` |
+| Mac | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+
+The same entry works in Claude Code, Cursor, VS Code, Windsurf, Zed and Gemini CLI, and the wizard detects those clients too.
+
+---
+
 ## When a practitioner reaches for it
 
 This is not a replacement for a case-law database. It is the tool for the legislation-facing parts of ordinary practice, where the cost of a small error is high and the answer is on a public register that is slow to navigate by hand. Every row below is something the verification run actually did; the transcripts are in [`docs/VERIFICATION.md`](docs/VERIFICATION.md).
@@ -167,75 +203,6 @@ The other half of the problem is access. Several of the sources a researcher wou
 
 ---
 
-## Quick Start
-
-> The package is published on npm as **`au-law-mcp`**, because the unscoped `australian-law-mcp` name already belongs to an unrelated project.
-
-### Option 1 — MCP server (Claude Desktop, Claude Code, Cursor, Windsurf, VS Code, Zed, Gemini CLI)
-
-**Automatic (recommended).** The wizard detects which clients are installed, shows you the config paths, and merges the entry into each file it is allowed to touch:
-
-```bash
-npx -y --ignore-scripts au-law-mcp setup
-```
-
-There is no API-key step. The wizard reads an existing config, merges, and rewrites — it never replaces a file that already holds your other servers.
-
-**Manual.** Add this to your client's config:
-
-```json
-{
-  "mcpServers": {
-    "australian-law": {
-      "command": "npx",
-      "args": ["-y", "au-law-mcp"]
-    }
-  }
-}
-```
-
-| Client | Config file |
-|---|---|
-| Claude Desktop | `%APPDATA%\Claude\claude_desktop_config.json` (Win) / `~/Library/Application Support/Claude/claude_desktop_config.json` (Mac) |
-| Claude Code | `.mcp.json` in the project directory |
-| Cursor | `~/.cursor/mcp.json` |
-| VS Code | `.vscode/mcp.json` in the project directory (uses `servers`, not `mcpServers`) |
-| Windsurf | `~/.codeium/windsurf/mcp_config.json` |
-| Gemini CLI | `~/.gemini/settings.json` |
-| Zed | `~/.zed/settings.json` (uses `context_servers`, and nests the command) |
-
-### Option 2 — CLI
-
-```bash
-npm install -g --ignore-scripts --omit=optional au-law-mcp
-
-australian-law "what does s 18 of the ACL say"        # plain English, routed to a tool
-australian-law "is [2020] HCA 41 still good law"      # → cite_check
-australian-law explain "unfair dismissal time limit"  # show the routing, run nothing
-australian-law list --category "case law"             # browse by category
-australian-law search_law --query "Fair Work Act"     # call a tool directly
-australian-law                                        # interactive REPL
-```
-
-### Option 3 — Docker
-
-```bash
-docker build -t au-law-mcp .
-docker run -p 3000:3000 -e MCP_AUTH_TOKEN=replace-with-a-secret au-law-mcp
-```
-
-The image binds `0.0.0.0` because a container *is* a remote deployment. Startup fails without `MCP_AUTH_TOKEN` unless you deliberately set `MCP_ALLOW_UNAUTHENTICATED_REMOTE=1`.
-
-### Option 4 — HTTP deployment
-
-```bash
-au-law-mcp --mode http --port 8000
-```
-
-Stateless Streamable HTTP: `POST /mcp` needs no session handshake, so any number of replicas can sit behind one load balancer. `GET /` reports the tool counts and `GET /health` is a plain liveness probe; both stay open when a token is set so a balancer can reach them. Every variable is documented in the [configuration reference](#configuration-reference) below.
-
----
-
 ## The 10 advertised tools
 
 `ListTools` returns ten. The other 71 are reachable — by name through `CallTool`, and by discovery through `discover_tools` → `execute_tool`. Nothing is ever removed from the registry to shrink the advertised list, so a name learned from an earlier version keeps working.
@@ -326,6 +293,14 @@ This software retrieves and formats public legal material. It does not give lega
 - **Per-host politeness** — every upstream has its own timeout and minimum interval, sized from measurement (Queensland content search takes up to 90s; the ATO form up to 60s), so one slow host does not stall every other tool.
 - **Natural-language CLI** — a query router with an `explain` mode that shows where a question would go without running it, plus a generated subcommand per tool.
 - **2,477 offline tests** against recorded fixtures, plus **18 live-gated tests** that only run with `LIVE=1` and check the real upstreams still answer the shapes the parsers expect.
+
+---
+
+## Other ways to run it
+
+- **CLI.** `npm install -g --ignore-scripts --omit=optional au-law-mcp`, then `australian-law "what does s 18 of the ACL say"`. `australian-law explain "…"` shows where a question would go without running it; `australian-law` alone opens a REPL; `australian-law <tool> --<param>` calls a tool directly.
+- **Docker.** `docker build -t au-law-mcp .` then `docker run -p 3000:3000 -e MCP_AUTH_TOKEN=replace-with-a-secret au-law-mcp`. The image binds `0.0.0.0` because a container is a remote deployment, and it refuses to start without a token unless `MCP_ALLOW_UNAUTHENTICATED_REMOTE=1` is set deliberately.
+- **HTTP.** `au-law-mcp --mode http --port 8000`. Stateless Streamable HTTP: `POST /mcp` needs no session handshake, so replicas can sit behind one load balancer; `GET /` reports the tool counts and `GET /health` is a liveness probe, both open even when a token is set. The variables are below.
 
 ---
 
