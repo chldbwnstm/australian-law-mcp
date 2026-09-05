@@ -80,7 +80,14 @@ const LIST_SEPARATOR = /\s*,\s*|\s+and\s+/i
 
 function canonical(value: string): string | undefined {
   const ref = parseSectionRef(value.trim())
-  return ref ? formatRef(ref) : undefined
+  if (!ref) return undefined
+  const formatted = formatRef(ref)
+  // The promise this file makes is about the OUTPUT: `requireRef` on the
+  // other side parses what is suggested here, so a formatted form that does
+  // not itself round-trip must never be suggested. Checking only the input
+  // let `para 1020F(1)(c)` through as `para (1020F)` — a suggestion the
+  // suggested tool rejected the moment the caller ran it.
+  return parseSectionRef(formatted) ? formatted : undefined
 }
 
 /**

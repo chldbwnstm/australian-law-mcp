@@ -171,6 +171,13 @@ const REGISTER_ENABLING_PROVISIONS = [
   "s 202(5), 205(3), 737(1), 768BK(1A)",
   "s 245J, 245K",
   "s 140GBA(4), (5), (6A)",
+  // Paragraph-kind values returned live by the FRL API for in-force
+  // instruments (2026-09-05). Round 4's `formatRef` printed these as
+  // `para (1020F)` — an output its own parser rejected — so `canonical` now
+  // round-trips what it suggests, not just what it read.
+  "para 1020F(1)(c)",
+  "para 601QA(1)(a), (b)",
+  "para 184(a)",
 ] as const
 
 /** Every `provision:"…"` argument the rendered output offers the caller. */
