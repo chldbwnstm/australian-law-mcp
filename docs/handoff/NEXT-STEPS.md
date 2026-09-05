@@ -7,13 +7,13 @@ Updated 2026-09-05. Everything described here is committed and pushed; nothing i
 | | |
 |---|---|
 | Remote | `github.com/chldbwnstm/australian-law-mcp` (private) |
-| Last commit | `d94830c` Round-5 fixes + corpus harness |
-| Tests | 2,360 passing, 18 live-gated (skipped offline), suite runs in ~6s |
+| Last commit | `f1698f7` Final round — grammar constants set from the whole statute book |
+| Tests | 2,429 passing, 18 live-gated (skipped offline), suite runs in ~6s |
 | Typecheck | clean |
 | Tools | 81 registered, 10 advertised — the same surface shape as korean-law-mcp |
 | Live matrix | `docs/VERIFICATION.md` — MCP stdio, all 18 decision domains, CLI, HTTP, packaging |
 
-Five adversarial review rounds and two live-verification passes fixed **92 confirmed
+Six adversarial review rounds and two live-verification passes fixed **97 confirmed
 defects**. Every finding was reproduced by execution before it was fixed, and every fix
 is pinned by a test proven to fail beforehand. The round-5 list that this file previously
 described as outstanding is now closed; `round5-outstanding-findings.json` is kept as the
@@ -24,11 +24,16 @@ record of what was fixed and why.
 1. **Real-corpus round-trip harness** — `src/lib/section-ref.corpus.test.ts` runs the
    provision grammar over 4,562 real labels from five recorded Federal Register tables of
    contents and asserts each parses, round-trips, addresses its own navLabel and no other,
-   and is neither invented nor truncated by the scanner. Non-provision labels are claimed
+   and is neither invented nor truncated by the scanner. A later round found the harness
+   blind to the plural/range branch and extended it to re-cite its own labels the way
+   writers do (plural, dashed pairs, and/to/comma joins), adding 9,770 assertions — which
+   immediately exposed two more defects. Non-provision labels are claimed
    by exclusion rules with stated reasons; a label matching none fails rather than being
    skipped. Against the pre-fix grammar it reported 97.13% parse, 2 labels resolving to the
    wrong provision and 454 scanned wrong — the exact regression class it exists to catch.
-   Recording a sixth table of contents extends the corpus with no code change.
+   Recording a sixth table of contents extends the corpus with no code change. The two
+   letter constants in the grammar are set from the whole statute book — all 1,177 in-force
+   principal Commonwealth Acts, 126,207 labels — not from a sample.
 2. **A registry guard that asserts outcomes** — it now drives each registered tool with a
    schedule-carrying alias and checks which provision came back, enumerating tools from the
    live registry so a new one is included automatically and failing (not skipping) on any it
@@ -61,7 +66,7 @@ above, none of which a passing test suite would have revealed on its own.
 ```bash
 git clone https://github.com/chldbwnstm/australian-law-mcp
 cd australian-law-mcp && npm install
-npm test          # 2,360 passing
+npm test          # 2,429 passing
 LIVE=1 npx vitest run src/lib/sources   # 18 live-gated tests against real upstreams
 npm run build && node build/index.js    # stdio MCP server
 node build/cli.js "what does s 18 of the ACL say"
