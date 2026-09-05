@@ -1,0 +1,302 @@
+[
+ {
+  "file": "src/lib/section-ref.ts",
+  "line": 188,
+  "summary": "NUMBER_PATTERN cannot express a compound number whose first component carries a letter, so real references like `Part 2D.1` and `Subdivision 83A-C` are rejected outright by parseSectionRef and silently truncated to a different provision by the scanner.",
+  "failure_scenario": "`\\d{1,4}(?:SEP\\d{1,4}){0,3}` requires digits on both sides of a separator, so a letter before the `.`/`-` ends the number. Verified against live FRL NCX (2026-09-05): parseSectionRef('pt 2D.1')=null and parseSectionRef('sub-div 83A-A')=null, so get_law_text/parse_section_ref reject 125 real Corporations Act 2001 Parts (2A.1 \u2026 2N.5) and ITAA97 Subdivisions 83A-A\u2026E / TAA sch 1 12A-A\u2026C. Worse, the right-edge guard `(?![0-9A-Za-z])` does not fire on `.`/`-`, so extractSectionRefs('Directors owe duties under Part 2D.1 of the Corporations Act 2001 (Cth)') returns ['pt 2D'] and extractStatuteCitations('The Corporations Act 2001 (Cth) pt 2D.1 imposes duties') returns pinpoint `pt 2D` attributed to the Corporations Act \u2014 statute-check then answers `\u2717 NOT_FOUND \u2026 has no pt 2D` (impossible:true \u2192 [CITATION_ERRORS_FOUND]), accusing a correct citation of being invented. This is partly a round-4 regression: at 2188a0d the same scanner returned the correct `sub-div 83A-C` / `sub-div 12A-C` (ROMAN_NUMBER still accepted `C`); after e92abd2 both truncate to `sub-div 83A` / `sub-div 12A`.",
+  "severity": "high",
+  "category": "correctness",
+  "dimension": "grammar-regression",
+  "confirmed": true,
+  "voteCount": 3,
+  "votes": [
+   {
+    "real": true,
+    "reasoning": "CONFIRMED by execution against the built library (`npm run build`) and live FRL data; all scratch work was done in /tmp and removed.\n\nMECHANISM (src/lib/section-ref.ts:185-188): NUMBER_PATTERN is\n`(?:ROMAN_NUMBER|\\d{1,4}(?:NUMBER_SEP\\d{1,4}){0,3}(?:NUMBER_HYPHEN[A-Za-z]{1,3}(?![A-Za-z0-9])|[A-Za-z]{0,6}))`.\nThe compound-number branch requires digits on BOTH sides of a `.`/`-`, so a letter on the f"
+   },
+   {
+    "real": true,
+    "reasoning": "CONFIRMED \u2014 genuine defect, not documented or pinned.\n\nReproduced by executing the real modules (tsx against src/lib/section-ref.ts at HEAD e92abd2):\n\nparseSectionRef rejections:\n- `pt 2D.1` -> null, `Part 2D.1` -> null, `pt 2A.1` -> null, `pt 2N.5` -> null\n- `sub-div 83A-C` -> null, `sub-div 83A-A` -> null, `Subdivision 83A-C` -> null, `sub-div 12A-C`"
+   },
+   {
+    "real": true,
+    "reasoning": "Confirmed live and material. NUMBER_PATTERN (src/lib/section-ref.ts:185-188) requires digits on both sides of a `.`/`-` separator, so a number whose first component carries a letter cannot continue past the separator. Verified by running the built code: parseSectionRef('pt 2D.1'), ('pt 2F.1A'), ('pt 2N.5'), ('sub-div 83A-C'), ('sub-div 12A-C') all return null, while 'pt 5.3A' and 'sub-div 152-A' p"
+   }
+  ]
+ },
+ {
+  "file": "src/lib/section-ref.ts",
+  "line": 459,
+  "summary": "formatRef discards ref.subsections for every BRACKETED_KIND, so the drafting-standard forms `subsection 5(2)` and `paragraph 23(1)(a)` normalise to a different provision.",
+  "failure_scenario": "The bracketed branch builds `${abbrev} (${number})` and never appends `subsections`, which is only used in the other branch. parseSectionRef('subsection 5(2)') correctly yields {kind:'subsection', number:'5', subsections:['2']}, but formatRef prints `sub-s (5)` \u2014 section 5's subsection (2) has become subsection (5), and the (2) is gone. Likewise 'paragraph 23(1)(a)' \u2192 `para (23)`, 'subparagraph 23(1)(a)(ii)' \u2192 `sub-para (23)`, 'sub-reg 5(2)' \u2192 `sub-reg (5)`. Because extractSectionRefs/extractProvisions pass through formatRef, a query or document containing 'for the purposes of subsection 5(2) of the Act' \u2014 a phrase that appears verbatim in nearly every Commonwealth Act \u2014 is routed to a lookup for a provision nobody cited. No test pins this (section-ref.test.ts only covers the numberless `sub-s (2)`).",
+  "severity": "high",
+  "category": "correctness",
+  "dimension": "grammar-regression",
+  "confirmed": true,
+  "voteCount": 3,
+  "votes": [
+   {
+    "real": true,
+    "reasoning": "CONFIRMED by execution. I compiled `src/lib/section-ref.ts` (+ `section-ref-vocab.ts`) and the whole project into a scratch dir under /tmp (never into the repo; scratch dir deleted afterwards) and ran the claimed inputs.\n\nObserved output of `parseSectionRef` -> `formatRef` / `normaliseRef`:\n- \"subsection 5(2)\" => parse {kind:\"subsection\", number:\"5\", s"
+   },
+   {
+    "real": true,
+    "reasoning": "Confirmed by executing the real code. formatRef's BRACKETED_KINDS branch (src/lib/section-ref.ts:458-460) builds `${abbrev} (${number})` and never appends ref.subsections, which is only used in the sibling branch. Observed outputs: parseSectionRef('subsection 5(2)') -> {kind:'subsection', number:'5', subsections:['2']} -> formatRef -> 'sub-s (5)'; 'paragraph 23(1)(a)' -> 'para (23)'; 'subparagraph"
+   },
+   {
+    "real": true,
+    "reasoning": "Confirmed by running the built code. formatRef's BRACKETED_KINDS branch emits `${abbrev} (${number})` and never appends ref.subsections, so parseSectionRef('subsection 5(2)') -> {kind:'subsection',number:'5',subsections:['2']} formats as `sub-s (5)`; 'paragraph 23(1)(a)' -> `para (23)`; 'sub-reg 5(2)' -> `sub-reg (5)`. extractSectionRefs on 'for the purposes of subsection 5(2) of the Act' yields t"
+   }
+  ]
+ },
+ {
+  "file": "src/lib/section-ref.ts",
+  "line": 406,
+  "summary": "A plural designation in front of a forward-running ITAA-style number is read as a range, so `ss 165-210` (a single real ITAA 1997 section) becomes \"sections 165 to 210\".",
+  "failure_scenario": "The hyphen-after-a-plural rule is only defended by runsBackwards, which catches `ss 355-25` (25<355) but not any ITAA number whose serial exceeds its division. The ITAA 1997's own in-force navLabel (fetched live 2026-09-05 from C2004A05138) reads '165-212E  Entry history rule does not apply for the purposes of sections 165-210 and 165-211'; extractSectionRefs on it returns ['ss 165\u2013210'], and 'Commissioner discretion to waive requirements in paragraphs 230-395(2)(c) and (e)' returns ['paras (230)\u2013395']. A user asking \"what do ss 165-210 and 165-211 of the ITAA 1997 say\" gets a lookup for the range 165\u2192210; refToNcxLabelPattern for `165` matches nothing (LABEL_TAIL refuses 165-10), so a correct citation is reported as a provision the Act does not contain.",
+  "severity": "high",
+  "category": "correctness",
+  "dimension": "grammar-regression",
+  "confirmed": true,
+  "voteCount": 3,
+  "votes": [
+   {
+    "real": true,
+    "reasoning": "CONFIRMED by execution against the live ITAA 1997 NCX (C2004A05138, fetched 2026-09-05, 6,773 navLabels), using an unmodified src/lib/section-ref.ts + provision-slicer.ts built via `npm run build`.\n\nBoth claimed inputs reproduce verbatim:\n- extractSectionRefs(\"165-212E  Entry history rule does not apply for the purposes of sections 165-210 and 165-211\") -> [\"ss 165\u2013210\"] (number \"165\", rangeEnd \"2"
+   },
+   {
+    "real": true,
+    "reasoning": "CONFIRMED by execution against src (not just the stale build).\n\nParser: parseSectionRef(\"ss 165-210\") -> {number:\"165\", rangeEnd:\"210\"}, formatRef -> \"ss 165\u2013210\". Same for the FRL U+2011 form \"ss 165\u2011210\". extractSectionRefs on the ITAA's own navLabel text \"\u2026for the purposes of sections 165-210 and 165-211\" -> [\"ss 165\u2013210\"], and \"\u2026paragraphs 230-395(2)(c) and (e)\" -> [\"paras (230)\u2013395\"].\n\nDownst"
+   },
+   {
+    "real": true,
+    "reasoning": "Confirmed by running the code. `parseSectionRef(\"ss 165-210\")` yields `{number:\"165\", rangeEnd:\"210\"}` and formats as `ss 165\u2013210`; the `runsBackwards` guard (section-ref.ts:344) is purely arithmetic so it only rescues ITAA numbers whose serial is below its division (355-25, 40-25, 995-1) and misses every one whose serial exceeds it.\n\nThis is material, not theoretical. The trigger is the ordinary "
+   }
+  ]
+ },
+ {
+  "file": "src/lib/section-ref-vocab.ts",
+  "line": 157,
+  "summary": "ROMAN_NUMBER's three-letter tail is one letter short of the real Commonwealth maximum, so Crimes Act 1914 Part IAABA cannot be expressed or found at all.",
+  "failure_scenario": "Live FRL fetch of C1914A00012 (2026-09-05) contains the in-force navLabel 'Part IAABA\u2014Monitoring of compliance with community safety supervision orders etc.'. `[A-Z]{0,3}` cannot match the 4-letter tail 'AABA', so parseSectionRef('pt IAABA') returns null (get_law_text/parse_section_ref answer [INVALID_PARAMETER] for a Part that plainly exists), and extractSectionRefs / extractProvisions on 'what does Part IAABA of the Crimes Act say' return [] \u2014 the query router loses the provision entirely and falls back to a text search. Only statute-citations reports it, and only as an unread [PARSE_ERROR]. Round 4 widened the tail from one letter to three specifically to cover real Parts (IVBA, IABA) and stopped one letter short of the widest real one.",
+  "severity": "med",
+  "category": "coverage",
+  "dimension": "grammar-regression",
+  "confirmed": true,
+  "voteCount": 3,
+  "votes": [
+   {
+    "real": true,
+    "reasoning": "REPRODUCED by execution against a pristine `git archive HEAD` build (plus the repo's own build), with a live FRL fetch.\n\n1. Premise verified live: GET https://www.legislation.gov.au/C1914A00012/latest/latest/text/latest/epub/OEBPS/document.ncx (HTTP 200, 323,849 bytes) contains the in-force navLabel 'Part\\xa0IAABA\u2014Monitoring of compliance with community safety supervision orders etc.', sitting bet"
+   },
+   {
+    "real": true,
+    "reasoning": "GENUINE DEFECT \u2014 confirmed by execution and by an authoritative source check.\n\n1. The provision is real and long-standing. The Federal Register of Legislation compilation C1914A00012 (Crimes Act 1914) contains both \"Part IAAB\u2014Monitoring of compliance with Part 5.3 supervisory orders etc.\" and \"Part IAABA\u2014Monitoring of compliance with community safety supervision orders etc.\" Part IAABA (ss 3ZZUHA\u2013"
+   },
+   {
+    "real": true,
+    "reasoning": "CONFIRMED and material.\n\nFact check on the law: Crimes Act 1914 (Cth) Part IAABA \u2014 \"Monitoring of compliance with community safety supervision orders etc.\" (ss 3ZZUHA, 3ZZUHB, 3ZZUHC) \u2014 was inserted by the Migration and Other Legislation Amendment (Bridging Visas, Serious Offenders and Other Measures) Act 2023 (No 110, 2023) sch 2 and has been in force since 8 December 2023. It sits between Part I"
+   }
+  ]
+ },
+ {
+  "file": "src/tools/analysis-helpers/statute-citations.ts",
+  "line": 763,
+  "summary": "scanProvisionList abandons the whole remainder of a comma/and list at the first shape change, so every later member is dropped with no unread marker and verify_citations still prints [VERIFIED].",
+  "failure_scenario": "On a shape mismatch the scanner either `break`s (plain/other) or returns immediately with a single unread span; either way items after that point are never scanned, and PINPOINT_SHAPE cannot re-find them because a bare '52' carries no designation. Verified: extractStatuteCitations('The Trade Practices Act 1974 (Cth) ss 51AC, 52 and 53 were considered.', 20) returns exactly one citation \u2014 `ss 51AC` \u2014 with no unread entry, so verify_citations prints '[VERIFIED] \u2026 Statute citations: 1 checked of 1 found' over a sentence naming three sections. The reverse order ('ss 45, 45D and 46') reports s 45 plus an unread for 45D and drops 46 silently. This is the exact failure mode the round-4 commit message says it fixed, and it violates the file's own stated invariant that nothing located may be dropped in silence.",
+  "severity": "med",
+  "category": "correctness",
+  "dimension": "grammar-regression",
+  "confirmed": true,
+  "voteCount": 3,
+  "votes": [
+   {
+    "real": true,
+    "reasoning": "CONFIRMED by execution against the built module and by driving verify_citations with the repo's own NCX fixture client.\n\nCode: src/tools/analysis-helpers/statute-citations.ts:746-776. On a shape mismatch scanProvisionList either `break`s (line 763, plain/other) or `return`s a single unread span (line 764) \u2014 in both cases every list member after that point is never scanned. ListScan carries at most"
+   },
+   {
+    "real": true,
+    "reasoning": "Confirmed by execution, not just reading. extractStatuteCitations('The Trade Practices Act 1974 (Cth) ss 51AC, 52 and 53 were considered.', 20) returns exactly one citation (`ss 51AC`, attachedBy trailing-cite) with no unread entry; 'ss 45, 45D and 46' returns `ss 45` plus an unread for 45D and silently loses 46; 'ss 45, 46A, 47' silently loses 47.\n\nMechanism: scanProvisionList (statute-citations."
+   },
+   {
+    "real": true,
+    "reasoning": "Reproduced empirically. extractStatuteCitations('The Trade Practices Act 1974 (Cth) ss 51AC, 52 and 53 were considered.', 20) returns exactly one citation (ss 51AC) with zero unread entries; 'ss 45, 45D and 46' returns s 45 plus one unread for 45D and drops 46 entirely; 'ss 588G, 588FE and 9' drops 9. Same-shape lists work, so the defect is confined to the shape-change branch at statute-citations."
+   }
+  ]
+ },
+ {
+  "file": "src/lib/section-ref.ts",
+  "line": 565,
+  "summary": "extractSectionRefs has no bare-lettered-structural branch, and round 4's removal of L/C/D/M from ROMAN_NUMBER means real units such as Corporations Act 'Subdivision C' and 'Subdivision DA' are no longer harvested from prose at all.",
+  "failure_scenario": "LETTERED_STRUCTURAL is only consulted by the anchored parseSectionRef; the scanner's REF_BODY requires NUMBER_PATTERN, which after e92abd2 no longer matches a bare C/D/L/M. Verified against live Corporations Act NCX: extractSectionRefs('Subdivision C\u2014Common provisions') returns [] at HEAD but returned ['sub-div C'] at 2188a0d; same for 'Subdivision D', 'Subdivision DA'..'DE', 'Subdivision CA'/'CB'. extractProvisions('see Subdivision C of Division 3 of Part 5.3B') now yields only div 3 and pt 5.3B, and extractStatuteCitations reports nothing for the Subdivision \u2014 not even as unread, because PINPOINT_SHAPE's roman branch is also restricted to [IVX]. The vocab comment's claim that 'LETTERED_STRUCTURAL in section-ref.ts reads those' is only true for the anchored path.",
+  "severity": "med",
+  "category": "regression",
+  "dimension": "grammar-regression",
+  "confirmed": true,
+  "voteCount": 3,
+  "votes": [
+   {
+    "real": true,
+    "reasoning": "Reproduced by execution. Built clean trees of HEAD (e92abd2) and 2188a0d via `git archive` into /tmp (repo untouched apart from the gitignored build/), then ran the claimed inputs.\n\nextractSectionRefs at HEAD returns [] for 'Subdivision C\u2014Common provisions', 'Subdivision D', 'Subdivision DA', 'Subdivision DE', 'Subdivision CA', 'Subdivision CB'; at 2188a0d each of those was harvested (e.g. ['subdi"
+   },
+   {
+    "real": false,
+    "reasoning": "All the finding's mechanical claims reproduce, but the conclusion does not hold.\n\nVerified at HEAD: extractSectionRefs(\"Subdivision C\u2014Common provisions\") -> [], \"Subdivision DA\u2014Other\" -> [], \"see Subdivision C of Division 3 of Part 5.3B\" -> [\"div 3\",\"pt 5.3B\"]; anchored normaliseRef(\"sub-div C\") still -> \"sub-div C\". Verified at 2188a0d (ROMAN_NUMBER was \"[IVXLCDM]+[A-Z]?\"): those same inputs retu"
+   },
+   {
+    "real": true,
+    "reasoning": "CONFIRMED and material.\n\nVerified by executing the real code (temporary vitest probe in `src/lib/`, since removed):\n\n- `extractSectionRefs(\"Subdivision C\u2014Common provisions\")` -> `[]`; `\"Subdivision D\u2014Other\"` -> `[]`; `\"Subdivision DA\"` -> `[]`; `\"sub-div B\"` -> `[]`; `\"Part C\"` -> `[]`.\n- `extractSectionRefs(\"see Subdivision C of Division 3 of Part 5.3"
+   }
+  ]
+ },
+ {
+  "file": "src/tools/analysis-helpers/statute-citations.ts",
+  "line": 770,
+  "summary": "When a list exceeds MAX_LIST_ITEMS the scanner returns immediately, so only the 13th continuation is reported unread and every member after it disappears without a trace.",
+  "failure_scenario": "extractStatuteCitations('The Fair Work Act 2009 (Cth) ss 340, 341, \u2026, 359 apply.', 40) on a 20-section list returns 13 citations plus one unread naming '353'; ss 354\u2013359 are never scanned, never reported, and cannot be recovered by unreadShapes because they carry no designation. verify_citations then prints '14 checked of 14 found' over a sentence naming 20 sections, which reads as a complete count of a text it only partly read \u2014 the comment above the line claims a list running past the ceiling 'stops here and says so', but it says so about one item only.",
+  "severity": "low",
+  "category": "correctness",
+  "dimension": "grammar-regression",
+  "confirmed": true,
+  "voteCount": 3,
+  "votes": [
+   {
+    "real": true,
+    "reasoning": "Reproduced by execution against the prebuilt module at build (scratch scripts in /tmp, since deleted; nothing written to the repo).\n\nRun 1 \u2014 extractStatuteCitations('The Fair Work Act 2009 (Cth) ss 340, 341, ..., 358 and 359 apply.', 40) over a 20-section list returned exactly 14 records: 'ss 340' plus 's 341'..'s 352' (13 real citations), then one att"
+   },
+   {
+    "real": true,
+    "reasoning": "Confirmed by execution. In src/tools/analysis-helpers/statute-citations.ts:770, `if (items.length >= MAX_LIST_ITEMS) return { items, unread: { start, end } }` abandons the scan, so only the 13th continuation is reported unread and every later member is dropped with no record.\n\nEmpirical check (scratch vitest probe, since deleted): extractStatuteCitations('The Fair Work Act 2009 (Cth) ss 340, 341, "
+   },
+   {
+    "real": true,
+    "reasoning": "Confirmed by running the extractor. For a 20-section list ('Fair Work Act 2009 (Cth) ss 340, 341, ... 359') with maxCitations=40, extractStatuteCitations returns 14 records: 13 citations (ss 340-352) plus one unread naming 'ss 340 \u2026 353'. ss 354-359 produce no record at all. They cannot be recovered by the unreadShapes audit because PINPOINT_SHAPE (line 269) requires a designation in front of the "
+   }
+  ]
+ },
+ {
+  "file": "src/lib/section-ref-vocab.ts",
+  "line": 157,
+  "summary": "Round 4 narrowed ROMAN_NUMBER to drop the L/C/D/M letters, so lettered structural units (\"Subdivision C\", \"Subdivision D\", \"Division D\", \"Subdivision CA/DA\") are no longer extracted by the document citation scanner \u2014 and PINPOINT_SHAPE's roman branch starts at [IVX] only, so they are not reported as unread either.",
+  "failure_scenario": "verify_citations({text:\"The prohibition in Subdivision C of Division 3 of Part IV of the Competition and Consumer Act 2010 (Cth) applies, as does Division D of that Act.\"}) prints \"Statute citations: 2 checked of 2 found | \u26a0 0 not checked here\" \u2014 the document cited four provisions and two vanished with no trace. Verified by driving build/: extractStatuteCitations on that text returns [div 3, pt IV] at e92abd2 vs [sub-div C, div 3, pt IV] at 2188a0d, and \"See Division D of the Competition and Consumer Act 2010 (Cth)\" returns [] (was [division D]). The CCA alone has ~90 real \"Subdivision C/D/CA/DA\" navLabels. This is precisely the silent-skip class the round-4 commit says it fixed for \"Part IAB\": dropped without appearing in the found-count.",
+  "severity": "high",
+  "category": "correctness",
+  "dimension": "chokepoint-and-callers",
+  "confirmed": true,
+  "voteCount": 3,
+  "votes": [
+   {
+    "real": true,
+    "reasoning": "Reproduced by execution at HEAD (e92abd2) against the freshly built build/, and refuted-by-contrast against a /tmp copy of 2188a0d.\n\n1. End-to-end: verifyCitations(new AuApiClient(), {text: \"The prohibition in Subdivision C of Division 3 of Part IV of the Competition and Consumer Act 2010 (Cth) applies, as does Division D of that Act.\"}) printed exactly the claimed line:\n   \"[VERIFIED] Citation ch"
+   },
+   {
+    "real": true,
+    "reasoning": "Verified by building HEAD and driving the real extractors. extractStatuteCitations(\"The prohibition in Subdivision C of Division 3 of Part IV of the Competition and Consumer Act 2010 (Cth) applies, as does Division D of that Act.\", 20) returns only [div 3, pt IV] with no attachedBy:\"unread\" entry; \"See Division D of the Competition and Consumer Act 2010 (Cth)\" returns []. Cause chain confirmed: RO"
+   },
+   {
+    "real": true,
+    "reasoning": "Verified by driving the built module at HEAD (e92abd2) and against a patched copy with the pre-round-4 ROMAN_NUMBER.\n\nAt HEAD: extractStatuteCitations(\"The prohibition in Subdivision C of Division 3 of Part IV of the Competition and Consumer Act 2010 (Cth) applies, as does Division D of that Act.\") returns only [div 3, pt IV]; \"See Division D of the Competition and Consumer Act 2010 (Cth).\" return"
+   }
+  ]
+ },
+ {
+  "file": "src/lib/provision-slicer.ts",
+  "line": 180,
+  "summary": "duplicateNumberNote treats any two non-schedule navLabels sharing a leading number as an unresolvable ambiguity, so it fires falsely on Acts whose guides/appendices restart at 1, prefixing an \"ambiguous reference\" warning to unambiguous body sections.",
+  "failure_scenario": "Verified against the live Corporations Act 2001 NCX (C2004A00818, 5,569 entries): get_law_text(registerId:\"C2004A00818\", provision:\"s 9\") now serves the Dictionary with 'Note: this compilation numbers \"9\" more than once, so a bare reference cannot tell them apart. served: 9 Dictionary \u2014 in Division 1\u2014General / also numbered 9: 9 Returns to shareholders \u2014 in Part 1.5\u2014Small business guide. No reference form distinguishes it \u2014 use get_law_tree to see both.' Part 1.5 is a non-operative Small Business Guide whose paragraphs are numbered 1-12, not sections; \"Corporations Act s 9\" is unambiguous. 22 entries across 11 numbers (ss 1,2,3,4,5,6,7,9,11,12) carry the false warning on the second-most-cited Australian Act. No test pins this.",
+  "severity": "med",
+  "category": "correctness",
+  "dimension": "chokepoint-and-callers",
+  "confirmed": true,
+  "voteCount": 3,
+  "votes": [
+   {
+    "real": true,
+    "reasoning": "Reproduced by execution against the live register, not by reading. Fetched https://www.legislation.gov.au/C2004A00818/latest/latest/text/latest/epub/OEBPS/document.ncx (HTTP 200, 1,786,308 bytes) and parsed it with the repo's own built parser: 5,569 entries, matching the claim. Ran the real code path get_law_text uses (src/tools/law-text.ts:148 -> AuApiClient.getProvision -> sliceProvision -> with"
+   },
+   {
+    "real": true,
+    "reasoning": "Genuine defect, reproduced end-to-end against the live source, and not deliberate/documented/pinned.\n\nReproduction (live, this session): fetched https://www.legislation.gov.au/C2004A00818/latest/latest/text/latest/epub/OEBPS/document.ncx (5,569 entries) and document_1.html, ran them through the project's own parseNcx -> findNavPoint -> sliceProvision (the exact path AuApiClient.getProvision uses a"
+   },
+   {
+    "real": true,
+    "reasoning": "CONFIRMED by direct execution against the live source, not by reading alone.\n\nMethod: fetched https://www.legislation.gov.au/C2004A00818/latest/latest/text/latest/epub/OEBPS/document.ncx (1.79 MB), parsed it with the repo's own parseNcx (5,569 entries), and called duplicateNumberNote from src/lib/provision-slicer.ts on every numbered entry.\n\nResult: get_law_text(registerId \"C2004A00818\", provision"
+   }
+  ]
+ },
+ {
+  "file": "src/tools/instrument-radar.ts",
+  "line": 82,
+  "summary": "enablingProvisionCall verifies only that the Register's string parses, then emits formatRef's output \u2014 which for paragraph/subsection kinds does not round-trip, so the \"suggestion this builds cannot be rejected by requireRef\" guarantee in its own docstring is false.",
+  "failure_scenario": "Ran enablingProvisionCall over the 61 distinct affectingProvisions values returned live by the FRL API for in-force legislative instruments. \"para 1020F(1)(c)\" -> provision \"para (1020F)\", which parseSectionRef rejects, so instrument_radar prints get_provision_history({registerId:\"...\", provision:\"para (1020F)\"}) and requireRef throws [INVALID_PARAM] the moment the caller runs it \u2014 the exact failure the round-4 fix claims to have removed. \"para 601QA(1)(a), (b)\" -> \"para (601QA)\" is both unparseable and flagged narrowed, so the caller is told to \"check the others too\" about a call that cannot run. \"para 184(a)\" -> \"para (184)\" does parse but is a different reference (paragraph 184, subsection lost), and is printed as the canonical form of what the Register recorded. 8 of the 61 live values are affected.",
+  "severity": "med",
+  "category": "correctness",
+  "dimension": "chokepoint-and-callers",
+  "confirmed": true,
+  "voteCount": 3,
+  "votes": [
+   {
+    "real": true,
+    "reasoning": "CONFIRMED by execution against the live FRL API and the built code.\n\n## Root cause (read, then executed)\n\n`canonical()` at src/tools/instrument-radar.ts:81-84 is `parseSectionRef(value) ? formatRef(ref) : undefined` \u2014 it verifies the *input* parses and then returns `formatRef`'s output without ever checking that the *output* parses. Every branch of `en"
+   },
+   {
+    "real": true,
+    "reasoning": "CONFIRMED genuine defect, verified end-to-end against the live FRL API.\n\nMechanism: `canonical()` at src/tools/instrument-radar.ts:82 does `parseSectionRef(input)` then returns `formatRef(ref)` \u2014 it verifies the INPUT parses but never that the OUTPUT does. `formatRef` (src/lib/section-ref.ts:458) formats `BRACKETED_KINDS` (subsection/paragraph/subparagraph/subclause/subregulation/subrule) as `${ab"
+   },
+   {
+    "real": true,
+    "reasoning": "CONFIRMED and material.\n\nRoot cause: src/lib/section-ref.ts:458 \u2014 formatRef emits `${abbrev} (${number})` for BRACKETED_KINDS (subsection, paragraph, subparagraph, subclause, subregulation, subrule) and drops ref.subsections entirely. parseSectionRef(\"para 1020F(1)(c)\") -> {kind:\"paragraph\", number:\"1020\", letterSuffix:\"F\", subsections:[\"1\",\"c\"]}, so formatRef returns \"para (1020F)\". Re-parsing th"
+   }
+  ]
+ },
+ {
+  "file": "src/lib/query-extract.test.ts",
+  "line": 585,
+  "summary": "The registry-wide guard's substantive assertion only inspects apiClient.getProvision calls, so for every in-scope tool that slices volumes itself the check is vacuous and the tool passes on the string \"sch 2 s 18\" appearing anywhere in its prose.",
+  "failure_scenario": "Driving the built registry with the test's own stub: get_batch_provisions, get_provision_history, chain_law_system and get_external_links all finish with asked === [] (they call getToc + getVolumeHtml, or no provision endpoint at all), so `expect(bodySection).toEqual([])` passes trivially and only `toContain(\"sch 2 s 18\")` remains \u2014 a condition the alias table's own note satisfies without any provision being fetched correctly (get_external_links passes exactly that way today). Four of the seven non-ledgered tools are therefore covered only by a substring check; a future tool that prints the alias note and then slices the body's s 18 out of document_1.html passes the guard while serving \"Meetings of Commission\" under the ACL heading. Separately, KNOWN_GAPS still exempts five registered tools (get_instrument_provisions, get_historical_law, applicable_law, impact_map, legal_analysis) that do serve the body's s 18 today.",
+  "severity": "med",
+  "category": "test-coverage",
+  "dimension": "chokepoint-and-callers",
+  "confirmed": true,
+  "voteCount": 3,
+  "votes": [
+   {
+    "real": true,
+    "reasoning": "Reproduced by execution. Built the project (`npm run build`; `build/` is gitignored) and drove the built registry from a /tmp scratch driver that replicates the test's own schemaFields/toolsWith/registerStub/NEUTRAL_FIELDS/runWithAclSection18 verbatim, instrumenting every stub method.\n\nIn-scope tools: 12; non-ledgered candidates: 7. Four of the seven finish with asked === [] and therefore make `ex"
+   },
+   {
+    "real": true,
+    "reasoning": "Confirmed by execution. Driving the built registry with the test's own stub, the seven in-scope (non-ledgered) tools split as: asked non-empty only for get_law_text, compare_old_new, chain_amendment_track; asked === [] for get_batch_provisions, get_provision_history, chain_law_system (getToc + getVolumeHtml(4) \u2014 they slice volumes themselves) and get_external_links (zero upstream calls). So `expec"
+   },
+   {
+    "real": true,
+    "reasoning": "CONFIRMED by mutation test. I drove the built registry with the test's own harness (a probe replicating runWithAclSection18 over every in-scope tool) and dumped `asked` plus the full output text.\n\nFacts: 12 tools match (LAW_FIELD && PROVISION_FIELD); KNOWN_GAPS exempts 5, leaving 7 checked. Of those 7, exactly 4 finish with `asked === []` \u2014 get_batch_provisions (getToc + getVolumeHtml:4), get_prov"
+   }
+  ]
+ },
+ {
+  "file": "src/lib/section-ref.ts",
+  "line": 545,
+  "summary": "The number-led NCX label pattern requires whitespace after the number, so a navLabel that is a bare number with no heading text can never be matched and the provision is reported absent.",
+  "failure_scenario": "The real C2004Q00685 NCX (fetched 2026-09-05) labels two Constitution sections \"86.\" and \"87.\" with no title. refToNcxLabelPattern builds /^86\\.?(?=[\\s\u00a0])/, which cannot match \"86.\", so get_law_text({query:\"Constitution\", provision:\"s 86\"}) answers \"[LAW_NOT_FOUND] s 86 is not in the latest table of contents of Commonwealth of Australia Constitution Act [C2004Q00685]\" for a section that is in the table of contents \u2014 a false absence claim on the title round 4 specifically re-examined, and cl 86 fails identically so there is no other address. leadingNumber's own docstring cites \"86.\" -> 86, so the label shape was known when resolveNavPoint was written; the resolver was not updated to reach it.",
+  "severity": "med",
+  "category": "correctness",
+  "dimension": "chokepoint-and-callers",
+  "confirmed": true,
+  "voteCount": 3,
+  "votes": [
+   {
+    "real": true,
+    "reasoning": "Executed and confirmed. (1) Live fetch of https://www.legislation.gov.au/C2004Q00685/latest/latest/text/latest/epub/OEBPS/document.ncx (HTTP 200, 43156 bytes) shows exactly two bare-number navLabels in the whole file: \"86.\" and \"87.\" (navPoints 105/106, under \"Chapter IV.\u2014Finance and Trade.\", anchors _Toc29462686/_Toc29462687). (2) Compiling the repo with tsc to a /tmp outDir and running findNavPo"
+   },
+   {
+    "real": true,
+    "reasoning": "Confirmed against the live upstream. The real C2004Q00685 NCX (fetched today, 157 navPoints) contains two navLabels that are byte-exactly \"86.\" and \"87.\" \u2014 bare number plus stop, no heading text, no trailing space. src/lib/section-ref.ts:545 builds /^86\\.?(?=[\\s\u00a0])/ for a number-led label, which cannot match a label that ends at the stop. Running the shipped build against that live NCX: resolveNav"
+   },
+   {
+    "real": true,
+    "reasoning": "Confirmed against the live C2004Q00685 NCX fetched today: navLabels 86 and 87 are literally \"86.\" and \"87.\" with no heading text. refToNcxLabelPattern (src/lib/section-ref.ts:545) emits /^86\\.?(?=[\\s\u00a0])/, whose lookahead cannot be satisfied at end of string, so running the built resolver over the real NCX gives NOT FOUND for s 86, s 87 and cl 86 while s 85, s 88 and s 51 resolve normally. The entr"
+   }
+  ]
+ }
+]
