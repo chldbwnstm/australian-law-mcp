@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/logo.png" alt="australian-law-mcp — point-in-time Commonwealth law, citation-checked" width="800">
+</p>
+
 # Australian Law MCP
 
 **Australian legislation, decisions and citation checking, inside the AI tools a practitioner already uses.** Commonwealth Acts and instruments as compiled on any date, State and Territory registers, judgments, tribunal decisions, ATO rulings, treaties and explanatory material — all from keyless public sources, exposed as MCP tools and a natural-language CLI. Published on npm as **`au-law-mcp`**.
