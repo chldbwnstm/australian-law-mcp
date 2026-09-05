@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { DASH_LIKE, extractSectionRefs, formatRef, parseSectionRef } from "../../lib/section-ref.js"
+import { isRomanNumber } from "../../lib/section-ref-vocab.js"
 import {
   extractStatuteCitations,
   findFullCites,
@@ -808,5 +809,92 @@ describe("findFullCites / findShortForms", () => {
     const text = "Fair Work Act 2009 (Cth) ('FW Act')"
     const forms = findShortForms(text, findFullCites(text))
     expect([...forms.keys()]).toContain("fwact")
+  })
+})
+
+describe("the unread net reads roman numbers from the same vocabulary the reader does", () => {
+  /**
+   * `PINPOINT_SHAPE` is the audit net: a fragment it finds that no reading
+   * consumed and no named refusal covers is returned as an unread citation.
+   * The net therefore has to be at least as wide as the grammar it audits — a
+   * roman pinpoint the reader REFUSES and the net cannot see is a citation
+   * that never reaches the report at all, which is the one failure this module
+   * exists to prevent.
+   *
+   * The net used to carry its own roman branch, `[IVX][A-Z]{0,9}`, written
+   * beside `ROMAN_NUMBER` rather than derived from it. The two agree on all
+   * 1,344 structural tokens in `src/lib/__fixtures__` — and disagree at the
+   * top of the range, because a hard-coded ceiling cannot follow a grammar
+   * that moves. `ROMAN_NUMBER` was widened in round 6 from a measurement of
+   * all 126,207 navLabels in the statute book; the literal was not.
+   */
+
+  /**
+   * The longest numeral the vocabulary itself admits, searched for rather than
+   * written down — so this test cannot drift from `ROMAN_NUMBER` either.
+   */
+  const widestNumeral = ((): string => {
+    let widest = ""
+    const grow = (stem: string): void => {
+      if (stem.length > 8) return
+      if (stem.length > widest.length && isRomanNumber(stem) && isRomanNumber(`${stem}AABA`)) widest = stem
+      for (const letter of ["I", "V", "X"]) grow(stem + letter)
+    }
+    grow("")
+    return widest
+  })()
+
+  it("the vocabulary really does admit a numeral this wide — the guard on the guard", () => {
+    // Without this the two assertions below could both pass over a string the
+    // grammar never accepted, and prove nothing about the net.
+    expect(widestNumeral.length).toBeGreaterThanOrEqual(7)
+    expect(isRomanNumber(`${widestNumeral}AABA`)).toBe(true)
+    // `Z` is not a series letter, so the reader must refuse this one — which
+    // is exactly when the net has to speak up.
+    expect(isRomanNumber(`${widestNumeral}AABZ`)).toBe(false)
+  })
+
+  it("reads the widest roman part the vocabulary allows", () => {
+    const text = `The Crimes Act 1914 (Cth) pt ${widestNumeral}AABA applies.`
+    const cites = extractStatuteCitations(text, 20)
+    expect(cites.map((cite) => cite.pinpoint)).toContain(`pt ${widestNumeral}AABA`)
+    expect(cites.filter((cite) => cite.attachedBy === "unread")).toEqual([])
+  })
+
+  it("still reports one it cannot read, however wide the vocabulary lets one be", () => {
+    // A tail one letter outside the series class, on a numeral the vocabulary
+    // does admit. The reader refuses it; the net has to report it. With the
+    // hard-coded branch the whole fragment was 11 characters against a
+    // 10-character ceiling, so nothing matched and the citation vanished from
+    // a document the caller was then told had been checked.
+    const text = `The Crimes Act 1914 (Cth) pt ${widestNumeral}AABZ applies.`
+    const unread = extractStatuteCitations(text, 20).filter((cite) => cite.attachedBy === "unread")
+    expect(unread.map((cite) => cite.raw)).toEqual([`pt ${widestNumeral}AABZ`])
+    expect(unread[0].pinpoint).toContain("[PARSE_ERROR]")
+  })
+
+  it("keeps reporting the shorter near-misses it always did", () => {
+    // The regression guard for the fix: widening the net at the top must not
+    // narrow it in the middle. `IZZZZ` is a numeral the vocabulary reads (`I`)
+    // with a four-letter tail it refuses.
+    const unread = extractStatuteCitations("The Crimes Act 1914 (Cth) pt IZZZZ applies.", 20).filter(
+      (cite) => cite.attachedBy === "unread",
+    )
+    expect(unread.map((cite) => cite.raw)).toEqual(["pt IZZZZ"])
+  })
+
+  it("does not turn an all-capitals word into an unread pinpoint", () => {
+    // The other edge, and the reason the net is not simply `[A-Z]+`: every
+    // fragment it reports prints a `[PARSE_ERROR]` line, so a net that reads
+    // ordinary capitalised prose accuses correct documents of citing
+    // provisions they never named.
+    for (const text of [
+      "The SIS Act and the RDA were both considered.",
+      "See the INSTRUMENT referred to in the schedule.",
+      "The Crimes Act 1914 (Cth) applies. VICTORIA POLICE gave evidence.",
+    ]) {
+      const unread = extractStatuteCitations(text, 20).filter((cite) => cite.attachedBy === "unread")
+      expect(unread.map((cite) => cite.raw), text).toEqual([])
+    }
   })
 })

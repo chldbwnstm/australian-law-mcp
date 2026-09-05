@@ -271,14 +271,33 @@ const PINPOINT = new RegExp(
  * rather than letting the document go out one citation shorter than it came in.
  *
  * The roman branch keeps the two guards that make roman numerals safe here —
- * a space in front (so `SIS` is not `s IS`) and a word edge behind — and starts
- * at `I`, `V` or `X` only, because `ROMAN_NUMBER` deliberately refuses the
- * `L`/`C`/`D`/`M` readings that turn English words into pinpoints. Reporting
- * those as "unread" would turn a correct refusal into noise on every document.
+ * a space in front (so `SIS` is not `s IS`) and a word edge behind — and it is
+ * **`ROMAN_NUMBER` plus a near miss**, never a second spelling of it.
+ *
+ * Written out here the branch was `[IVX][A-Z]{0,9}`. It agreed with the
+ * vocabulary on all 1,344 structural tokens in `src/lib/__fixtures__` and
+ * disagreed at the top of the range, because a ceiling written down beside a
+ * grammar cannot follow it: `ROMAN_NUMBER` reaches eleven characters
+ * (`XXXVIII` and a four-letter series tail) and the literal stopped at ten, so
+ * `pt XXXVIIIAABZ` — a tail one letter outside the series class, which the
+ * reader therefore refuses — matched neither the reader nor the net and left
+ * the report altogether. `ROMAN_NUMBER` was widened in round 6 from all
+ * 126,207 navLabels of the statute book; a literal standing beside it is a
+ * hole waiting for the next measurement.
+ *
+ * The `[A-Z]{0,4}` is the near miss, and it is what makes this a net rather
+ * than a copy of the reader: the vocabulary's own tail runs to four letters, so
+ * a pinpoint written with a longer one, or with a tail outside the series
+ * class, is exactly what has to be caught and reported. The slack is bounded
+ * for the same reason the vocabulary's is — every fragment this finds prints a
+ * `[PARSE_ERROR]` line, and an unbounded tail would read ordinary capitalised
+ * prose as a pinpoint the document never contained. Starting from
+ * `ROMAN_NUMBER` also inherits its refusal of the `L`/`C`/`D`/`M` readings for
+ * free, which is what kept `s CIVIL` and `r MILD` out.
  */
 const PINPOINT_SHAPE = new RegExp(
   `(?<![A-Za-z])(?:${SPELLINGS})\\s*` +
-    `(?:(?<=\\s)[IVX][A-Z]{0,9}|\\d[0-9A-Za-z]{0,12}(?:${NUMBER_SEP}[0-9A-Za-z]{1,8}){0,4})` +
+    `(?:(?<=\\s)${ROMAN_NUMBER}[A-Z]{0,4}|\\d[0-9A-Za-z]{0,12}(?:${NUMBER_SEP}[0-9A-Za-z]{1,8}){0,4})` +
     `(?![0-9A-Za-z])`,
   "g",
 )

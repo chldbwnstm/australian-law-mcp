@@ -15,6 +15,7 @@ import { allTools, unwrapZodEffects } from "../tool-registry.js"
 import type { AuApiClient } from "./api-client.js"
 import { normalizeFrlVersion } from "./api-client.js"
 import { lawCache } from "./cache.js"
+import { ErrorCodes } from "./errors.js"
 import { resolveLawAlias } from "./law-alias.js"
 import { parseNcx } from "./ncx-parser.js"
 import { findNavPoint, htmlToText, sliceProvision } from "./provision-slicer.js"
@@ -1135,40 +1136,337 @@ describe("the alias's schedule, across the whole registry", () => {
       }
     }
   }, 60_000)
+})
+
+// ──────────────────────────────────────────────────────────────────────────
+// The second sweep: the tools that read a provision out of the question
+// ──────────────────────────────────────────────────────────────────────────
+
+/**
+ * The other half of the class, and the one round 3 missed: a tool with no
+ * `provision` field that lifts the reference out of the query itself and acts
+ * on it — `search_ai_law`, and every chain that embeds it. "ACL s 29" means
+ * `sch 2 s 29` (*False or misleading representations about goods or services*)
+ * exactly as "ACL s 18" does, and a follow-up call printed at the bare `s 29`
+ * sends the caller to the Act's own s 29 (*Delegation by Commission*).
+ *
+ * s 29 rather than s 18 because "s 18" is the canned example in
+ * `get_law_text`'s "Next:" block, and a canned example is not a reading of this
+ * question. s 29 is not in the recorded NCX, so nothing here can be established
+ * from served text; what the answer **addresses** is the evidence.
+ *
+ * ## Why this needed a table
+ *
+ * The sweep used to drive every tool and make one negative assertion — nothing
+ * may address the bare `s 29`. For the two tools that read a provision that is
+ * the whole point; for the other thirty-six it compares `[]` with `[]`, and a
+ * tool that stopped scoping tomorrow would only be caught if it happened to be
+ * one of the two. Worse, the set was open: a tool registered tomorrow was swept
+ * in silence, and if the harness could not drive it there was nothing to say so.
+ *
+ * So each swept tool now carries a row saying what its answer to this question
+ * must establish, the table is held **equal** to the live swept set (a new tool
+ * fails here until someone writes it a row), and every class is asserted rather
+ * than assumed:
+ *
+ *  - `scopes_from_query` — it reads the provision and applies the schedule. The
+ *    scoped form must appear in what it addresses, and the bare form must not.
+ *  - `names_no_provision` — it answers this question without naming a provision
+ *    at all. That is asserted, not assumed: a tool that starts reading one and
+ *    prints it fails here, and the fix is to scope it and move the row up.
+ *  - `unreachable_offline` — its only source has no recorded fixture, so it
+ *    refuses before it ever looks at the question. An exclusion with a reason,
+ *    and the reason is checked: the answer must still open with a bracket label
+ *    from `ErrorCodes`, so a row cannot outlive the gap that justified it. If
+ *    someone records that source, the row fails and the tool must be
+ *    re-classified rather than quietly staying out of the sweep.
+ *
+ * There is no fourth class and no skip path. A tool this harness cannot drive
+ * is a failing test naming the tool and the field its schema needs.
+ */
+type QuerySweepContract =
+  /** Reads the provision out of the query and applies the alias's schedule to it. */
+  | { outcome: "scopes_from_query" }
+  /** Answers without naming a provision — asserted, so one that starts naming one fails. */
+  | { outcome: "names_no_provision" }
+  /** No recorded fixture for its source: it refuses before reaching the question. */
+  | { outcome: "unreachable_offline"; reason: string }
+
+const QUERY_SWEEP: Record<string, QuerySweepContract> = {
+  // ── reads the provision out of the question ──────────────────────────────
+  search_ai_law: { outcome: "scopes_from_query" },
+  chain_full_research: { outcome: "scopes_from_query" },
+
+  // ── answers this question without naming a provision ─────────────────────
+  chain_action_basis: { outcome: "names_no_provision" },
+  chain_dispute_prep: { outcome: "names_no_provision" },
+  chain_procedure_detail: { outcome: "names_no_provision" },
+  chain_state_law_compare: { outcome: "names_no_provision" },
+  get_enabled_instruments: { outcome: "names_no_provision" },
+  get_enabling_acts: { outcome: "names_no_provision" },
+  get_law_history: { outcome: "names_no_provision" },
+  get_law_system_tree: { outcome: "names_no_provision" },
+  get_law_tree: { outcome: "names_no_provision" },
+  get_legal_term_kb: { outcome: "names_no_provision" },
+  get_plain_term: { outcome: "names_no_provision" },
+  get_related_laws: { outcome: "names_no_provision" },
+  get_schedules: { outcome: "names_no_provision" },
+  get_state_equivalents: { outcome: "names_no_provision" },
+  get_three_tier: { outcome: "names_no_provision" },
+  instrument_radar: { outcome: "names_no_provision" },
+  search_agency_rules: { outcome: "names_no_provision" },
+  search_all: { outcome: "names_no_provision" },
+  search_explanatory: { outcome: "names_no_provision" },
+  search_gazettes: { outcome: "names_no_provision" },
+  search_historical_law: { outcome: "names_no_provision" },
+  search_law: { outcome: "names_no_provision" },
+  search_treaties: { outcome: "names_no_provision" },
+
+  // ── no recorded fixture for the source they read ─────────────────────────
+  // Each of these is a decision or state-legislation corpus this repository has
+  // no capture of, and inventing one is banned for the reason `CLAUDE.md` gives:
+  // it would test the tool against an idea of the page. The reason is what a
+  // reviewer needs to decide whether the row should still be here.
+  search_cases: {
+    outcome: "unreachable_offline",
+    reason:
+      "the case-law sources (AustLII, LawCite, judgments.fedcourt.gov.au) are blocked hosts with no recorded page, so the tool refuses before it reads the question",
+  },
+  search_decisions: {
+    outcome: "unreachable_offline",
+    reason:
+      "the 18-domain dispatcher lands on the same case-law sources as search_cases for its default domain, and none of them has a fixture",
+  },
+  search_admin_appeals: {
+    outcome: "unreachable_offline",
+    reason: "NCAT and QCAT are scraped HTML with no recorded page in this repository",
+  },
+  search_rulings: {
+    outcome: "unreachable_offline",
+    reason: "the ATO Legal Database is a separate search API with no recorded response",
+  },
+  search_competition_decisions: {
+    outcome: "unreachable_offline",
+    reason:
+      "the ACCC public registers and the Competition Tribunal return 403 to non-browser clients — a blocked host, so there is nothing to record",
+  },
+  search_constitutional_decisions: {
+    outcome: "unreachable_offline",
+    reason: "hcourt.gov.au is scraped HTML with no recorded page",
+  },
+  search_integrity_decisions: {
+    outcome: "unreachable_offline",
+    reason: "nacc.gov.au is scraped HTML with no recorded page",
+  },
+  search_privacy_decisions: {
+    outcome: "unreachable_offline",
+    reason: "oaic.gov.au is scraped HTML with no recorded page",
+  },
+  search_public_service_decisions: {
+    outcome: "unreachable_offline",
+    reason: "mpc.gov.au is scraped HTML with no recorded page",
+  },
+  search_tax_tribunal_decisions: {
+    outcome: "unreachable_offline",
+    reason: "ato.gov.au's decision-impact listing is scraped HTML with no recorded page",
+  },
+  search_workplace_decisions: {
+    outcome: "unreachable_offline",
+    reason: "fwc.gov.au is scraped HTML with no recorded page",
+  },
+  search_state_law: {
+    outcome: "unreachable_offline",
+    reason:
+      "the NSW and SA registers are blocked hosts — this server does not fetch them, which is not evidence they have no such Act",
+  },
+  search_university_rules: {
+    outcome: "unreachable_offline",
+    reason: "it reads the same blocked state registers as search_state_law",
+  },
+}
+
+/** The tools this second sweep governs: law words, and no provision field. */
+function querySweepTools(): RegistryTool[] {
+  return toolsWith((fields) => fields.some((f) => LAW_FIELD.test(f)) && !fields.some((f) => PROVISION_FIELD.test(f)))
+}
+
+const QUERY_SWEEP_QUESTION = "ACL s 29 false representations"
+
+/** Every bracket label this server may open a refusal with. */
+const REFUSAL_LABEL = new RegExp(`^\\[(?:${Object.values(ErrorCodes).join("|")})\\]`)
+
+/**
+ * What a run says about the provision it read out of the question: the
+ * follow-up calls it prints, the deep links it builds, and the provision
+ * strings that crossed the client boundary.
+ *
+ * The question is stripped out of each address first, and that is not a
+ * loophole — it is the difference between a reading and an echo. This question
+ * contains the words "s 29", so a tool that puts it in a search box builds
+ * `.../search/text/ACL s 29 false representations`, which opens a search for
+ * the caller's own sentence and pinpoints nothing. `search_ai_law` does exactly
+ * that and is right to. What has to be judged is the `s 29` a tool writes
+ * itself — the follow-up call, the section link — so the echoed sentence comes
+ * out before the address is read.
+ */
+function provisionsAddressed(run: Drive): string[] {
+  const found = [...run.text.matchAll(/provision\s*[:=]\s*"([^"]{1,40})"/g)].map((match) => match[1].trim())
+  for (const url of run.text.match(/https?:\/\/\S+/g) ?? []) {
+    try {
+      found.push(decodeURIComponent(url.replace(/\+/g, " ")))
+    } catch {
+      found.push(url)
+    }
+  }
+  return [...found, ...run.asked.map((provision) => provision.trim())].map((item) =>
+    item.split(QUERY_SWEEP_QUESTION).join(" "),
+  )
+}
+
+const SCOPED_29 = /sch\s*2\b[\s,]*s\.?\s*29(?![0-9A-Za-z])/i
+const BARE_29 = /(?:^|[^0-9A-Za-z])s\.?\s*29(?![0-9A-Za-z])/i
+
+/** Assert one run against its row. Split out so the decoys below can drive it. */
+function expectQueryScoped(tool: string, run: Drive, contract: QuerySweepContract): void {
+  expect(
+    run.failure,
+    `${tool} could not be driven with { ${QUERY_SWEEP_QUESTION} }: ${run.failure}\n` +
+      "An untestable tool is an untested tool. Add the neutral value its schema needs to NEUTRAL_FIELDS, or " +
+      "fix the handler — there is no skip path out of this sweep.",
+  ).toBeUndefined()
+
+  const addressed = provisionsAddressed(run)
+  const bare = addressed.filter((item) => BARE_29.test(item) && !SCOPED_29.test(item))
+  const scoped = addressed.filter((item) => SCOPED_29.test(item))
+
+  // Universal, whatever the row says: a browser follows the address, not the
+  // warning printed beside it, and the Act's own s 29 is a real provision that
+  // returns real text.
+  expect(
+    bare,
+    `${tool} addressed the Act's own s 29 ("Delegation by Commission") for a question about the ACL. ` +
+      "Read provisions out of the query with scopeProvisionsToLaw({ query }) and use the result for the " +
+      "fetch and for every link and follow-up call printed beside it.",
+  ).toEqual([])
+
+  if (contract.outcome === "scopes_from_query") {
+    expect(
+      scoped,
+      `${tool} is contracted to read the provision out of the question and apply the alias's schedule, ` +
+        "but nothing in its answer addresses sch 2 s 29. Either it stopped reading the question, or the " +
+        "row belongs in names_no_provision.",
+    ).not.toEqual([])
+    return
+  }
+
+  if (contract.outcome === "names_no_provision") {
+    expect(
+      run.text.length,
+      `${tool} answered this question with nothing at all, so this row establishes nothing.`,
+    ).toBeGreaterThan(0)
+    expect(
+      addressed.filter((item) => /\b29\b/.test(item)),
+      `${tool} is contracted to name no provision for this question, and it named one. That is not a ` +
+        "failure by itself — it is a row that is out of date. Move it to scopes_from_query and make it " +
+        "apply the alias's schedule.",
+    ).toEqual([])
+    return
+  }
+
+  // unreachable_offline: the exclusion, and the check that keeps it honest.
+  expect(contract.reason.length, `${tool}'s exclusion must say why it cannot be driven`).toBeGreaterThan(20)
+  expect(
+    run.text,
+    `${tool} is excluded from this sweep because its source has no recorded fixture, but it answered ` +
+      "instead of refusing. Someone recorded that source: delete the exclusion and give the tool a real " +
+      "outcome row.",
+  ).toMatch(REFUSAL_LABEL)
+}
+
+function driveWithQuestion(tool: RegistryTool): Promise<Drive> {
+  return drive(tool, (field) => (LAW_FIELD.test(field) ? QUERY_SWEEP_QUESTION : NEUTRAL_FIELDS[field]))
+}
+
+describe("the alias's schedule, in the tools that read the provision out of the question", () => {
+  it("the swept set is exactly the contracted set — a new query-reading tool fails here until it gets a row", () => {
+    const found = querySweepTools()
+      .map((tool) => tool.name)
+      .sort()
+    // Belt to the braces: the enumeration must never go quietly empty, and the
+    // exemplar the sweep was built around must always be in it.
+    expect(found).toContain("search_ai_law")
+    expect(found.length).toBeGreaterThanOrEqual(30)
+    expect(
+      found,
+      "The live registry's (law words, no provision) tools and the QUERY_SWEEP table have diverged. " +
+        "A name only in the left list is a new tool that reads its provision out of the query: give it a " +
+        "row and make it pass — do not exempt it. A name only in the right list is a stale row: delete it.",
+    ).toEqual(Object.keys(QUERY_SWEEP).sort())
+  })
+
+  describe("the guard on the guard — what this sweep would let through", () => {
+    // The sweep is only worth its size if it rejects the answer it was built to
+    // reject. These drive `expectQueryScoped` with answers written by hand, so
+    // its verdict is pinned rather than taken on trust.
+    it("rejects a follow-up call printed at the Act's own s 29", () => {
+      const decoy: Drive = {
+        asked: [],
+        text:
+          'Alias "ACL" → Competition and Consumer Act 2010 (Cth), sch 2.\n' +
+          'Next: get_law_text { registerId: "C2004A00109", provision: "s 29" }',
+      }
+      expect(() => expectQueryScoped("decoy", decoy, { outcome: "scopes_from_query" })).toThrow(
+        /addressed the Act's own s 29/,
+      )
+    })
+
+    it("rejects a deep link that pinpoints the section without the schedule", () => {
+      const decoy: Drive = {
+        asked: [],
+        text: "See https://www.legislation.gov.au/C2004A00109/latest?q=s%2029 for the text.",
+      }
+      expect(() => expectQueryScoped("decoy", decoy, { outcome: "names_no_provision" })).toThrow(
+        /addressed the Act's own s 29/,
+      )
+    })
+
+    it("rejects a scoping tool whose answer addresses nothing at all", () => {
+      const decoy: Drive = { asked: [], text: "Read 'ACL s 29' as sch 2 s 29. See the Register." }
+      expect(() => expectQueryScoped("decoy", decoy, { outcome: "scopes_from_query" })).toThrow(
+        /nothing in its answer addresses sch 2 s 29/,
+      )
+    })
+
+    it("rejects an exclusion whose tool has started answering", () => {
+      const decoy: Drive = { asked: [], text: "3 decisions matching this search:\n1. Some v Body [2020] X 1" }
+      expect(() =>
+        expectQueryScoped("decoy", decoy, {
+          outcome: "unreachable_offline",
+          reason: "a reason long enough to pass the non-empty check on this row",
+        }),
+      ).toThrow(/answered instead of refusing/)
+    })
+
+    it("accepts an answer that reads the question and applies the schedule", () => {
+      const honest: Drive = {
+        asked: ["sch 2 s 29"],
+        text: 'Next: get_law_text { registerId: "C2004A00109", provision: "sch 2 s 29" }',
+      }
+      expect(() => expectQueryScoped("honest", honest, { outcome: "scopes_from_query" })).not.toThrow()
+    })
+  })
 
   it("scopes a provision read out of the question itself, in every tool that reads one", async () => {
-    // The other half of the class, and the one round 3 missed: a tool with no
-    // `provision` field that lifts the reference out of the query and prints it
-    // as the follow-up call (`search_ai_law`, and every chain that embeds it).
-    // s 29 rather than s 18 because "s 18" is also the canned example in
-    // get_law_text's "Next:" block, and a canned example is not a reading of
-    // this question. s 29 is not in the recorded NCX, so this half is a
-    // negative check only: nothing may address the body's s 29.
-    const swept = toolsWith(
-      (fields) => fields.some((f) => LAW_FIELD.test(f)) && !fields.some((f) => PROVISION_FIELD.test(f)),
-    )
-    expect(swept.map((tool) => tool.name)).toContain("search_ai_law")
-
-    for (const tool of swept) {
-      const run = await drive(tool, (field) =>
-        LAW_FIELD.test(field) ? "ACL s 29 false representations" : NEUTRAL_FIELDS[field],
-      )
-      expect(
-        run.failure,
-        `${tool.name} could not be driven: ${run.failure}\n` +
-          "An untestable tool is an untested tool — add the neutral value its schema needs to NEUTRAL_FIELDS.",
-      ).toBeUndefined()
-
-      const hinted = [...run.text.matchAll(/provision\s*[:=]\s*"([^"]{1,24})"/g)].map((match) => match[1].trim())
-      expect(
-        hinted.filter((provision) => /^s\.?\s*29$/i.test(provision)),
-        `${tool.name} printed a follow-up call at the body's s 29 for a question about the ACL. ` +
-          "Read provisions out of the query with scopeProvisionsToLaw({ query }).",
-      ).toEqual([])
-      expect(
-        run.asked.filter((provision) => /^s\.?\s*29$/i.test(provision.trim())),
-        `${tool.name} asked the Register for the body's s 29 for a question about the ACL.`,
-      ).toEqual([])
+    for (const tool of querySweepTools()) {
+      const contract = QUERY_SWEEP[tool.name]
+      if (!contract) {
+        expect.fail(
+          `${tool.name} takes law words and no provision but has no row in QUERY_SWEEP — add one and make it ` +
+            "pass. There is no skip path: an undriven tool is exactly where the body-for-schedule " +
+            "substitution hides.",
+        )
+      }
+      expectQueryScoped(tool.name, await driveWithQuestion(tool), contract)
     }
   }, 60_000)
 })

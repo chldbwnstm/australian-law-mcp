@@ -176,6 +176,12 @@ describe("partial result assembly", () => {
   })
 
   it("does not swallow a branch failure that happens before the deadline", async () => {
+    // The clock is installed and never fired: "before the deadline" is then a
+    // fact of construction rather than a bet that five seconds of wall clock
+    // outlast a rejection. With a real timer armed, a machine slow enough to
+    // cross the limit first would turn this assertion into a timeout — the one
+    // flake the rest of the file was rewritten to remove.
+    manualClock()
     const d = startChainDeadline(5_000)
     try {
       await expect(raceDeadline(d, Promise.reject(new Error("upstream parse failure"))))
