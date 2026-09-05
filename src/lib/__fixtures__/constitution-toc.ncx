@@ -1,0 +1,954 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE ncx PUBLIC "-//NISO//DTD ncx 2005-1//EN" "http://www.daisy.org/z3986/2005/ncx-2005-1.dtd">
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1" xml:lang="en-US">
+  <head>
+    <meta name="dtb:uid" content="3e854721-272c-4105-9152-07154882ba79" />
+  </head>
+  <docTitle>
+    <text>Commonwealth of Australia Constitution Act - [Other]</text>
+  </docTitle>
+  <navMap>
+    <navPoint id="12b55599-d685-44bc-abbf-0373c2503aa5" playOrder="1">
+      <navLabel>
+        <text>Commonwealth of Australia Constitution Act - [Other]</text>
+      </navLabel>
+      <content src="document_1/document_1.html" />
+      <navPoint id="c932027b-cced-4181-a8fb-e05961edeb5d" playOrder="2">
+        <navLabel>
+          <text>1.  Short title.</text>
+        </navLabel>
+        <content src="document_1/document_1.html#_Toc29462582" />
+      </navPoint>
+      <navPoint id="c5ce264b-e69d-4db1-ae4f-41a5596108ea" playOrder="3">
+        <navLabel>
+          <text>2.  Act to extend to the Queen’s successors.</text>
+        </navLabel>
+        <content src="document_1/document_1.html#_Toc29462583" />
+      </navPoint>
+      <navPoint id="aae8b0c1-b8cf-49cc-80de-553e84d9c3c1" playOrder="4">
+        <navLabel>
+          <text>3.  Proclamation of Commonwealth.</text>
+        </navLabel>
+        <content src="document_1/document_1.html#_Toc29462584" />
+      </navPoint>
+      <navPoint id="88720d1f-0910-4384-aea7-8e69919aecdd" playOrder="5">
+        <navLabel>
+          <text>4.  Commencement of Act.</text>
+        </navLabel>
+        <content src="document_1/document_1.html#_Toc29462585" />
+      </navPoint>
+      <navPoint id="9d509eff-e0da-4958-b1d2-43e9b3405dab" playOrder="6">
+        <navLabel>
+          <text>5.  Operation of the Constitution and laws.</text>
+        </navLabel>
+        <content src="document_1/document_1.html#_Toc29462586" />
+      </navPoint>
+      <navPoint id="0e165c28-f200-4d0d-ba74-51afa4ad57d9" playOrder="7">
+        <navLabel>
+          <text>6.  Definitions.</text>
+        </navLabel>
+        <content src="document_1/document_1.html#_Toc29462587" />
+      </navPoint>
+      <navPoint id="2e0129ad-b13a-46e8-b236-fe79a1646827" playOrder="8">
+        <navLabel>
+          <text>7.  Repeal of Federal Council Act.</text>
+        </navLabel>
+        <content src="document_1/document_1.html#_Toc29462588" />
+      </navPoint>
+      <navPoint id="56e85933-ffd1-451f-9d92-4a53f27824fc" playOrder="9">
+        <navLabel>
+          <text>8.  Application of Colonial Boundaries Act.</text>
+        </navLabel>
+        <content src="document_1/document_1.html#_Toc29462589" />
+      </navPoint>
+      <navPoint id="ac42bf52-949f-400b-a684-031b363128c6" playOrder="10">
+        <navLabel>
+          <text>9.  Constitution.</text>
+        </navLabel>
+        <content src="document_1/document_1.html#_Toc29462590" />
+      </navPoint>
+      <navPoint id="1f770fc8-cbf4-4375-9ba7-870a60668c4e" playOrder="11">
+        <navLabel>
+          <text>Chapter I.—The Parliament.</text>
+        </navLabel>
+        <content src="document_1/document_1.html#_Toc29462592" />
+        <navPoint id="8491e2e6-929b-4f28-ae96-f467abb9fdb0" playOrder="12">
+          <navLabel>
+            <text>Part I.—General.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462593" />
+        </navPoint>
+        <navPoint id="57b9b3b9-47f0-4d8b-9f4e-867978f3e192" playOrder="13">
+          <navLabel>
+            <text>1.  Legislative Power.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462594" />
+        </navPoint>
+        <navPoint id="4ae91762-1dcd-4de8-8b68-f0a5892cf69f" playOrder="14">
+          <navLabel>
+            <text>2.  Governor-General.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462595" />
+        </navPoint>
+        <navPoint id="fa149bc0-1ab3-4f8f-bfb4-3c7826a06621" playOrder="15">
+          <navLabel>
+            <text>3.  Salary of Governor-General.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462596" />
+        </navPoint>
+        <navPoint id="f4e99018-abab-4f3a-b40b-998712d462b0" playOrder="16">
+          <navLabel>
+            <text>4.  Provisions relating to Governor-General.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462597" />
+        </navPoint>
+        <navPoint id="ac295d8b-b1f6-4ffe-92b9-af9d669835b0" playOrder="17">
+          <navLabel>
+            <text>5.  Sessions of Parliament.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462598" />
+        </navPoint>
+        <navPoint id="711ee71e-74f2-4642-aea2-f589346be5e9" playOrder="18">
+          <navLabel>
+            <text>6.  Yearly session of Parliament.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462599" />
+        </navPoint>
+        <navPoint id="9f8f49e9-a865-41d1-a37e-39d1683215b4" playOrder="19">
+          <navLabel>
+            <text>Part II.—The Senate.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462600" />
+        </navPoint>
+        <navPoint id="949c7625-14e4-4052-b8e1-644a8decc681" playOrder="20">
+          <navLabel>
+            <text>7.  The Senate.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462601" />
+        </navPoint>
+        <navPoint id="da8db8c0-866d-4697-b048-666d129344db" playOrder="21">
+          <navLabel>
+            <text>8.  Qualification of electors.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462602" />
+        </navPoint>
+        <navPoint id="b535c71b-e2d7-4457-9e88-85a919cb43d0" playOrder="22">
+          <navLabel>
+            <text>9.  Method of election of senators.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462603" />
+        </navPoint>
+        <navPoint id="1b459898-545b-4a58-8ba1-33d3ede296df" playOrder="23">
+          <navLabel>
+            <text>10.  Application of State laws.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462604" />
+        </navPoint>
+        <navPoint id="17e89f1d-f822-4824-af87-4adcda54a115" playOrder="24">
+          <navLabel>
+            <text>11.  Failure to choose senators.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462605" />
+        </navPoint>
+        <navPoint id="3b293bef-43a7-40bc-8342-0976e98efffc" playOrder="25">
+          <navLabel>
+            <text>12.  Issue of writs.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462606" />
+        </navPoint>
+        <navPoint id="639946df-47df-452c-b7e5-507115da287f" playOrder="26">
+          <navLabel>
+            <text>13.  Rotation of senators.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462607" />
+        </navPoint>
+        <navPoint id="9045cd9a-d21f-463b-84f2-eed0dc067582" playOrder="27">
+          <navLabel>
+            <text>14.  Further provision for rotation.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462608" />
+        </navPoint>
+        <navPoint id="61dec377-d15f-49f8-86e8-0bed06286930" playOrder="28">
+          <navLabel>
+            <text>15.  Casual vacancies.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462609" />
+        </navPoint>
+        <navPoint id="337fbd9d-1d8c-463e-be41-e6f0c383d711" playOrder="29">
+          <navLabel>
+            <text>16.  Qualifications of senator.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462610" />
+        </navPoint>
+        <navPoint id="d704e478-477d-410c-b95c-928879d696b5" playOrder="30">
+          <navLabel>
+            <text>17.  Election of President.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462611" />
+        </navPoint>
+        <navPoint id="1244703d-8ef6-4396-92c4-015a7ed2fe3a" playOrder="31">
+          <navLabel>
+            <text>18.  Absence of President.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462612" />
+        </navPoint>
+        <navPoint id="6b619462-6be3-4904-996b-aee517895cb5" playOrder="32">
+          <navLabel>
+            <text>19.  Resignation of senator.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462613" />
+        </navPoint>
+        <navPoint id="30c781a0-be36-422f-974b-0645587e0eb6" playOrder="33">
+          <navLabel>
+            <text>20.  Vacancy by absence.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462614" />
+        </navPoint>
+        <navPoint id="dbcc700f-3e0a-4e1b-bcd5-bdfb1f126f73" playOrder="34">
+          <navLabel>
+            <text>21.  Vacancy to be notified.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462615" />
+        </navPoint>
+        <navPoint id="03d329c7-57e2-45d8-8dc0-aa15ffd735d2" playOrder="35">
+          <navLabel>
+            <text>22.  Quorum.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462616" />
+        </navPoint>
+        <navPoint id="3af86d3a-6efc-47e9-b0a9-979b4375ab77" playOrder="36">
+          <navLabel>
+            <text>23.  Voting in Senate.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462617" />
+        </navPoint>
+        <navPoint id="63a8aca5-8441-49c7-8a63-b994db976dca" playOrder="37">
+          <navLabel>
+            <text>Part III.—The House of Representatives.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462618" />
+        </navPoint>
+        <navPoint id="eb0a19e9-f796-4fb9-9da4-3ce8e999df68" playOrder="38">
+          <navLabel>
+            <text>24.  Constitution of House of Representatives.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462619" />
+        </navPoint>
+        <navPoint id="3b953588-db21-4bbf-8eda-092216a5bed5" playOrder="39">
+          <navLabel>
+            <text>25.  Provision as to races disqualified from voting.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462620" />
+        </navPoint>
+        <navPoint id="c706659c-f962-4e8c-bfda-02044a287814" playOrder="40">
+          <navLabel>
+            <text>26.  Representatives in first Parliament.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462621" />
+        </navPoint>
+        <navPoint id="eb43282f-aa73-4adf-8048-74392309f40e" playOrder="41">
+          <navLabel>
+            <text>27.  Alteration of number of members.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462622" />
+        </navPoint>
+        <navPoint id="af2eae3e-1136-444e-8817-de3e50ba8ba4" playOrder="42">
+          <navLabel>
+            <text>28.  Duration of House of Representatives.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462623" />
+        </navPoint>
+        <navPoint id="e646f035-2ee8-4eb9-bf0f-4e2aab7df7bf" playOrder="43">
+          <navLabel>
+            <text>29.  Electoral divisions.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462624" />
+        </navPoint>
+        <navPoint id="b4cf0033-8d92-4216-ae45-40f8177bfe19" playOrder="44">
+          <navLabel>
+            <text>30.  Qualification of electors.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462625" />
+        </navPoint>
+        <navPoint id="bfb66929-6b8f-40b2-a17e-3b82734dea3d" playOrder="45">
+          <navLabel>
+            <text>31.  Application of State laws.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462626" />
+        </navPoint>
+        <navPoint id="7d19cf83-e806-4fed-9a9a-23f2ad1d0438" playOrder="46">
+          <navLabel>
+            <text>32.  Writs for general election.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462627" />
+        </navPoint>
+        <navPoint id="ac3723f6-745b-46dd-aef4-126eaad6cdeb" playOrder="47">
+          <navLabel>
+            <text>33.  Writs for vacancies.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462628" />
+        </navPoint>
+        <navPoint id="356de29c-cf99-4ec1-a75c-1712d40c5bce" playOrder="48">
+          <navLabel>
+            <text>34.  Qualifications of members.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462629" />
+        </navPoint>
+        <navPoint id="f72bdaf0-3e2f-47a3-a3a0-632dcad29dbb" playOrder="49">
+          <navLabel>
+            <text>35.  Election of Speaker.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462630" />
+        </navPoint>
+        <navPoint id="85734701-3658-49d7-abb5-c78eb28a51da" playOrder="50">
+          <navLabel>
+            <text>36.  Absence of Speaker.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462631" />
+        </navPoint>
+        <navPoint id="d8f2a11c-836c-4d3e-b7ee-ba88b300ef71" playOrder="51">
+          <navLabel>
+            <text>37.  Resignation of member.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462632" />
+        </navPoint>
+        <navPoint id="e35ee1a8-0e6b-495f-9dc1-67c1b274a344" playOrder="52">
+          <navLabel>
+            <text>38.  Vacancy by absence.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462633" />
+        </navPoint>
+        <navPoint id="7ae7a266-4a12-4eb9-85c8-16b1d0c65f9e" playOrder="53">
+          <navLabel>
+            <text>39.  Quorum.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462634" />
+        </navPoint>
+        <navPoint id="e62a17c9-d834-4b41-b57a-3fb7996dd935" playOrder="54">
+          <navLabel>
+            <text>40.  Voting in House of Representatives.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462635" />
+        </navPoint>
+        <navPoint id="e0f2a2ce-d272-4899-a887-baaa3bd9021e" playOrder="55">
+          <navLabel>
+            <text>Part IV.—Both Houses of the Parliament.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462636" />
+        </navPoint>
+        <navPoint id="cddaf9ce-f19f-4b8f-8f60-a4cf9f207f9b" playOrder="56">
+          <navLabel>
+            <text>41.  Right of electors of States.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462637" />
+        </navPoint>
+        <navPoint id="27f1e965-97e3-4d0f-bdac-948d5951307b" playOrder="57">
+          <navLabel>
+            <text>42.  Oath or affirmation of allegiance.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462638" />
+        </navPoint>
+        <navPoint id="bd8e137b-7a06-41d0-9016-c1db03a73570" playOrder="58">
+          <navLabel>
+            <text>43.  Member of one House ineligible for other.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462639" />
+        </navPoint>
+        <navPoint id="7386218d-e898-4860-826e-5659da864506" playOrder="59">
+          <navLabel>
+            <text>44.  Disqualification.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462640" />
+        </navPoint>
+        <navPoint id="74e5cb4d-6080-4c80-8fe6-f388d77b94fd" playOrder="60">
+          <navLabel>
+            <text>45.  Vacancy on happening of disqualification.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462641" />
+        </navPoint>
+        <navPoint id="bdda38a3-eeda-464b-8f61-a969afbbeda3" playOrder="61">
+          <navLabel>
+            <text>46.  Penalty for sitting when disqualified.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462642" />
+        </navPoint>
+        <navPoint id="f2dee037-19cd-4a30-82f4-d4972111fcd4" playOrder="62">
+          <navLabel>
+            <text>47.  Disputed elections.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462643" />
+        </navPoint>
+        <navPoint id="fa31af00-8194-41e8-939b-6faf3038a555" playOrder="63">
+          <navLabel>
+            <text>48.  Allowance to members.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462644" />
+        </navPoint>
+        <navPoint id="e58d5760-1c67-477b-9c4e-20ce1462f2eb" playOrder="64">
+          <navLabel>
+            <text>49.  Privileges, &amp;c. of Houses.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462645" />
+        </navPoint>
+        <navPoint id="c1496568-d67a-4173-82a1-0d7e96fdf4a0" playOrder="65">
+          <navLabel>
+            <text>50.  Rules and orders.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462646" />
+        </navPoint>
+        <navPoint id="920571c1-e764-4a82-837e-8c30e1c9f9f9" playOrder="66">
+          <navLabel>
+            <text>Part V.—Powers of the Parliament.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462647" />
+        </navPoint>
+        <navPoint id="45c6d66d-f84f-49b2-896b-85cc5cf77187" playOrder="67">
+          <navLabel>
+            <text>51.  Legislative powers of the Parliament.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462648" />
+        </navPoint>
+        <navPoint id="757d81a1-1469-47a0-8758-06f159e79e35" playOrder="68">
+          <navLabel>
+            <text>52.  Exclusive powers of the Parliament.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462649" />
+        </navPoint>
+        <navPoint id="6420d4e1-9289-455d-9b77-6206b5e9792c" playOrder="69">
+          <navLabel>
+            <text>53.  Powers of the Houses in respect of legislation.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462650" />
+        </navPoint>
+        <navPoint id="392547ba-be08-41ca-81cc-a58286551e54" playOrder="70">
+          <navLabel>
+            <text>54.  Appropriation Bills.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462651" />
+        </navPoint>
+        <navPoint id="1e95b90d-0adb-4b2d-a25e-ddd074a8a74e" playOrder="71">
+          <navLabel>
+            <text>55.  Tax Bill.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462652" />
+        </navPoint>
+        <navPoint id="3b347f35-2ef2-4d17-a10e-0ab87bd54bc4" playOrder="72">
+          <navLabel>
+            <text>56.  Recommendation of money votes.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462653" />
+        </navPoint>
+        <navPoint id="428608b3-b4bf-409c-90a8-22731212a5bb" playOrder="73">
+          <navLabel>
+            <text>57.  Disagreement between the Houses.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462654" />
+        </navPoint>
+        <navPoint id="02ec94d7-e6a9-4682-a006-417b03d5dfb4" playOrder="74">
+          <navLabel>
+            <text>58.  Royal assent to Bills.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462655" />
+        </navPoint>
+        <navPoint id="cbd0a486-e8d6-4d5e-a871-7fbf5c6348bc" playOrder="75">
+          <navLabel>
+            <text>59.  Disallowance by the Queen.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462656" />
+        </navPoint>
+        <navPoint id="b5e88c03-e896-4db5-843d-f9780c0bcc99" playOrder="76">
+          <navLabel>
+            <text>60.  Signification of Queen’s pleasure on Bills reserved.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462657" />
+        </navPoint>
+      </navPoint>
+      <navPoint id="b6d15ee2-4e18-47a2-bb40-e8f0e1906c8c" playOrder="77">
+        <navLabel>
+          <text>Chapter II.—The Executive Government.</text>
+        </navLabel>
+        <content src="document_1/document_1.html#_Toc29462658" />
+        <navPoint id="986d8aa8-ff8a-4615-9200-9ad948a7df2f" playOrder="78">
+          <navLabel>
+            <text>61.  Executive power.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462659" />
+        </navPoint>
+        <navPoint id="7cb07262-1d31-4c7f-8ba5-4a94241fef07" playOrder="79">
+          <navLabel>
+            <text>62.  Federal Executive Council.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462660" />
+        </navPoint>
+        <navPoint id="63d37447-bd31-4456-9cc4-e9368e11b043" playOrder="80">
+          <navLabel>
+            <text>63.  Provisions referring to Governor-General.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462661" />
+        </navPoint>
+        <navPoint id="70a3eff0-4ce5-4a34-810b-8a1835766c66" playOrder="81">
+          <navLabel>
+            <text>64.  Ministers of State.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462662" />
+        </navPoint>
+        <navPoint id="bdcd3053-e90d-4758-980d-546fecd15a26" playOrder="82">
+          <navLabel>
+            <text>65.  Number of Ministers.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462663" />
+        </navPoint>
+        <navPoint id="72be09af-8e02-4170-92c0-f2c073de65a4" playOrder="83">
+          <navLabel>
+            <text>66.  Salaries of Ministers.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462664" />
+        </navPoint>
+        <navPoint id="94f655e4-c35a-48b8-b450-9ee5bdf4d5e1" playOrder="84">
+          <navLabel>
+            <text>67.  Appointment of civil servants.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462665" />
+        </navPoint>
+        <navPoint id="ff941fb6-e6ec-46f9-a92f-6ca8ebd36241" playOrder="85">
+          <navLabel>
+            <text>68.  Command of naval and military forces.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462666" />
+        </navPoint>
+        <navPoint id="03a781d0-af80-4762-a580-243799c3c99e" playOrder="86">
+          <navLabel>
+            <text>69.  Transfer of certain departments.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462667" />
+        </navPoint>
+        <navPoint id="e6c5a02e-c54e-44fc-ba42-ba97a19e6ec1" playOrder="87">
+          <navLabel>
+            <text>70.  Certain powers of Governors to vest in Governor-General.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462668" />
+        </navPoint>
+      </navPoint>
+      <navPoint id="f0db24b8-c8ac-43fd-b29a-39f3e73cabfa" playOrder="88">
+        <navLabel>
+          <text>Chapter III.—The Judicature.</text>
+        </navLabel>
+        <content src="document_1/document_1.html#_Toc29462669" />
+        <navPoint id="156cfb19-5dbb-4206-abe0-027c0edfb06f" playOrder="89">
+          <navLabel>
+            <text>71.  Judicial power and Courts.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462670" />
+        </navPoint>
+        <navPoint id="55a40459-7788-420d-9a3b-1128fa163b59" playOrder="90">
+          <navLabel>
+            <text>72.  Judges’ appointment, tenure and remuneration.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462671" />
+        </navPoint>
+        <navPoint id="05165413-7f78-4d76-9f8e-c7a8df52dcd7" playOrder="91">
+          <navLabel>
+            <text>73.  Appellate jurisdiction of High Court.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462672" />
+        </navPoint>
+        <navPoint id="6a703d67-f3e6-4774-bb52-1d70d03defb4" playOrder="92">
+          <navLabel>
+            <text>74.  Appeal to Queen in Council.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462673" />
+        </navPoint>
+        <navPoint id="ed9dd506-a5be-4fb3-a3e2-dcf7c68a7d99" playOrder="93">
+          <navLabel>
+            <text>75.  Original jurisdiction of High Court.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462674" />
+        </navPoint>
+        <navPoint id="81040fcf-07d1-4295-a159-ecc4be7df5eb" playOrder="94">
+          <navLabel>
+            <text>76.  Additional original jurisdiction.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462675" />
+        </navPoint>
+        <navPoint id="e97208e2-c828-4600-88e4-3db333e2f8cd" playOrder="95">
+          <navLabel>
+            <text>77.  Power to define jurisdiction.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462676" />
+        </navPoint>
+        <navPoint id="860297ed-e8cb-462d-bfa2-00521a26303a" playOrder="96">
+          <navLabel>
+            <text>78.  Proceedings against Commonwealth or State.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462677" />
+        </navPoint>
+        <navPoint id="3f6c42eb-6514-4093-9a67-41da7e6afe36" playOrder="97">
+          <navLabel>
+            <text>79.  Number of judges.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462678" />
+        </navPoint>
+        <navPoint id="b4875c2a-946b-4ee1-b289-ea6236b4ea0e" playOrder="98">
+          <navLabel>
+            <text>80.  Trial by jury.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462679" />
+        </navPoint>
+      </navPoint>
+      <navPoint id="dbc4e45e-d149-4455-b841-7f03c989b579" playOrder="99">
+        <navLabel>
+          <text>Chapter IV.—Finance and Trade.</text>
+        </navLabel>
+        <content src="document_1/document_1.html#_Toc29462680" />
+        <navPoint id="492b00ea-8ed0-4e04-9698-32ff586a4de5" playOrder="100">
+          <navLabel>
+            <text>81.  Consolidated Revenue Fund.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462681" />
+        </navPoint>
+        <navPoint id="1cb23c98-219e-4fb8-80e8-a64512e7aaf3" playOrder="101">
+          <navLabel>
+            <text>82.  Expenditure charged thereon.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462682" />
+        </navPoint>
+        <navPoint id="2156af3f-3f56-4630-b581-f8b714dc123e" playOrder="102">
+          <navLabel>
+            <text>83.  Money to be appropriated by law.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462683" />
+        </navPoint>
+        <navPoint id="ff8d5991-d6d8-41d0-b3a8-d2542757fc84" playOrder="103">
+          <navLabel>
+            <text>84.  Transfer of officers.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462684" />
+        </navPoint>
+        <navPoint id="3a0d8c8d-fe34-4c72-9937-cc3c8bc64f20" playOrder="104">
+          <navLabel>
+            <text>85.  Transfer of property of State.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462685" />
+        </navPoint>
+        <navPoint id="c82e1a3e-bfed-4bf5-917c-7d56d948e2ca" playOrder="105">
+          <navLabel>
+            <text>86.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462686" />
+        </navPoint>
+        <navPoint id="78523b6c-b345-43bf-8703-b2daafde0c7a" playOrder="106">
+          <navLabel>
+            <text>87.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462687" />
+        </navPoint>
+        <navPoint id="d5bd5cfb-fa3a-4f27-8881-44fcf2ee0065" playOrder="107">
+          <navLabel>
+            <text>88.  Uniform duties of customs.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462688" />
+        </navPoint>
+        <navPoint id="d6bf1d1f-885d-4cc9-910c-451e5c30e5c6" playOrder="108">
+          <navLabel>
+            <text>89.  Payment to States before uniform duties.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462689" />
+        </navPoint>
+        <navPoint id="90d36e96-533c-4d3b-bd84-7e4b8e787b90" playOrder="109">
+          <navLabel>
+            <text>90.  Exclusive power over customs, excise, and bounties.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462690" />
+        </navPoint>
+        <navPoint id="2d6c0266-801d-4316-b168-2b40cfc64cfa" playOrder="110">
+          <navLabel>
+            <text>91.  Exceptions as to bounties.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462691" />
+        </navPoint>
+        <navPoint id="035a5ec6-b70d-42f6-b2ed-7e120adf0919" playOrder="111">
+          <navLabel>
+            <text>92.  Trade within the Commonwealth to be free.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462692" />
+        </navPoint>
+        <navPoint id="83ed9e5f-28e4-463b-ad90-50a443a10dc7" playOrder="112">
+          <navLabel>
+            <text>93.  Payment to States for five years after uniform Tariffs.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462693" />
+        </navPoint>
+        <navPoint id="d55b8e0f-6bbe-489d-989c-535862967366" playOrder="113">
+          <navLabel>
+            <text>94.  Distribution of surplus.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462694" />
+        </navPoint>
+        <navPoint id="9c5c969b-4e1f-4ea2-8cd6-5f9ec3cba041" playOrder="114">
+          <navLabel>
+            <text>95.  Customs duties of Western Australia.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462695" />
+        </navPoint>
+        <navPoint id="52524745-9e51-424a-8375-3c6c93529d72" playOrder="115">
+          <navLabel>
+            <text>96.  Financial assistance to States.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462696" />
+        </navPoint>
+        <navPoint id="06a29a42-6da6-4f78-bee3-c6155baa6531" playOrder="116">
+          <navLabel>
+            <text>97.  Audit.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462697" />
+        </navPoint>
+        <navPoint id="ce538107-59ef-465f-a5bb-fccdd0fab914" playOrder="117">
+          <navLabel>
+            <text>98.  Trade and commerce includes navigation and State railways.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462698" />
+        </navPoint>
+        <navPoint id="a3ddb156-314d-49a5-a82f-34e220a3c8be" playOrder="118">
+          <navLabel>
+            <text>99.  Commonwealth not to give preference.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462699" />
+        </navPoint>
+        <navPoint id="02d80996-5d32-46e1-af9d-9a84b1b3e84f" playOrder="119">
+          <navLabel>
+            <text>100.  Nor abridge right to use water.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462700" />
+        </navPoint>
+        <navPoint id="48ba4f42-be7e-4c33-b75f-ce0285a8425f" playOrder="120">
+          <navLabel>
+            <text>101.  Inter-State Commission.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462701" />
+        </navPoint>
+        <navPoint id="12cdc61d-8e2f-4f59-ba02-ad2c7a9f3f5b" playOrder="121">
+          <navLabel>
+            <text>102.  Parliament may forbid preferences by State.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462702" />
+        </navPoint>
+        <navPoint id="4a102418-4cd0-47e4-87f0-ad21ee6ba7a7" playOrder="122">
+          <navLabel>
+            <text>103.  Commissioners’ appointment, tenure, and remuneration.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462703" />
+        </navPoint>
+        <navPoint id="94c70cc9-7760-4b1d-bdd1-dc4ae8244821" playOrder="123">
+          <navLabel>
+            <text>104.  Saving of certain rates.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462704" />
+        </navPoint>
+        <navPoint id="919c298f-9876-4cb9-b2e7-2b2839f4e85b" playOrder="124">
+          <navLabel>
+            <text>105.  Taking over public debts of States.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462705" />
+        </navPoint>
+        <navPoint id="033f5303-c141-43c4-a3f3-e15d84ab32a9" playOrder="125">
+          <navLabel>
+            <text>105A.  Agreements with respect to State debts.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462706" />
+        </navPoint>
+      </navPoint>
+      <navPoint id="a4ecddb1-f577-45a7-bf26-a05286f27662" playOrder="126">
+        <navLabel>
+          <text>Chapter V.—The States.</text>
+        </navLabel>
+        <content src="document_1/document_1.html#_Toc29462707" />
+        <navPoint id="84f0fdea-ff6d-41cc-9e39-17256ae75698" playOrder="127">
+          <navLabel>
+            <text>106.  Saving of Constitutions.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462708" />
+        </navPoint>
+        <navPoint id="a4bd200b-bcf7-41da-93b0-da68fa0e248f" playOrder="128">
+          <navLabel>
+            <text>107.  Saving of Power of State Parliaments.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462709" />
+        </navPoint>
+        <navPoint id="8dfefd86-8caf-4dc1-a03a-2fd58d0ca0f3" playOrder="129">
+          <navLabel>
+            <text>108.  Saving of State laws.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462710" />
+        </navPoint>
+        <navPoint id="f9463eaf-f88e-41fa-beb7-59e667ae4213" playOrder="130">
+          <navLabel>
+            <text>109.  Inconsistency of laws.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462711" />
+        </navPoint>
+        <navPoint id="82e8bf07-8367-43bd-b26f-70962b3c308a" playOrder="131">
+          <navLabel>
+            <text>110.  Provisions referring to Governor.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462712" />
+        </navPoint>
+        <navPoint id="0b5e64e0-d95a-414c-86c8-10e405c35c5d" playOrder="132">
+          <navLabel>
+            <text>111.  States may surrender territory.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462713" />
+        </navPoint>
+        <navPoint id="8f9775b2-2337-4a0f-b513-6e31e73ee7f8" playOrder="133">
+          <navLabel>
+            <text>112.  States may levy charges for inspection laws.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462714" />
+        </navPoint>
+        <navPoint id="5546683f-2653-47ce-be92-b91ffe9141d4" playOrder="134">
+          <navLabel>
+            <text>113.  Intoxicating liquids.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462715" />
+        </navPoint>
+        <navPoint id="72bccdf8-d799-4487-b01d-90a834b01b31" playOrder="135">
+          <navLabel>
+            <text>114.  States may not raise forces. Taxation of property of Commonwealth or State.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462716" />
+        </navPoint>
+        <navPoint id="037c2783-a12d-49f3-80ba-04062ea2039e" playOrder="136">
+          <navLabel>
+            <text>115.  States not to coin money.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462717" />
+        </navPoint>
+        <navPoint id="c52e735e-2ea2-48f2-8ce6-b9ca867d03da" playOrder="137">
+          <navLabel>
+            <text>116.  Commonwealth not to legislate in respect of religion.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462718" />
+        </navPoint>
+        <navPoint id="fb3dea51-55fc-4e5e-913e-66adb752c2cf" playOrder="138">
+          <navLabel>
+            <text>117.  Rights of residents in States.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462719" />
+        </navPoint>
+        <navPoint id="2261f510-cb7a-4628-864f-0bb1ece7d895" playOrder="139">
+          <navLabel>
+            <text>118.  Recognition of laws &amp; c. of States.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462720" />
+        </navPoint>
+        <navPoint id="20929a74-58bf-4431-839e-f4d99bae1043" playOrder="140">
+          <navLabel>
+            <text>119.  Protection of States from invasion and violence.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462721" />
+        </navPoint>
+        <navPoint id="22c3b4e6-d8ef-4865-91d8-1e89dc1a13d0" playOrder="141">
+          <navLabel>
+            <text>120.  Custody of offenders against laws of the Commonwealth.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462722" />
+        </navPoint>
+      </navPoint>
+      <navPoint id="dd6711b4-8d51-4b60-a5ad-36871d1a9203" playOrder="142">
+        <navLabel>
+          <text>Chapter VI.—New States.</text>
+        </navLabel>
+        <content src="document_1/document_1.html#_Toc29462723" />
+        <navPoint id="845131d6-2cfa-443c-8502-939c1c1448e5" playOrder="143">
+          <navLabel>
+            <text>121.  New States may be admitted or established.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462724" />
+        </navPoint>
+        <navPoint id="50ded3f0-07a3-42c2-9db3-936838293324" playOrder="144">
+          <navLabel>
+            <text>122.  Government of territories.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462725" />
+        </navPoint>
+        <navPoint id="80b62bcf-90cb-4d0f-9812-8798432b90d2" playOrder="145">
+          <navLabel>
+            <text>123.  Alteration of limits of States.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462726" />
+        </navPoint>
+        <navPoint id="dc71a498-f80d-4a39-a86c-aab013677bc9" playOrder="146">
+          <navLabel>
+            <text>124.  Formation of new States.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462727" />
+        </navPoint>
+      </navPoint>
+      <navPoint id="fbec30ac-5966-4c3a-bbfc-1b371e6d99f7" playOrder="147">
+        <navLabel>
+          <text>Chapter VII.—Miscellaneous.</text>
+        </navLabel>
+        <content src="document_1/document_1.html#_Toc29462728" />
+        <navPoint id="dbd123d9-4a3f-463d-8aac-408dd29a6b3b" playOrder="148">
+          <navLabel>
+            <text>125.  Seat of Government.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462729" />
+        </navPoint>
+        <navPoint id="dd727aac-dc96-45c2-b39b-5b33f164a8e4" playOrder="149">
+          <navLabel>
+            <text>126.  Power to Her Majesty to authorise Governor-General to appoint deputies.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462730" />
+        </navPoint>
+      </navPoint>
+      <navPoint id="1972be8d-7eb4-4e5f-b95d-2c94bfa3ebc6" playOrder="150">
+        <navLabel>
+          <text>Chapter VIII.—Alteration of the Constitution.</text>
+        </navLabel>
+        <content src="document_1/document_1.html#_Toc29462731" />
+        <navPoint id="bf4a3603-131b-4ac8-9333-2932e8a41923" playOrder="151">
+          <navLabel>
+            <text>128.  Mode of altering the Constitution.</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462732" />
+        </navPoint>
+      </navPoint>
+      <navPoint id="3f41242d-0a08-43b7-aae9-07c35f55bb00" playOrder="152">
+        <navLabel>
+          <text>SCHEDULE.</text>
+        </navLabel>
+        <content src="document_1/document_1.html#_Toc29462733" />
+        <navPoint id="0622b340-3ad4-44f7-a278-b3bf7ca411e7" playOrder="153">
+          <navLabel>
+            <text>Endnotes</text>
+          </navLabel>
+          <content src="document_1/document_1.html#_Toc29462734" />
+          <navPoint id="139fc8a9-1050-4f6b-8c03-b0f5b6e0d584" playOrder="154">
+            <navLabel>
+              <text>Endnote 1—About the endnotes</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc29462735" />
+          </navPoint>
+          <navPoint id="9be6dd07-c772-4cff-8bc7-bed8096dce39" playOrder="155">
+            <navLabel>
+              <text>Endnote 2—Abbreviation key</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc29462736" />
+          </navPoint>
+          <navPoint id="487d5007-8d77-4dcc-8631-fc60880b61fb" playOrder="156">
+            <navLabel>
+              <text>Endnote 3—Legislation history</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc29462737" />
+          </navPoint>
+          <navPoint id="a374676c-4cd4-4c83-93b0-93cca9be8e0b" playOrder="157">
+            <navLabel>
+              <text>Endnote 4—Amendment history</text>
+            </navLabel>
+            <content src="document_1/document_1.html#_Toc29462738" />
+          </navPoint>
+        </navPoint>
+      </navPoint>
+    </navPoint>
+  </navMap>
+</ncx>

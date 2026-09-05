@@ -295,6 +295,13 @@ const MULTI_PROVISION_SHAPES: ReadonlyArray<[string, string[]]> = [
   ["ss 45–46", ["ss 45–46"]],
   ["ss 45 to 47 and 50", ["ss 45–47", "s 50"]],
   ["ss 45AD and 45AF", ["ss 45AD", "s 45AF"]],
+  // A member that is lettered or dotted where the head was bare is still a
+  // member: `46A` and `45D` are provision numbers no English sentence
+  // produces, so the earlier "identical shape or nothing" rule was refusing
+  // citations it had already located and could already read.
+  ["ss 45 and 46A", ["ss 45", "s 46A"]],
+  ["ss 45, 45D and 46", ["ss 45", "s 45D", "s 46"]],
+  ["ss 45, 46 and 46AA", ["ss 45", "s 46", "s 46AA"]],
   ["ss 355-25, 355-30", ["ss 355-25", "s 355-30"]],
   ["pts IVA and IVB", ["pt IVA", "pt IVB"]],
   ["regs 2.01, 2.02", ["regs 2.01", "reg 2.02"]],
@@ -391,17 +398,96 @@ describe("a list never harvests ordinary prose", () => {
     expect(cites.map((cite) => cite.pinpoint)).toEqual(["ss 45"])
   })
 
-  it("stops at an item that does not keep the shape of the first — and says so", () => {
-    const cites = extractStatuteCitations("Fair Work Act 2009 (Cth) ss 45 and 46A apply.", 20)
-    expect(cites.map((cite) => cite.pinpoint)[0]).toBe("ss 45")
-    expect(cites.map((cite) => cite.attachedBy)).toContain("unread")
-    expect(cites.some((cite) => cite.raw.includes("46A"))).toBe(true)
+  // A bare number is what prose looks like, so it still stops the reader when
+  // the head was shaped otherwise — but stopping is not dropping: the members
+  // behind it are named too. "ss 51AC, 52 and 53" used to report `ss 51AC` and
+  // nothing else at all, under a verdict that counted 1 found of 1 checked.
+  it("stops at a bare number the head's shape does not admit — and names the whole rest", () => {
+    const cites = extractStatuteCitations("Trade Practices Act 1974 (Cth) ss 51AC, 52 and 53 were considered.", 20)
+    expect(cites.map((cite) => cite.pinpoint)[0]).toBe("ss 51AC")
+    const unread = cites.filter((cite) => cite.attachedBy === "unread")
+    expect(unread).toHaveLength(1)
+    expect(unread[0].raw).toContain("52 and 53")
+    expect(unread[0].pinpoint).toContain("2 provisions")
   })
 
-  it("reports the item a long list runs past rather than dropping it", () => {
-    const numbers = Array.from({ length: 15 }, (_, index) => 45 + index)
+  it("reports every item a long list runs past, with their number, rather than the first of them", () => {
+    const numbers = Array.from({ length: 20 }, (_, index) => 340 + index)
     const cites = extractStatuteCitations(`Fair Work Act 2009 (Cth) ss ${numbers.join(", ")} apply.`, 40)
-    expect(cites.some((cite) => cite.attachedBy === "unread")).toBe(true)
+    const read = cites.filter((cite) => cite.attachedBy !== "unread")
+    const unread = cites.filter((cite) => cite.attachedBy === "unread")
+    expect(unread).toHaveLength(1)
+    // 13 read (the head plus MAX_LIST_ITEMS), 7 left — and the line says seven,
+    // not one. It used to name 353 alone and 354–359 were never mentioned.
+    expect(read).toHaveLength(13)
+    expect(unread[0].pinpoint).toContain(`${numbers.length - read.length} provisions`)
+    expect(unread[0].raw).toContain("359")
+  })
+})
+
+// The mechanism, not the instances.
+//
+// Every previous round tuned the list grammar and every tuning traded one set
+// of real citation forms for another, silently, because the only thing under
+// test was which forms got READ. So the property under test here is the one the
+// module's own header states and the one `verify_citations` depends on: a
+// provision the sentence names is either read, or named in an unread marker.
+// Never neither.
+//
+// A future narrowing of `continuesList` — or a new refusal, or a lower ceiling
+// — is free to stop reading any of these. It is not free to make one vanish:
+// that fails here, on the row it broke, instead of surfacing three rounds later
+// as a `[VERIFIED]` over a document nobody finished reading.
+const LIST_MEMBERS: ReadonlyArray<[string, string[]]> = [
+  ["ss 45, 46 and 47", ["45", "46", "47"]],
+  ["ss 45, 46, 47", ["45", "46", "47"]],
+  ["ss 45 & 46", ["45", "46"]],
+  ["ss 45 and 46A", ["45", "46A"]],
+  ["ss 45, 45D and 46", ["45", "45D", "46"]],
+  // The Trade Practices Act as it is actually cited. Round 4 read `51AC` and
+  // reported nothing whatever about 52 and 53.
+  ["ss 51AC, 52 and 53", ["51AC", "52", "53"]],
+  ["ss 45AD, 45AF and 46", ["45AD", "45AF", "46"]],
+  ["ss 355-25, 355-30 and 355-35", ["355-25", "355-30", "355-35"]],
+  ["ss 8-1, 8-5 and 25-5", ["8-1", "8-5", "25-5"]],
+  ["pts IVA, IVB and XIB", ["IVA", "IVB", "XIB"]],
+  // A member from a different numbering series is not another member of this
+  // list, so it is not read — but it is still named.
+  ["ss 45, IVA and IVB", ["45", "IVA", "IVB"]],
+  ["sub-ss (2), (3) and (4)", ["(2)", "(3)", "(4)"]],
+  ["paras (a), (b) and (c)", ["(a)", "(b)", "(c)"]],
+]
+
+/** Does this text name that member, as itself rather than as part of a longer number? */
+function names(text: string, member: string): boolean {
+  const escaped = member.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  return new RegExp(`(?<![0-9A-Za-z.\\-])${escaped}(?![0-9A-Za-z.\\-])`).test(text)
+}
+
+describe("a list member is read or named — never dropped", () => {
+  it.each(LIST_MEMBERS)("accounts for every provision of %s", (pinpoint, members) => {
+    const cites = extractStatuteCitations(`Fair Work Act 2009 (Cth) ${pinpoint} apply.`, 40)
+    const read = cites.filter((cite) => cite.attachedBy !== "unread").map((cite) => cite.pinpoint)
+    const marked = cites
+      .filter((cite) => cite.attachedBy === "unread")
+      .map((cite) => cite.raw)
+      .join(" | ")
+    for (const member of members) {
+      expect(
+        read.some((shown) => names(shown, member)) || names(marked, member),
+        `"${member}" of "${pinpoint}" is neither read (${JSON.stringify(read)}) nor named (${JSON.stringify(marked)})`,
+      ).toBe(true)
+    }
+  })
+
+  // The count is part of the marker, because one line standing for seven
+  // provisions that says nothing about seven is read as standing for one.
+  it("states how many provisions an unread marker covers", () => {
+    const cites = extractStatuteCitations("Trade Practices Act 1974 (Cth) ss 51AC, 52, 53 and 54 applied.", 40)
+    const unread = cites.filter((cite) => cite.attachedBy === "unread")
+    expect(unread).toHaveLength(1)
+    expect(unread[0].pinpoint).toContain("3 provisions")
+    expect(unread[0].pinpoint).toContain("NONE of them was checked")
   })
 })
 
@@ -515,7 +601,7 @@ describe("nothing located is dropped in silence", () => {
     const texts = [
       "The tribunal considered s 1234567 at length.",
       "Taxation Administration Act 1953 (Cth) s 8AAZLGAX applies.",
-      "Fair Work Act 2009 (Cth) ss 45 and 46A apply.",
+      "Trade Practices Act 1974 (Cth) ss 51AC, 52 and 53 were considered.",
       "Competition and Consumer Act 2010 (Cth) s 12345678901 applies.",
     ]
     for (const text of texts) {

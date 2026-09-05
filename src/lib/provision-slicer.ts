@@ -11,9 +11,11 @@
  *    cases are `sch 2 s 18` vs `s 18` (the CCA has both, with different
  *    content) and the Constitution's two sets of ss 1–9; returning the wrong
  *    one is a confidently wrong legal answer.
- *  - `duplicateNumberNote` / `withDuplicateNumberNote` — the ambiguity the
- *    reference grammar cannot express, named in the text that is served. A
- *    silently resolved ambiguity is indistinguishable from a wrong answer.
+ *  - `duplicateNumberNote` / `withDuplicateNumberNote` — the one ambiguity the
+ *    reference grammar cannot express (covering clauses against the Act's own
+ *    numbering), named in the text that is served. A silently resolved
+ *    ambiguity is indistinguishable from a wrong answer; a warning printed over
+ *    an answer that was never ambiguous is its own kind of wrong.
  *  - `sliceProvision` — NCX entry + volume HTML → readable text between this
  *    anchor and the next one.
  */
@@ -161,39 +163,63 @@ function placeOf(entry: NcxEntry): string {
  * Name an unresolvable ambiguity in the served text, or `undefined` when there
  * is none.
  *
- * An Act that numbers the same provision twice outside its schedules cannot be
- * addressed unambiguously by `s N`, and a reader who is handed one of the two
- * with nothing said has no way to notice. `resolveNavPoint` picks the one a
- * lawyer means; this says which was picked, where the other is, and how to ask
- * for it — the ambiguity is named rather than resolved in silence.
+ * The ambiguity this exists for is **one shape**: an enacting Act's covering
+ * clauses, which hang directly off the document root, colliding with the Act's
+ * own numbering inside its Chapters and Parts. That is the *Commonwealth of
+ * Australia Constitution Act 1900* (C2004Q00685), where ss 1–9 name two
+ * different provisions apiece; `resolveNavPoint` decides it by designation
+ * (`cl 7` is the covering clause, `s 7` the Constitution's own), and this says
+ * which was picked, where the other is, and how to ask for it — the choice is
+ * named rather than made in silence.
  *
- * Schedule twins are deliberately out of scope: `sch 2 s 18` already addresses
- * them, the schedule rule already decides them, and every tool that can serve
- * one already prints the schedule in its breadcrumb.
+ * Two collisions are deliberately **not** named, because in neither case is a
+ * reader being handed a provision they could have meant instead:
+ *
+ *  - **Schedule twins.** `sch 2 s 18` already addresses the ACL's s 18, the
+ *    schedule rule in `resolveNavPoint` already decides it, and every tool that
+ *    can serve one prints the schedule in its breadcrumb.
+ *  - **Numbering that restarts inside a Part.** Non-operative reader's aids
+ *    renumber from 1: the *Corporations Act 2001* (C2004A00818, NCX read live
+ *    2026-09-05, 5,569 entries) numbers its "Part 1.5—Small business guide"
+ *    paragraphs 1–12, colliding with ss 1–7, 9–12 of Parts 1.1 and 1.2 — 22
+ *    entries across 11 numbers, on the second-most-cited Australian Act.
+ *    "Corporations Act s 9" is not ambiguous: only one of the two is a section,
+ *    and warning that it might be the guide's paragraph 9 is a false alarm
+ *    printed above a correct answer. Both sit inside the Act's own structure,
+ *    so requiring the two to differ in *rootedness* excludes them — and that is
+ *    also the only case `resolveNavPoint` resolves by a rule, hence the only
+ *    one for which there is a second designation to offer.
  */
 export function duplicateNumberNote(entry: NcxEntry, entries: readonly NcxEntry[]): string | undefined {
   const number = leadingNumber(entry.label)
   if (number === undefined || isInsideSchedule(entry)) return undefined
 
+  const servedIsRooted = nearestStructural(entry) === undefined
   // Cheapest test first: most labels are worded and fail `leadingNumber`
   // outright, so the ancestor walk runs only for the handful of numbered ones.
   const peers = entries.filter(
-    (other) => other !== entry && leadingNumber(other.label) === number && !isInsideSchedule(other),
+    (other) =>
+      other !== entry &&
+      leadingNumber(other.label) === number &&
+      !isInsideSchedule(other) &&
+      // One of the two must be a covering clause and the other part of the
+      // Act's own structure. Two entries on the same side of that line are a
+      // renumbering, not a reference the caller could have meant.
+      (nearestStructural(other) === undefined) !== servedIsRooted,
   )
   if (peers.length === 0) return undefined
 
-  const servedIsRooted = nearestStructural(entry) === undefined
   const lines = [
     `Note: this compilation numbers "${number}" more than once, so a bare reference cannot tell them apart.`,
     `  served: ${entry.label} — ${placeOf(entry)}`,
   ]
   for (const peer of peers) {
-    const peerIsRooted = nearestStructural(peer) === undefined
-    const how =
-      peerIsRooted === servedIsRooted
-        ? "No reference form distinguishes it — use get_law_tree to see both."
-        : `Ask for it as "${peerIsRooted ? "cl" : "s"} ${number}".`
-    lines.push(`  also numbered ${number}: ${peer.label} — ${placeOf(peer)}. ${how}`)
+    // The peer is on the other side of the rooted/contained line by
+    // construction, so there is always a designation that reaches it.
+    lines.push(
+      `  also numbered ${number}: ${peer.label} — ${placeOf(peer)}. ` +
+        `Ask for it as "${servedIsRooted ? "s" : "cl"} ${number}".`,
+    )
   }
   return lines.join("\n")
 }

@@ -120,10 +120,28 @@ export const SPELLING_ALTERNATION = [...spellingToKind.keys()]
   .join("|")
 
 /**
- * A roman structural number: the numeral, then up to three letters of tail —
- * `IV`, `IVA`, `XI`, `IIIAA`, `IVBA`, `XICA`, `IABA`.
+ * The letters a structural *series* is lettered with — the tail of a roman
+ * Part, and the whole of a bare lettered unit.
  *
- * Both bounds are load-bearing.
+ * A series letter is an insertion marker, so it is always drawn from the front
+ * of the alphabet: measured across the whole tables of contents of five real
+ * compilations (Corporations Act 2001, ITAA 1997, Crimes Act 1914, the
+ * Constitution and the CCA — 13,861 navLabels, of which `__fixtures__` records
+ * 5,776), the widest roman tail letter is F (`Part IVF`, `Part XIE`) and the
+ * widest bare lettered unit is H (`Subdivision H`). Nothing is lettered past
+ * that, so the class is what keeps an ordinary word out of a pinpoint — see
+ * `ROMAN_NUMBER`. `section-ref.corpus.test.ts` re-runs the grammar over those
+ * recorded labels, so widening this needs a real label to justify it.
+ */
+export const SERIES_LETTER = "[A-F]"
+/** The bare lettered structural units: `Subdivision C`, `Division D`, `Part B`. */
+export const SERIES_UNIT_LETTER = "[A-H]"
+
+/**
+ * A roman structural number: the numeral, then a bounded tail —
+ * `IV`, `IVA`, `XI`, `IIIAA`, `IVBA`, `XICA`, `IABA`, `IAABA`.
+ *
+ * Every bound is load-bearing.
  *
  * **The tail runs to three letters, not one.** The Commonwealth really does go
  * that far: the *Competition and Consumer Act 2010* has Parts IIIAA, IVBA,
@@ -134,6 +152,17 @@ export const SPELLING_ALTERNATION = [...spellingToKind.keys()]
  * citation checker reported on the rest of the document as though that
  * citation had been checked.
  *
+ * **A fourth letter is admitted only when the whole tail is a series letter.**
+ * The widest real tail is the *Crimes Act 1914*'s Part IAABA (in force since
+ * 8 December 2023, ss 3ZZUHA–3ZZUHC), which a three-letter tail rejected
+ * outright — and the same right-edge guard then dropped it from a scanned
+ * document without a word. An unrestricted fourth letter is not the way to
+ * reach it: measured against `/usr/share/dict/words`, the numeral with
+ * `[A-Z]{0,4}` matches 709 ordinary English words against this pattern's 324
+ * and the three-letter tail's 322 — the two it adds are `Vedda` and `xebec`,
+ * and both would still have to be written in capitals after a spaced
+ * designation to become a pinpoint.
+ *
  * **The numeral is a real numeral (I–XXXIX), not "letters drawn from
  * IVXLCDM".** The loose spelling is what made the tail dangerous to widen:
  * `section-ref.ts` scans documents case-insensitively, so `[IVXLCDM]+[A-Z]{0,3}`
@@ -142,10 +171,7 @@ export const SPELLING_ALTERNATION = [...spellingToKind.keys()]
  * reports as a provision the Act does not contain. No Part, Division or
  * Chapter is numbered L, C, D or M (they would be 50, 100, 500 and 1000), so
  * dropping those letters costs nothing real and removes every one of those
- * readings: measured against `/usr/share/dict/words`, `[IVXLCDM]+[A-Z]{0,3}`
- * matches 2,005 ordinary English words and this pattern matches 237 — fewer
- * than the 188 of the old one-letter tail once its own `civil`/`dill` family
- * is taken out.
+ * readings: `[IVXLCDM]+[A-Z]{0,3}` matches 2,490 words of the same dictionary.
  *
  * A bare lettered unit (`pt C`, `sub-div B`) is not this pattern's business:
  * `LETTERED_STRUCTURAL` in `section-ref.ts` reads those, and only for the
@@ -154,7 +180,8 @@ export const SPELLING_ALTERNATION = [...spellingToKind.keys()]
  * Wrapped in its own group and free of capturing groups: callers interpolate
  * it into alternations and read their own match indices.
  */
-export const ROMAN_NUMBER = "(?:(?:X{1,3}(?:IX|IV|V?I{0,3})|IX|IV|V?I{1,3}|V)[A-Z]{0,3})"
+export const ROMAN_NUMBER =
+  `(?:(?:X{1,3}(?:IX|IV|V?I{0,3})|IX|IV|V?I{1,3}|V)(?:${SERIES_LETTER}{4}|[A-Z]{0,3}))`
 
 /**
  * One bracketed subdivision token: `(2)`, `(a)`, `(ii)` — or a longer roman

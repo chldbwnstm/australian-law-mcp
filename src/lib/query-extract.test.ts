@@ -17,7 +17,7 @@ import { normalizeFrlVersion } from "./api-client.js"
 import { lawCache } from "./cache.js"
 import { resolveLawAlias } from "./law-alias.js"
 import { parseNcx } from "./ncx-parser.js"
-import { findNavPoint, sliceProvision } from "./provision-slicer.js"
+import { findNavPoint, htmlToText, sliceProvision } from "./provision-slicer.js"
 import {
   extractCitations,
   extractDates,
@@ -434,13 +434,13 @@ describe("bare concept queries", () => {
     expect(isBareTermQuery("a very long phrase with far too many words in it")).toBe(false)
   })
 })
-
 // ──────────────────────────────────────────────────────────────────────────
 // The registry-wide guard
 // ──────────────────────────────────────────────────────────────────────────
 
 /**
- * Every tool that takes (law words, provision) must apply the alias's schedule.
+ * Every tool that takes (law words, provision) must **serve** the provision the
+ * alias's schedule names — not merely mention it.
  *
  * This block is the reason `scopeProvisionsToLaw` exists. The ACL **is**
  * schedule 2 of the *Competition and Consumer Act 2010*, so "ACL" + "s 18"
@@ -455,35 +455,76 @@ describe("bare concept queries", () => {
  * does not converge, so the check is enumerated instead of listed: the schemas
  * in `allTools` decide who is in scope, and a tool added tomorrow with a
  * law-ish field and a provision-ish field is in scope the moment it is
- * registered.
+ * registered. A lib test reaching up to `tool-registry.ts` inverts the usual
+ * layering, and that is the point — the registry is the only place that knows
+ * every tool.
  *
- * A lib test reaching up to `tool-registry.ts` inverts the usual layering, and
- * that is the point — the registry is the only place that knows every tool, and
- * this rule is worth less than nothing if it is enforced only over the tools
- * somebody remembered to list.
+ * ## Why this was rebuilt (round 5)
  *
- * What it proves for each tool: it never asks the Register for the *body's*
- * s 18, and it says `sch 2 s 18` somewhere in its answer. What it does not
- * prove: that a tool building a deep link rewrites the link itself rather than
- * warning beside it (`get_external_links` passes on the warning alone).
+ * The first version of this guard asserted two things: that no `s 18` reached
+ * `apiClient.getProvision`, and that the answer contained the string
+ * `"sch 2 s 18"`. Both are satisfiable without ever reading the right
+ * provision. Four of the in-scope tools never call `getProvision` at all — they
+ * fetch the TOC and the volume HTML and slice it themselves — so for them the
+ * first assertion compared `[]` with `[]`, and all that remained was a
+ * substring that the alias table's own note supplies for free. A tool could
+ * print the note and then serve "Meetings of Commission" underneath it and pass.
+ *
+ * So the guard now asserts the **outcome**, over three channels, and a tool
+ * must produce evidence on at least one of them:
+ *
+ *  - `fetched`   — the provision string that crossed the client boundary.
+ *  - `served`    — wording that only one of the two provisions' answers can
+ *                  carry, taken from the recorded fixtures (the section's own
+ *                  text, and its row in `Endnote 4—Amendment history` for the
+ *                  tools that answer with an amendment history rather than
+ *                  text).
+ *  - `addressed` — the follow-up calls and deep links the answer hands the
+ *                  caller to act on. A link to the body provision is the same
+ *                  wrong answer in a form the user clicks.
+ *
+ * A tool with **no** evidence on any channel fails: it is not covered by
+ * anything, and treating "the harness could not tell" as a pass is what made
+ * the previous version vacuous. Two further properties close the two ways a
+ * string check can be gamed: the run is repeated for a **second collision**
+ * (`s 19`) under a **second alias** ("Australian Consumer Law", which unlike
+ * "ACL" carries no explanatory note), so canned `sch 2 s 18` example prose in a
+ * tool's own output proves nothing; and a **negative control** drives the same
+ * tools with "CCA", which names no schedule, and requires the body provision —
+ * over-applying a schedule is the mirror-image wrong answer.
+ *
+ * ## What is not covered
+ *
+ * The drive is the CCA only. The other schedule-carried body of law in the
+ * alias table, the *National Credit Code* (sch 1 of the *National Consumer
+ * Credit Protection Act 2009*), has no recorded fixture, and inventing one is
+ * banned for good reason — it would test the tools against an idea of the
+ * document rather than the document. The alias itself is pinned at the choke
+ * point instead ("covers the other schedule-carried bodies of law", above);
+ * what the CCA drive establishes is that each tool routes through that choke
+ * point at all, which is the part that kept regressing.
  */
 const LAW_FIELD = /^(?:query|lawName|law|act|title|name)$/
 const PROVISION_FIELD = /^provisions?$/
 
 /**
- * Tools that do NOT apply the schedule, verified 2026-09-04.
+ * Tools that do NOT serve the schedule's provision, verified 2026-09-05.
  *
  * This is a ledger of open bugs, not a list of exemptions — each entry is a
  * tool that answers "ACL s 18" with the body's s 18 today. **Delete the line
- * when you fix the tool.** Adding a line is how a new tool opts out of the one
- * rule this project's flagship example exists to state, so a reviewer should
- * treat a new entry the way they would treat a new `@ts-expect-error`.
+ * when you fix the tool**: the ledger test below re-runs every entry and fails
+ * if the bug is gone, so a stale exemption cannot outlive the defect it
+ * describes. Adding a line is how a new tool opts out of the one rule this
+ * project's flagship example exists to state, so a reviewer should treat a new
+ * entry the way they would treat a new `@ts-expect-error`.
  */
 const KNOWN_GAPS: Record<string, string> = {
   get_instrument_provisions:
     "parses `provision` with parseSectionRef and never consults `query` — prints the alias note, then serves the body provision under it.",
   get_historical_law:
     "same shape: requireRef(input.provision) with no mention, so a point-in-time read of 'ACL s 18' is the body's s 18 as at that date.",
+  get_external_links:
+    "warns that 'ACL' is sch 2 instead of applying it: the section heading and the AustLII search URL it hands the user are still built from the bare 's 18', so the link opens the body provision.",
 }
 
 /** Zod object shape, defensively: the tests must not go quietly vacuous on a zod upgrade. */
@@ -498,6 +539,11 @@ function toolsWith(predicate: (fields: string[]) => boolean): RegistryTool[] {
   return (allTools as RegistryTool[]).filter((tool) => predicate(schemaFields(tool.schema)))
 }
 
+/** The tools this guard governs: they take law words and a provision. */
+function inScopeTools(): RegistryTool[] {
+  return toolsWith((fields) => fields.some((f) => LAW_FIELD.test(f)) && fields.some((f) => PROVISION_FIELD.test(f)))
+}
+
 interface RegistryTool {
   name: string
   schema: unknown
@@ -507,6 +553,16 @@ interface RegistryTool {
 const CCA_NCX = readFileSync(new URL("../tools/__fixtures__/cca-schedules.ncx", import.meta.url), "utf8")
 const CCA_VOL1 = readFileSync(new URL("./__fixtures__/cca-vol1-slice.html", import.meta.url), "utf8")
 const CCA_VOL4 = readFileSync(new URL("./__fixtures__/cca-vol4-slice.html", import.meta.url), "utf8")
+/**
+ * `Endnote 4—Amendment history`, which lives at the far end of the same
+ * `document_4.html` the schedule text was trimmed from (both captures 2026-09-04
+ * — see `src/tools/__fixtures__/PROVENANCE.txt`). It is appended to volume 4
+ * below rather than served separately, because that is where the Register puts
+ * it, and without it the tools that answer with an amendment history instead of
+ * text (`get_provision_history`, `impact_map`, `legal_analysis`) produce nothing
+ * this guard can read an outcome from.
+ */
+const CCA_ENDNOTES = readFileSync(new URL("../tools/__fixtures__/cca-endnote-amendments.html", import.meta.url), "utf8")
 const CCA_ENTRIES = parseNcx(CCA_NCX)
 const CCA_VERSIONS = (
   JSON.parse(readFileSync(new URL("../tools/__fixtures__/frl-versions-cca.json", import.meta.url), "utf8")) as {
@@ -524,12 +580,11 @@ const CCA_TITLE: FrlTitle = {
 
 /**
  * One Register, stubbed: the CCA, its compilations and its real NCX (which
- * carries both s 18s). `asked` records every provision string that reached the
- * upstream boundary — that is where "did the tool apply the schedule" is
- * answered, rather than in the prose.
+ * carries both s 18s and both s 19s). `asked` records every provision string
+ * that reached the upstream boundary.
  */
 function registerStub(asked: string[]): AuApiClient {
-  const volumeHtml = (volume: number): string => (volume === 1 ? CCA_VOL1 : CCA_VOL4)
+  const volumeHtml = (volume: number): string => (volume === 1 ? CCA_VOL1 : CCA_VOL4 + CCA_ENDNOTES)
   return {
     getTitle: async () => CCA_TITLE,
     searchTitles: async () => ({ count: 1, titles: [CCA_TITLE] }),
@@ -563,85 +618,386 @@ function registerStub(asked: string[]): AuApiClient {
 }
 
 /**
+ * A number the CCA uses twice: once in the body, once in Schedule 2 (the ACL).
+ * Every string here is lifted from the recorded fixtures, and the test below
+ * proves each side's wording cannot appear in the other's answer — a guard on
+ * the guard, because a marker that stopped discriminating would make this whole
+ * block pass silently.
+ */
+interface Collision {
+  /** What a caller writes after naming a body of law that is really a schedule. */
+  bare: string
+  /** The provision that reference actually means. */
+  scoped: string
+  /** The provision's own text, from the volume fixtures. */
+  text: { schedule: string; body: string }
+  /** Its row in `Endnote 4—Amendment history`, for the tools that answer with one. */
+  history: { schedule: string; body: string }
+}
+
+const COLLISIONS: readonly Collision[] = [
+  {
+    bare: "s 18",
+    scoped: "sch 2 s 18",
+    text: {
+      schedule: "A person must not, in trade or commerce, engage in conduct that is misleading or deceptive",
+      body: "Subject to this section, the Chairperson shall convene",
+    },
+    // ACL s 18 was inserted whole in 2010 and never amended; the body's s 18
+    // predates it by decades. The two rows share no Act number.
+    history: { schedule: "No 103, 2010", body: "No 17, 1986" },
+  },
+  {
+    bare: "s 19",
+    scoped: "sch 2 s 19",
+    text: {
+      schedule: "This Part does not apply to a publication of matter by an information provider",
+      body: "direct that the powers of the Commission under this Act",
+    },
+    history: { schedule: "No 109, 2014", body: "No 63, 2019" },
+  },
+]
+
+/** Which of the two provisions a piece of evidence points at. */
+type Side = "schedule" | "body"
+
+interface Evidence {
+  channel: "fetched" | "served" | "addressed"
+  side: Side
+  detail: string
+}
+
+/**
  * Fields the harness fills so a tool gets far enough to use the provision at
  * all. Only ever a neutral value for a field whose *absence* short-circuits the
  * handler — `get_historical_law` refuses without a date, `legal_analysis`
- * without a mode.
+ * without a mode, `search_state_law` without a jurisdiction. A tool that needs
+ * a field which is not here fails the drive rather than being skipped: see
+ * `drive`.
  */
 const NEUTRAL_FIELDS: Record<string, unknown> = {
   date: "2020-01-01",
   fromDate: "2026-01-15",
+  // Deliberate rather than arbitrary: `legal_analysis`'s other modes do not
+  // take a provision, so the first enum option would exercise nothing.
   mode: "impact_map",
+  jurisdiction: "NSW",
 }
 
-async function runWithAclSection18(tool: RegistryTool): Promise<{ text: string; asked: string[] }> {
+/**
+ * Parse the harness's input, repairing what the schema itself can tell us how
+ * to repair.
+ *
+ * A required enum (`search_decisions.domain`, `search_rulings.domain` — same
+ * field name, disjoint option sets) cannot be given one neutral value in the
+ * table above, and hard-coding a per-tool value is how this sweep would start
+ * going stale one tool at a time. A zod `invalid_value` issue carries the
+ * options, so the harness reads the answer off the rejection instead. Anything
+ * it still cannot satisfy is reported, never skipped.
+ */
+function parseInput(tool: RegistryTool, input: Record<string, unknown>): { parsed?: never; failure?: string } {
+  const schema = tool.schema as { parse: (value: unknown) => never }
+  const candidate = { ...input }
+  let lastError = ""
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      return { parsed: schema.parse(candidate) }
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error)
+      const issues = (error as { issues?: Array<{ path?: unknown[]; values?: unknown[] }> }).issues
+      if (!Array.isArray(issues)) return { failure: lastError }
+      let repaired = false
+      for (const issue of issues) {
+        const field = issue.path?.[0]
+        if (typeof field !== "string" || !Array.isArray(issue.values) || issue.values.length === 0) continue
+        candidate[field] = issue.values[0]
+        repaired = true
+      }
+      if (!repaired) return { failure: lastError }
+    }
+  }
+  return { failure: `schema still rejects the harness input after 4 repairs: ${lastError}` }
+}
+
+interface Drive {
+  text: string
+  asked: string[]
+  /** Set when the tool could not be driven at all — never swallowed. */
+  failure?: string
+}
+
+/** Run one registered tool against the stubbed Register, filling its schema. */
+async function drive(tool: RegistryTool, fill: (field: string) => unknown): Promise<Drive> {
   lawCache.clear()
   const input: Record<string, unknown> = {}
   for (const field of schemaFields(tool.schema)) {
-    if (LAW_FIELD.test(field)) input[field] = "ACL"
-    else if (field === "provision") input[field] = "s 18"
-    else if (field === "provisions") input[field] = ["s 18"]
-    else if (NEUTRAL_FIELDS[field] !== undefined) input[field] = NEUTRAL_FIELDS[field]
+    const value = fill(field)
+    if (value !== undefined) input[field] = value
   }
   const asked: string[] = []
+  const { parsed, failure } = parseInput(tool, input)
+  if (failure !== undefined) return { text: "", asked, failure }
   try {
-    const parsed = (tool.schema as { parse: (value: unknown) => never }).parse(input)
-    const result = await tool.handler(registerStub(asked), parsed)
+    const result = await tool.handler(registerStub(asked), parsed!)
     return { text: result.content.map((part) => part.text).join("\n"), asked }
   } catch (error) {
-    return { text: `threw: ${error instanceof Error ? error.message : String(error)}`, asked }
+    return {
+      text: "",
+      asked,
+      failure: `${error instanceof Error ? error.message : String(error)}`,
+    }
   }
+}
+
+/** Drive one in-scope tool with a law name and a bare provision reference. */
+function driveWithLawAndProvision(tool: RegistryTool, law: string, provision: string): Promise<Drive> {
+  return drive(tool, (field) => {
+    if (LAW_FIELD.test(field)) return law
+    if (field === "provision") return provision
+    if (field === "provisions") return [provision]
+    return NEUTRAL_FIELDS[field]
+  })
+}
+
+/**
+ * The addresses an answer hands the caller to act on: the follow-up calls it
+ * prints and the deep links it builds. Percent- and plus-encoding is undone so
+ * a query string is read the way the site will read it.
+ */
+function addressesIn(text: string): string[] {
+  const found = [...text.matchAll(/provision\s*[:=]\s*"([^"]{1,40})"/g)].map((match) => match[1])
+  for (const url of text.match(/https?:\/\/\S+/g) ?? []) {
+    try {
+      found.push(decodeURIComponent(url.replace(/\+/g, " ")))
+    } catch {
+      found.push(url)
+    }
+  }
+  return found
+}
+
+/**
+ * Everything the run says about *which* of the two provisions was served.
+ * Silence is not a pass: an empty list is a tool this harness cannot observe,
+ * and the test treats that as a failure.
+ */
+function outcomeEvidence(run: Drive, collision: Collision): Evidence[] {
+  const evidence: Evidence[] = []
+  const number = parseSectionRef(collision.bare)!.number
+  const scopedForm = new RegExp(`sch\\s*2\\b[\\s,]*s\\.?\\s*${number}(?![0-9A-Za-z])`, "i")
+  const bareForm = new RegExp(`(?:^|[^0-9A-Za-z])s\\.?\\s*${number}(?![0-9A-Za-z])`, "i")
+
+  for (const provision of run.asked) {
+    const ref = parseSectionRef(provision)
+    const normalised = ref ? formatRef(ref) : provision.trim()
+    if (normalised === collision.scoped) evidence.push({ channel: "fetched", side: "schedule", detail: provision })
+    else if (normalised === collision.bare) evidence.push({ channel: "fetched", side: "body", detail: provision })
+  }
+
+  for (const [side, markers] of [
+    ["schedule", [collision.text.schedule, collision.history.schedule]],
+    ["body", [collision.text.body, collision.history.body]],
+  ] as ReadonlyArray<[Side, string[]]>) {
+    for (const marker of markers) {
+      if (run.text.includes(marker)) evidence.push({ channel: "served", side, detail: marker })
+    }
+  }
+
+  for (const address of addressesIn(run.text)) {
+    if (scopedForm.test(address)) evidence.push({ channel: "addressed", side: "schedule", detail: address })
+    else if (bareForm.test(address)) evidence.push({ channel: "addressed", side: "body", detail: address })
+  }
+
+  return evidence
+}
+
+const show = (evidence: Evidence[]): string =>
+  evidence.map((item) => `    [${item.channel}] ${item.detail.slice(0, 160)}`).join("\n")
+
+/**
+ * Assert that one run served the provision it was supposed to. Two failures are
+ * possible and they mean different things, so they are reported differently.
+ */
+function expectServed(tool: string, scenario: string, run: Drive, collision: Collision, want: Side): void {
+  expect(
+    run.failure,
+    `${tool} could not be driven (${scenario}): ${run.failure}\n` +
+      "An untestable tool is an untested tool. Add whatever neutral value its schema needs to " +
+      "NEUTRAL_FIELDS, or fix the handler — do not remove it from the sweep.",
+  ).toBeUndefined()
+
+  const evidence = outcomeEvidence(run, collision)
+  const wrong = evidence.filter((item) => item.side !== want)
+  const wanted = want === "schedule" ? collision.scoped : collision.bare
+  const other = want === "schedule" ? collision.bare : collision.scoped
+
+  expect(
+    wrong,
+    `${tool} (${scenario}) answered with ${other} where ${wanted} was asked for:\n${show(wrong)}\n` +
+      "Route (query|lawName, provision) through scopeProvisionsToLaw() and use its result for the " +
+      "fetch, the text, and every link and follow-up call printed beside it.",
+  ).toEqual([])
+
+  expect(
+    evidence.length,
+    `${tool} (${scenario}) gave this harness nothing to check: it never fetched the provision, never ` +
+      `printed either provision's wording, and never addressed one in a link or follow-up call.\n` +
+      "That is not a pass — the previous version of this guard accepted exactly this and let a tool " +
+      "serve the wrong provision for three review rounds. Make the outcome observable (print the " +
+      "provision text, or address it in the call you suggest), or add a marker for whatever it does " +
+      "answer with to COLLISIONS.",
+  ).toBeGreaterThan(0)
 }
 
 describe("the alias's schedule, across the whole registry", () => {
   it("finds the tools that take a law and a provision", () => {
     // Guards the enumeration itself: a zod upgrade that changes `.shape` would
     // otherwise leave every test below passing over an empty list.
-    const found = toolsWith(
-      (fields) => fields.some((f) => LAW_FIELD.test(f)) && fields.some((f) => PROVISION_FIELD.test(f)),
-    ).map((tool) => tool.name)
+    const found = inScopeTools().map((tool) => tool.name)
     expect(found).toEqual(
       expect.arrayContaining(["get_law_text", "get_batch_provisions", "get_provision_history", "compare_old_new"]),
     )
     expect(found.length).toBeGreaterThanOrEqual(10)
   })
 
-  it("every one of them reads 'ACL' + 's 18' as sch 2 s 18", async () => {
-    const candidates = toolsWith(
-      (fields) => fields.some((f) => LAW_FIELD.test(f)) && fields.some((f) => PROVISION_FIELD.test(f)),
-    ).filter((tool) => KNOWN_GAPS[tool.name] === undefined)
+  it("the fixtures make the two provisions distinguishable", () => {
+    // The guard on the guard. Every assertion below is a string comparison
+    // against these markers, so if a fixture recapture ever made one side's
+    // wording appear in the other's text the whole block would go quietly
+    // vacuous — the exact failure mode this rebuild exists to remove.
+    for (const collision of COLLISIONS) {
+      const slice = (reference: string, html: string): string => {
+        const ref = parseSectionRef(reference)
+        expect(ref, `${reference} no longer parses`).not.toBeNull()
+        const entry = findNavPoint(ref!, CCA_ENTRIES)
+        expect(entry, `${reference} is not in the recorded CCA NCX`).toBeDefined()
+        return sliceProvision(html, entry!, CCA_ENTRIES) ?? ""
+      }
+      const scheduleText = slice(collision.scoped, CCA_VOL4)
+      const bodyText = slice(collision.bare, CCA_VOL1)
 
-    for (const tool of candidates) {
-      const { text, asked } = await runWithAclSection18(tool)
-      const bodySection = asked.filter((provision) => /^s\.?\s*18$/i.test(provision.trim()))
-      expect(
-        bodySection,
-        `${tool.name} asked the Register for the Act's own s 18 ("Meetings of Commission"). ` +
-          "Route (query|lawName, provision) through scopeProvisionsToLaw().",
-      ).toEqual([])
-      expect(
-        text,
-        `${tool.name} never says "sch 2 s 18" — it either dropped the schedule or applied it silently. ` +
-          "Route (query|lawName, provision) through scopeProvisionsToLaw() and print its note.",
-      ).toContain("sch 2 s 18")
+      expect(scheduleText).toContain(collision.text.schedule)
+      expect(bodyText).toContain(collision.text.body)
+      expect(bodyText).not.toContain(collision.text.schedule)
+      expect(scheduleText).not.toContain(collision.text.body)
+
+      // The endnote rows are two different amending Acts, and the table that
+      // holds both is what the history tools read. It is checked as text, not
+      // markup: the fixture splits "No" and "103, 2010" across sibling spans.
+      const endnotes = htmlToText(CCA_ENDNOTES)
+      expect(endnotes).toContain(collision.history.schedule)
+      expect(endnotes).toContain(collision.history.body)
+      expect(collision.history.schedule).not.toBe(collision.history.body)
+    }
+  })
+
+  describe("the guard on the guard — what this check would let through", () => {
+    // A registry sweep is only worth its complexity if it rejects the answer it
+    // was built to reject, and the previous version did not. These three drive
+    // `expectServed` with answers written by hand, so the sweep's own verdict is
+    // pinned instead of being taken on trust.
+    const collision = COLLISIONS[0]
+
+    it("rejects the answer shape the round-4 version accepted", () => {
+      // Verbatim in shape: the alias table's note (which spells out
+      // "sch 2 s 18"), and underneath it the body provision's text, sliced from
+      // the volume by the tool itself so nothing reached `getProvision`. That
+      // satisfies both of the old assertions — `asked` is empty and the text
+      // contains "sch 2 s 18" — while answering "ACL s 18" with "Meetings of
+      // Commission".
+      const decoy: Drive = {
+        asked: [],
+        text:
+          'Alias "ACL" → Competition and Consumer Act 2010 (Cth), sch 2. Read "s 18" as "sch 2 s 18".\n' +
+          "18 Meetings of Commission\n" +
+          `    (1) ${collision.text.body} such meetings of the Commission as he or she thinks necessary.`,
+      }
+      expect(decoy.asked, "the round-4 assertion").toEqual([])
+      expect(decoy.text, "the round-4 assertion").toContain("sch 2 s 18")
+      expect(() => expectServed("decoy", "ACL + s 18", decoy, collision, "schedule")).toThrow(
+        /answered with s 18 where sch 2 s 18 was asked for/,
+      )
+    })
+
+    it("rejects an answer that says the right thing and shows nothing", () => {
+      const decoy: Drive = { asked: [], text: "Read 'ACL s 18' as sch 2 s 18. See the Register for the text." }
+      expect(outcomeEvidence(decoy, collision)).toEqual([])
+      expect(() => expectServed("decoy", "ACL + s 18", decoy, collision, "schedule")).toThrow(
+        /gave this harness nothing to check/,
+      )
+    })
+
+    it("accepts an answer that actually serves the schedule's provision", () => {
+      const honest: Drive = {
+        asked: ["sch 2 s 18"],
+        text: `18 Misleading or deceptive conduct\n    (1) ${collision.text.schedule} or is likely to mislead.`,
+      }
+      expect(() => expectServed("decoy", "ACL + s 18", honest, collision, "schedule")).not.toThrow()
+    })
+  })
+
+  /**
+   * The scenarios every in-scope tool is driven through. Two aliases and two
+   * section numbers, so neither the literal string "ACL" nor a canned
+   * `sch 2 s 18` example in a tool's own prose can carry a tool through.
+   */
+  const SCHEDULE_ALIASES: ReadonlyArray<[string, Collision]> = [
+    ["ACL", COLLISIONS[0]],
+    // No `notes` entry in the alias table, so nothing prints the schedule for
+    // this one unless the tool applied it.
+    ["Australian Consumer Law", COLLISIONS[1]],
+  ]
+
+  it.each(SCHEDULE_ALIASES)(
+    "every in-scope tool serves the schedule's provision for '%s'",
+    async (law, collision) => {
+      const candidates = inScopeTools().filter((tool) => KNOWN_GAPS[tool.name] === undefined)
+      for (const tool of candidates) {
+        const run = await driveWithLawAndProvision(tool, law, collision.bare)
+        expectServed(tool.name, `${law} + ${collision.bare}`, run, collision, "schedule")
+      }
+    },
+    60_000,
+  )
+
+  it("no in-scope tool applies a schedule the caller never named", async () => {
+    // The mirror-image error, and the one a fix for the above is most likely to
+    // introduce: "CCA" is the Act itself, so "s 18" means the body's s 18
+    // ("Meetings of Commission") and rewriting it to sch 2 would be the same
+    // confident wrong answer pointing the other way.
+    for (const tool of inScopeTools()) {
+      for (const collision of COLLISIONS) {
+        const run = await driveWithLawAndProvision(tool, "CCA", collision.bare)
+        expectServed(tool.name, `CCA + ${collision.bare}`, run, collision, "body")
+      }
     }
   }, 60_000)
 
-  it("keeps the ledger of tools that still drop it honest", () => {
+  it("keeps the ledger of tools that still drop it honest", async () => {
     // A stale entry is worse than none: it would silently exempt a tool that no
-    // longer has the field, or a name that no longer exists.
-    const candidates = new Set(
-      toolsWith(
-        (fields) => fields.some((f) => LAW_FIELD.test(f)) && fields.some((f) => PROVISION_FIELD.test(f)),
-      ).map((tool) => tool.name),
-    )
-    for (const name of Object.keys(KNOWN_GAPS)) {
+    // longer has the field, a name that no longer exists, or — the one that
+    // matters — a tool somebody already fixed.
+    const candidates = new Set(inScopeTools().map((tool) => tool.name))
+    for (const [name, reason] of Object.entries(KNOWN_GAPS)) {
       expect(candidates.has(name), `${name} is listed as a known gap but is no longer such a tool — delete the entry`).toBe(
         true,
       )
-      expect(KNOWN_GAPS[name].length, `${name}'s ledger entry must say what is wrong`).toBeGreaterThan(20)
+      expect(reason.length, `${name}'s ledger entry must say what is wrong`).toBeGreaterThan(20)
+
+      const tool = inScopeTools().find((entry) => entry.name === name)!
+      const stillWrong: string[] = []
+      for (const [law, collision] of SCHEDULE_ALIASES) {
+        const run = await driveWithLawAndProvision(tool, law, collision.bare)
+        const wrong = outcomeEvidence(run, collision).filter((item) => item.side === "body")
+        if (run.failure !== undefined || wrong.length > 0) stillWrong.push(`${law} + ${collision.bare}`)
+      }
+      expect(
+        stillWrong,
+        `${name} now serves the schedule's provision — delete its KNOWN_GAPS entry so the guard covers it. ` +
+          `The ledger records open bugs, and this one is closed.`,
+      ).not.toEqual([])
     }
-  })
+  }, 60_000)
 
   it("scopes a provision read out of the question itself, in every tool that reads one", async () => {
     // The other half of the class, and the one round 3 missed: a tool with no
@@ -649,34 +1005,31 @@ describe("the alias's schedule, across the whole registry", () => {
     // as the follow-up call (`search_ai_law`, and every chain that embeds it).
     // s 29 rather than s 18 because "s 18" is also the canned example in
     // get_law_text's "Next:" block, and a canned example is not a reading of
-    // this question.
+    // this question. s 29 is not in the recorded NCX, so this half is a
+    // negative check only: nothing may address the body's s 29.
     const swept = toolsWith(
       (fields) => fields.some((f) => LAW_FIELD.test(f)) && !fields.some((f) => PROVISION_FIELD.test(f)),
     )
     expect(swept.map((tool) => tool.name)).toContain("search_ai_law")
 
     for (const tool of swept) {
-      lawCache.clear()
-      const input: Record<string, unknown> = {}
-      for (const field of schemaFields(tool.schema)) {
-        if (LAW_FIELD.test(field)) input[field] = "ACL s 29 false representations"
-      }
-      const asked: string[] = []
-      let text = ""
-      try {
-        const parsed = (tool.schema as { parse: (value: unknown) => never }).parse(input)
-        text = (await tool.handler(registerStub(asked), parsed)).content.map((part) => part.text).join("\n")
-      } catch {
-        continue // A tool this stub cannot satisfy prints no follow-up call at all.
-      }
-      const hinted = [...text.matchAll(/provision\s*[:=]\s*"([^"]{1,24})"/g)].map((match) => match[1].trim())
+      const run = await drive(tool, (field) =>
+        LAW_FIELD.test(field) ? "ACL s 29 false representations" : NEUTRAL_FIELDS[field],
+      )
+      expect(
+        run.failure,
+        `${tool.name} could not be driven: ${run.failure}\n` +
+          "An untestable tool is an untested tool — add the neutral value its schema needs to NEUTRAL_FIELDS.",
+      ).toBeUndefined()
+
+      const hinted = [...run.text.matchAll(/provision\s*[:=]\s*"([^"]{1,24})"/g)].map((match) => match[1].trim())
       expect(
         hinted.filter((provision) => /^s\.?\s*29$/i.test(provision)),
         `${tool.name} printed a follow-up call at the body's s 29 for a question about the ACL. ` +
           "Read provisions out of the query with scopeProvisionsToLaw({ query }).",
       ).toEqual([])
       expect(
-        asked.filter((provision) => /^s\.?\s*29$/i.test(provision.trim())),
+        run.asked.filter((provision) => /^s\.?\s*29$/i.test(provision.trim())),
         `${tool.name} asked the Register for the body's s 29 for a question about the ACL.`,
       ).toEqual([])
     }

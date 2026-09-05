@@ -350,6 +350,81 @@ describe("roman Parts with a lettered tail", () => {
     expect(refToNcxLabelPattern(parseSectionRef("pt IVBA")!).test(code)).toBe(true)
     expect(refToNcxLabelPattern(parseSectionRef("pt IVB")!).test(code)).toBe(false)
   })
+
+  // The widest tail in the statute book is four letters, not three: the
+  // *Crimes Act 1914*'s Part IAABA (ss 3ZZUHA–3ZZUHC, in force since 8
+  // December 2023) sits between Part IAAB and Part IAB in
+  // `__fixtures__/crimes-act-toc.ncx`. A three-letter tail rejected it
+  // outright, and the scanner's right-edge guard then dropped it from prose
+  // without a trace, so a query naming it fell back to a text search.
+  it("parses the widest real tail, Part IAABA", () => {
+    expect(normaliseRef("pt IAABA")).toBe("pt IAABA")
+    expect(normaliseRef("Part IAABA")).toBe("pt IAABA")
+    expect(extractSectionRefs("what does Part IAABA of the Crimes Act say").map(formatRef)).toEqual(["pt IAABA"])
+    const label = "Part IAABA—Monitoring of compliance with community safety supervision orders etc."
+    expect(refToNcxLabelPattern(parseSectionRef("pt IAABA")!).test(label)).toBe(true)
+    expect(refToNcxLabelPattern(parseSectionRef("pt IAAB")!).test(label)).toBe(false)
+    expect(refToNcxLabelPattern(parseSectionRef("pt IAABA")!).test("Part IAAB—Monitoring of compliance")).toBe(false)
+  })
+
+  // The fourth letter is admitted only when the whole tail is a series letter.
+  // An unrestricted `[A-Z]{0,4}` matches 709 words of /usr/share/dict/words
+  // against this pattern's 324 — and every one of those is a pinpoint the
+  // caller then reports as a provision the Act does not contain.
+  it("does not let a fourth arbitrary letter into the tail", () => {
+    expect(parseSectionRef("pt IVANOV")).toBeNull()
+    expect(parseSectionRef("s IGLOO")).toBeNull()
+    expect(extractSectionRefs("The VISION statement and the IDIOM were considered.")).toEqual([])
+  })
+})
+
+// Structural units are lettered as often as they are numbered, and
+// `extractSectionRefs` had no branch for them at all: `REF_BODY` requires a
+// `NUMBER_PATTERN`, and a bare letter is not one. So ~90 real
+// `Subdivision C`/`D`/`CA`/`DA` labels in the *Competition and Consumer Act
+// 2010* alone were not merely unresolved — they were not found, and
+// `verify_citations` counted a document's citations without them.
+describe("bare lettered structural units in prose", () => {
+  it("harvests the lettered units a document really cites", () => {
+    expect(extractSectionRefs("Subdivision C—Common provisions").map(formatRef)).toEqual(["sub-div C"])
+    expect(extractSectionRefs("Subdivision D—Other").map(formatRef)).toEqual(["sub-div D"])
+    expect(extractSectionRefs("See Division D of the Competition and Consumer Act 2010 (Cth).").map(formatRef))
+      .toEqual(["div D"])
+    expect(extractSectionRefs("Subdivision CA and Subdivision DA apply.").map(formatRef))
+      .toEqual(["sub-div CA", "sub-div DA"])
+    expect(extractSectionRefs("Part B, Schedule A and Appendix C").map(formatRef))
+      .toEqual(["pt B", "sch A", "app C"])
+  })
+
+  it("keeps them in document order beside the numbered ones", () => {
+    expect(extractSectionRefs("see Subdivision C of Division 3 of Part 5.3B").map(formatRef))
+      .toEqual(["sub-div C", "div 3", "pt 5.3B"])
+    expect(
+      extractSectionRefs(
+        "The prohibition in Subdivision C of Division 3 of Part IV of the Competition and Consumer " +
+          "Act 2010 (Cth) applies, as does Division D of that Act.",
+      ).map(formatRef),
+    ).toEqual(["sub-div C", "div 3", "pt IV", "div D"])
+  })
+
+  // Two rules keep this out of ordinary prose, and both are load-bearing.
+  it("matches the letters case-sensitively, so a lowercase word is a word", () => {
+    expect(extractSectionRefs("part of the agreement")).toEqual([])
+    expect(extractSectionRefs("division and control of the company")).toEqual([])
+    expect(extractSectionRefs("the schedule as amended")).toEqual([])
+  })
+
+  it("only accepts a series letter, so an all-caps word is not a unit", () => {
+    for (const prose of ["SCHEDULE OF FEES", "PART TO BE REPEALED", "DIVISION OR PART", "Part TWO", "Division ONE"]) {
+      expect(extractSectionRefs(prose).map(formatRef), prose).toEqual([])
+    }
+  })
+
+  it("does not report the same unit twice when both scanners see it", () => {
+    expect(extractSectionRefs("Part I—Preliminary").map(formatRef)).toEqual(["pt I"])
+    expect(extractSectionRefs("Part IVA—News media").map(formatRef)).toEqual(["pt IVA"])
+    expect(extractSectionRefs("Division 2—Establishment of the AER").map(formatRef)).toEqual(["div 2"])
+  })
 })
 
 // The tail is only safe to widen because the numeral in front of it is a real
@@ -503,6 +578,144 @@ describe("ITAA structural numbers", () => {
   })
 })
 
+// A compound number's *first* component carries letters as often as its last.
+// The *Corporations Act 2001* numbers 68 Parts `2A.1` … `2N.5` (plus `2F.1A`
+// and `5C.10`), the ITAA 1997 has Subdivisions `83A-A` … `83A-E`, and sch 1 to
+// the *Taxation Administration Act 1953* has `12A-A` … `12A-C`. Requiring
+// digits on both sides of the separator did not merely reject them: because
+// the scanner's right-edge guard does not fire on a `.` or a `-`, `Part 2D.1`
+// was harvested as `pt 2D` — a Part the Act does not have — and a citation
+// checker answered `NOT_FOUND … has no pt 2D` about a correct citation.
+describe("a compound number whose first component carries a letter", () => {
+  const REAL: Array<[input: string, canonical: string]> = [
+    ["Part 2D.1", "pt 2D.1"],
+    ["pt 2A.1", "pt 2A.1"],
+    ["Part 2N.5", "pt 2N.5"],
+    ["Part 2F.1A", "pt 2F.1A"],
+    ["Part 5C.10", "pt 5C.10"],
+    ["Subdivision 83A-A", "sub-div 83A-A"],
+    ["Subdiv 83A-C", "sub-div 83A-C"],
+    ["sub-div 12A-C", "sub-div 12A-C"],
+  ]
+
+  for (const [input, canonical] of REAL) {
+    it(`parses ${JSON.stringify(input)}`, () => {
+      expect(normaliseRef(input), input).toBe(canonical)
+      expect(parseSectionRef(input)!.rangeEnd, input).toBeUndefined()
+    })
+  }
+
+  // The dangerous outcome is not the rejection. It is the shorter reference
+  // left behind: `pt 2D` and `sub-div 83A` look like citations, and neither
+  // exists.
+  it("does not truncate one to a Part the Act does not have", () => {
+    expect(
+      extractSectionRefs("Directors owe duties under Part 2D.1 of the Corporations Act 2001 (Cth)").map(formatRef),
+    ).toEqual(["pt 2D.1"])
+    expect(extractSectionRefs("Subdivision 83A-C applies to the employee share scheme.").map(formatRef))
+      .toEqual(["sub-div 83A-C"])
+    expect(extractSectionRefs("sch 1 sub-div 12A-C of the TAA").map(formatRef)).toEqual(["sch 1 sub-div 12A-C"])
+  })
+
+  it("addresses its own navLabel, and not the neighbouring Part", () => {
+    const duties = "Part 2D.1—Duties and powers"
+    expect(refToNcxLabelPattern(parseSectionRef("pt 2D.1")!).test(duties)).toBe(true)
+    expect(refToNcxLabelPattern(parseSectionRef("pt 2D.2")!).test(duties)).toBe(false)
+    expect(refToNcxLabelPattern(parseSectionRef("pt 2D")!).test(duties)).toBe(false)
+    const objects = "Subdivision 83A-A—Objects of Division and key concepts"
+    expect(refToNcxLabelPattern(parseSectionRef("sub-div 83A-A")!).test(objects)).toBe(true)
+    expect(refToNcxLabelPattern(parseSectionRef("sub-div 83A-C")!).test(objects)).toBe(false)
+    expect(refToNcxLabelPattern(parseSectionRef("sub-div 83A")!).test(objects)).toBe(false)
+  })
+})
+
+// `subsection 5(2)` is how Commonwealth drafting writes a subsection, and the
+// phrase appears verbatim in nearly every Act. Printing it as `sub-s (5)`
+// moved the reference to section 5's *own* number and dropped the (2), so a
+// document saying "for the purposes of subsection 5(2) of the Act" was routed
+// to a lookup for a provision nobody cited. The bare `sub-s (2)` — where the
+// bracket is the whole reference — still prints as it always did.
+describe("a bracketed designation that carries its own section number", () => {
+  const CASES: Array<[input: string, canonical: string]> = [
+    ["subsection 5(2)", "sub-s 5(2)"],
+    ["sub-s 5(2)", "sub-s 5(2)"],
+    ["paragraph 23(1)(a)", "para 23(1)(a)"],
+    ["subparagraph 23(1)(a)(ii)", "sub-para 23(1)(a)(ii)"],
+    ["sub-reg 5(2)", "sub-reg 5(2)"],
+    ["sub-cl 12(3)", "sub-cl 12(3)"],
+    ["para 1020F(1)(c)", "para 1020F(1)(c)"],
+  ]
+
+  for (const [input, canonical] of CASES) {
+    it(`keeps the subsection of ${JSON.stringify(input)}`, () => {
+      expect(normaliseRef(input), input).toBe(canonical)
+      // What formatRef emits has to be readable back, or a caller that
+      // normalises before looking up gets [INVALID_PARAM] for its own output.
+      expect(normaliseRef(canonical), canonical).toBe(canonical)
+    })
+  }
+
+  it("still prints the bare bracketed form, which has no number to carry", () => {
+    expect(normaliseRef("sub-s (2)")).toBe("sub-s (2)")
+    expect(normaliseRef("subsection (2)")).toBe("sub-s (2)")
+    expect(normaliseRef("para (a)")).toBe("para (a)")
+  })
+
+  it("routes the drafting-standard phrase to the provision it names", () => {
+    expect(extractSectionRefs("for the purposes of subsection 5(2) of the Act").map(formatRef))
+      .toEqual(["sub-s 5(2)"])
+    expect(extractSectionRefs("see paragraph 23(1)(a) and subsection 912A(1)").map(formatRef))
+      .toEqual(["para 23(1)(a)", "sub-s 912A(1)"])
+  })
+})
+
+// The plural-hyphen rule was defended only by `runsBackwards`, which rescues
+// the ITAA numbers whose serial is below their division (`355-25`) and none of
+// the ones whose serial is above it. `165-210` is one real ITAA 1997 section —
+// the Act's own navLabel reads "165-212E  Entry history rule does not apply
+// for the purposes of sections 165-210 and 165-211" — and read as a range it
+// becomes a lookup for 46 provisions the Act does not have, reported back as
+// an absence.
+describe("a wide hyphenated pair is a number, not a range", () => {
+  it("reads the ITAA's own cross-reference as the section it cites", () => {
+    const ref = parseSectionRef("ss 165-210")!
+    expect(ref.number).toBe("165-210")
+    expect(ref.rangeEnd).toBeUndefined()
+    expect(
+      extractSectionRefs(
+        "165-212E  Entry history rule does not apply for the purposes of sections 165-210 and 165-211",
+      ).map(formatRef),
+    ).toEqual(["ss 165-210"])
+  })
+
+  it("does not hang a bracketed subdivision off the end of a range", () => {
+    const ref = parseSectionRef("paragraphs 230-395(2)(c)")!
+    expect(ref.number).toBe("230-395")
+    expect(ref.rangeEnd).toBeUndefined()
+    expect(ref.subsections).toEqual(["2", "c"])
+    expect(
+      extractSectionRefs("Commissioner discretion to waive requirements in paragraphs 230-395(2)(c) and (e)")
+        .map(formatRef),
+    ).toEqual(["paras 230-395(2)(c)"])
+  })
+
+  it("still reads the ranges a writer actually writes", () => {
+    expect(normaliseRef("ss 5-6")).toBe("ss 5–6")
+    expect(normaliseRef("ss 20-22")).toBe("ss 20–22")
+    expect(normaliseRef("ss 51-53")).toBe("ss 51–53")
+    expect(normaliseRef("ss 100-120")).toBe("ss 100–120")
+    expect(extractSectionRefs("ss 44-46 of the Act").map(formatRef)).toEqual(["ss 44–46"])
+  })
+
+  // An en dash only ever means "to" (AGLC r 1.9), so it overrides the ceiling:
+  // a writer who used one asked for the range, however wide.
+  it("leaves a real range dash alone however wide the span", () => {
+    expect(normaliseRef("ss 165–210")).toBe("ss 165–210")
+    expect(parseSectionRef("ss 165–210")!.rangeEnd).toBe("210")
+    expect(extractSectionRefs("ss 1–500 of the Act").map(formatRef)).toEqual(["ss 1–500"])
+  })
+})
+
 describe("refToNcxLabelPattern", () => {
   const match = (input: string, label: string) =>
     refToNcxLabelPattern(parseSectionRef(input)!).test(label)
@@ -601,6 +814,28 @@ describe("refToNcxLabelPattern — the Constitution's 1900 typography", () => {
     expect(match("s 51", "51A. Something else.")).toBe(false)
     expect(match("s 51", "51.2 Something else")).toBe(false)
     expect(match("s 5", "51. Legislative powers of the Parliament.")).toBe(false)
+  })
+
+  // Two of the Constitution's navLabels are byte-exactly "86." and "87." —
+  // the number and its stop, and no heading text at all (they are navPoints
+  // 105 and 106 of `__fixtures__/constitution-toc.ncx`, under "Chapter
+  // IV.—Finance and Trade."). A lookahead that insisted on whitespace could
+  // not be satisfied at the end of a string, so `get_law_text` answered
+  // "[LAW_NOT_FOUND] s 86 is not in the latest table of contents" about a
+  // section that is in it — an absence reported without being established,
+  // and with no other address to reach the section by.
+  it("matches a label that is nothing but the number", () => {
+    expect(match("s 86", "86.")).toBe(true)
+    expect(match("s 87", "87.")).toBe(true)
+    expect(match("cl 86", "86.")).toBe(true)
+    expect(match("s 86", "86")).toBe(true)
+  })
+
+  it("still refuses the neighbouring numbers of a bare label", () => {
+    expect(match("s 8", "86.")).toBe(false)
+    expect(match("s 86", "87.")).toBe(false)
+    expect(match("s 86", "86A.")).toBe(false)
+    expect(match("s 86", "86.1")).toBe(false)
   })
 })
 

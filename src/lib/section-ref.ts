@@ -23,8 +23,10 @@
  */
 
 import {
+  KIND_VOCAB,
   PLURAL_SPELLINGS,
   ROMAN_NUMBER,
+  SERIES_UNIT_LETTER,
   SPELLING_ALTERNATION,
   SUBDIVISION_TOKEN,
   isRomanNumber,
@@ -166,10 +168,28 @@ const NUMBER_SEP = `[.\\-${HYPHEN_SPELLINGS}${RANGE_DASHES}]`
 const LETTER_RUN_MAX = 6
 
 /**
+ * One component of a compound number: digits, then the letters that may
+ * follow them.
+ *
+ * **The letters belong to the component, not to the end of the number.** A
+ * compound number's *first* component carries them just as often as its last:
+ * `__fixtures__/corporations-act-toc-slice.ncx` has 125 Part labels whose
+ * number carries a letter (`2A.1` … `2N.5`, plus `2F.1A` and `5C.10`), the
+ * ITAA 1997 has Subdivisions `83A-A` … `83A-E`, and sch 1 to the *Taxation
+ * Administration Act 1953* has `12A-A` … `12A-C`.
+ * Requiring digits on both sides of the separator did not merely reject those:
+ * because the scanner's right-edge guard does not fire on a `.` or a `-`,
+ * `Part 2D.1` was harvested as `pt 2D` and `Subdivision 83A-C` as
+ * `sub-div 83A` — a *different* provision, handed to a citation checker that
+ * answered `NOT_FOUND … has no pt 2D` about a correct citation.
+ */
+const NUMBER_COMPONENT = `\\d{1,4}[A-Za-z]{0,${LETTER_RUN_MAX}}`
+
+/**
  * A provision number: an ITAA/ACL dotted-or-dashed form (`355-25`, `2.01`,
- * `42.02.2`, `2-1`), an ITAA structural form whose dash is followed by a
- * letter (`152-A`, `815-B`), a plain or lettered arabic number (`18`, `10AA`,
- * `8AAZLGA`), or a roman part number (`IVA`).
+ * `42.02.2`, `2-1`, `2D.1`), an ITAA structural form whose dash is followed by
+ * a letter (`152-A`, `815-B`, `83A-C`), a plain or lettered arabic number
+ * (`18`, `10AA`, `8AAZLGA`), or a roman part number (`IVA`).
  *
  * The lettered-dash tail is bounded tight and has to end the number: three
  * letters covers every real structural suffix (`152-A`, `815-B`, `38-BA`),
@@ -184,8 +204,8 @@ const LETTER_RUN_MAX = 6
  */
 const NUMBER_PATTERN =
   `(?:${ROMAN_NUMBER}` +
-  `|\\d{1,4}(?:${NUMBER_SEP}\\d{1,4}){0,3}` +
-  `(?:${NUMBER_HYPHEN}[A-Za-z]{1,3}(?![A-Za-z0-9])|[A-Za-z]{0,${LETTER_RUN_MAX}}))`
+  `|${NUMBER_COMPONENT}(?:${NUMBER_SEP}${NUMBER_COMPONENT}){0,3}` +
+  `(?:${NUMBER_HYPHEN}[A-Za-z]{1,3}(?![A-Za-z0-9]))?)`
 
 /** `(2)(a)(ii)` — at most six levels, each one `SUBDIVISION_TOKEN`. */
 const SUBSECTION_PATTERN = `(?:\\s?\\(${SUBDIVISION_TOKEN}\\)){0,6}`
@@ -247,6 +267,51 @@ const LETTERED_STRUCTURAL_KINDS: ReadonlySet<RefKind> = new Set<RefKind>([
   "part", "division", "subdivision", "chapter", "schedule", "appendix",
 ])
 const LETTERED_STRUCTURAL = new RegExp(`^(${DESIGNATOR})\\s+([A-Z]{1,3})$`, "i")
+
+/**
+ * The same units, as they have to be found in a document rather than handed
+ * over as a whole reference.
+ *
+ * `REF_BODY` cannot carry this: it requires a `NUMBER_PATTERN`, and a bare
+ * letter is not one — which is why `extractSectionRefs` returned nothing at
+ * all for `Subdivision C—Common provisions`, `Division D` and `Subdivision
+ * CA`/`DA`. There are 390 of them in the *Corporations Act 2001*'s recorded
+ * table of contents alone. They did not come back as unreadable either: they
+ * simply were not there, so `verify_citations` counted a document's citations
+ * without them.
+ *
+ * Two things make a second pass safe where widening `ROMAN_NUMBER` was not:
+ *
+ *  - **The letters are matched case-sensitively.** The numbered scanner runs
+ *    `/i` because "Part", "part" and "PART" all occur, and that is exactly
+ *    what turned "the rules can be amended" into `rr CAN`. Here the
+ *    designation spelling is spelled out case-insensitively by hand and the
+ *    letters are not, so `part of` and `division and` cannot match at all.
+ *  - **The letters are `SERIES_UNIT_LETTER`, not `[A-Z]`.** A structural
+ *    series is lettered from the front of the alphabet — A to H across all
+ *    13,861 navLabels of the five Acts measured — so `SCHEDULE OF FEES` and
+ *    `PART TO BE REPEALED` cannot read as `sch OF` or `pt TO`.
+ *
+ * The anchored `LETTERED_STRUCTURAL` stays wider on purpose: there the caller
+ * has already said the whole string is one reference, and there is no prose
+ * for a letter run to be a word in.
+ */
+const LETTERED_STRUCTURAL_SPELLINGS = KIND_VOCAB
+  .filter((entry) => LETTERED_STRUCTURAL_KINDS.has(entry.kind))
+  .flatMap((entry) => entry.spellings)
+  .sort((a, b) => b.length - a.length)
+
+function eitherCase(word: string): string {
+  return [...word]
+    .map((char) => (/[a-z]/.test(char) ? `[${char}${char.toUpperCase()}]` : escapeForPattern(char)))
+    .join("")
+}
+
+const LETTERED_STRUCTURAL_SCANNER = new RegExp(
+  `(?<![A-Za-z])(?:${LETTERED_STRUCTURAL_SPELLINGS.map(eitherCase).join("|")})` +
+    `[\\s\\u00a0]+${SERIES_UNIT_LETTER}{1,2}(?![0-9A-Za-z])`,
+  "g",
+)
 
 /** `sch 2` on its own, or `sch 1 item 4`. */
 const SCHEDULE_ONLY = new RegExp(
@@ -348,6 +413,37 @@ function runsBackwards(from: string, to: string): boolean {
 }
 
 /**
+ * How far apart the two ends of a *plain-hyphen* range may be.
+ *
+ * `runsBackwards` is only half the rule, and it is the half that happens to be
+ * free. `ss 355-25` is rescued because 25 < 355; `ss 165-210` is not, and it
+ * is one real ITAA 1997 section — the Act's own navLabel reads
+ * "165-212E  Entry history rule does not apply for the purposes of sections
+ * 165-210 and 165-211". Read as "sections 165 to 210" it becomes a lookup for
+ * 46 provisions the ITAA does not have, reported back as an absence.
+ *
+ * Measured over all 4,621 dashed section numbers the ITAA 1997 (C2004A05138)
+ * served on 2026-09-05: 3,374 already run backwards, and of the 1,247 that run
+ * forward only 182 span 20 or less. So a 20-section ceiling reads 96% of the
+ * Act's own section numbers correctly while still reading every range anyone
+ * writes by hand — `ss 5-6`, `ss 20-22`, `ss 51-53` — as the range it is. The
+ * residue (`s 4-15`, `s 20-25`) is genuinely undecidable from the text: those
+ * strings are a range *and* a section number, and no grammar can tell.
+ *
+ * The ceiling applies only to the plain hyphen. An en dash, or any of the
+ * other `RANGE_DASHES`, only ever means "to" (AGLC r 1.9), so `ss 165–210`
+ * with a real dash is still the range the writer asked for, however wide.
+ */
+const HYPHEN_RANGE_SPAN_MAX = 20
+
+function spansTooFarForAHyphen(from: string, to: string): boolean {
+  const start = Number.parseInt(from, 10)
+  const end = Number.parseInt(to, 10)
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return false
+  return end - start > HYPHEN_RANGE_SPAN_MAX
+}
+
+/**
  * Parse one provision reference. Returns `null` — never a guess — when the
  * input is not a provision reference: a caller handed a ref for arbitrary
  * prose will go and "verify" it, and report the result as fact.
@@ -400,19 +496,28 @@ export function parseSectionRef(input: string): SectionRef | null {
 
   // The hyphen decision. `NUMBER_PATTERN` is greedy, so `ss 5-6` arrives here
   // as the single number "5-6" and has to be split back out; `s 355-25` must
-  // not be. A range dash always means "to"; a hyphen only does after a plural.
+  // not be. A range dash always means "to"; a hyphen only does after a plural,
+  // and then only for a pair that reads as a range — see `isNotARange`.
+  const subsections = parseSubsections(rawSubsections)
+  const isNotARange = (from: string, to: string): boolean =>
+    runsBackwards(from, to) ||
+    // A range end never carries a bracketed subdivision: `paragraphs
+    // 230-395(2)(c)` is paragraph (c) of subsection (2) of one ITAA section,
+    // not "paragraphs 230 to 395" with a stray (2)(c) hanging off the end.
+    subsections.length > 0 ||
+    (!hadRangeDash && spansTooFarForAHyphen(from, to))
   let numberText = rawNumber
   let rangeEnd = spacedRangeEnd as string | undefined
   if (!rangeEnd && (plural || hadRangeDash)) {
     const split = RANGE_SPLIT.exec(rawNumber)
-    if (split && !runsBackwards(split[1], split[2])) {
+    if (split && !isNotARange(split[1], split[2])) {
       numberText = split[1]
       rangeEnd = split[2]
     }
   }
-  if (rangeEnd && ((!plural && !hadRangeDash) || runsBackwards(numberText, rangeEnd))) {
+  if (rangeEnd && ((!plural && !hadRangeDash) || isNotARange(numberText, rangeEnd))) {
     // A spaced hyphen after a singular designation is still part of the number,
-    // and so is a pair that runs backwards — see `runsBackwards`.
+    // and so is a pair that is not a range — see `isNotARange`.
     numberText = `${numberText}-${rangeEnd}`
     rangeEnd = undefined
   }
@@ -425,7 +530,7 @@ export function parseSectionRef(input: string): SectionRef | null {
     kind: vocab.kind,
     number,
     ...(letterSuffix ? { letterSuffix } : {}),
-    subsections: parseSubsections(rawSubsections),
+    subsections,
     ...(schedule ? { schedule: splitLetterSuffix(schedule).number } : {}),
     ...(item ? { item } : {}),
     ...(rangeEnd ? { rangeEnd } : {}),
@@ -434,7 +539,18 @@ export function parseSectionRef(input: string): SectionRef | null {
   }
 }
 
-/** Designations AGLC writes with the number in brackets (r 3.1.4). */
+/**
+ * Designations AGLC writes with the number in brackets (r 3.1.4) — but only
+ * when the bracketed token is the *whole* reference.
+ *
+ * `sub-s (2)` has no section number to hang the (2) off, so the bracket is all
+ * there is. `subsection 5(2)` — the phrase Commonwealth drafting uses in
+ * nearly every Act — does have one, and it is section 5's subsection (2).
+ * Printing that as `sub-s (5)` moved the reference to a different provision
+ * *and* dropped the (2), so a document saying "for the purposes of subsection
+ * 5(2) of the Act" was routed to a lookup for a provision nobody cited. Which
+ * form applies is decided by `ref.subsections`, not by the kind.
+ */
 const BRACKETED_KINDS: ReadonlySet<RefKind> = new Set<RefKind>([
   "subsection", "subclause", "subregulation", "subrule", "paragraph", "subparagraph",
 ])
@@ -455,7 +571,7 @@ export function formatRef(ref: SectionRef): string {
   }
 
   const subsections = ref.subsections.map((part) => `(${part})`).join("")
-  const core = BRACKETED_KINDS.has(ref.kind)
+  const core = BRACKETED_KINDS.has(ref.kind) && ref.subsections.length === 0
     ? `${abbrev} (${number})`
     : `${abbrev} ${number}${subsections}`
   const range = ref.rangeEnd ? `–${ref.rangeEnd}` : ""
@@ -531,9 +647,8 @@ export function refToNcxLabelPattern(ref: SectionRef): RegExp {
   if (vocab.ncxLabel === "worded") {
     return new RegExp(`^${vocab.ncxWord}${gap}*${number}${LABEL_TAIL}`, "i")
   }
-  // A number-led label is always followed by whitespace and then the heading,
-  // optionally with a full stop between the two. The lookahead, not the anchor,
-  // is what keeps `s 1` away from `18`.
+  // A number-led label is the number, then the heading — or nothing at all.
+  // The lookahead, not the anchor, is what keeps `s 1` away from `18`.
   //
   // The optional stop is for the pre-Federation continued laws, which keep
   // their original typography: the *Commonwealth of Australia Constitution
@@ -542,7 +657,14 @@ export function refToNcxLabelPattern(ref: SectionRef): RegExp {
   // table's own note advertises `Australian Constitution s 51(xx)` as the way
   // to cite it. It is escaped and optional, so `s 51` still cannot reach `51A`
   // (no gap after the number) or `51.2` (no gap after the stop).
-  return new RegExp(`^${number}\\.?(?=${gap})`)
+  //
+  // `$` is there for the same document. Two of the Constitution's navLabels
+  // are byte-exactly `"86."` and `"87."` — the number and its stop, no heading
+  // text — and a lookahead that insisted on whitespace could not be satisfied
+  // at the end of a string, so `get_law_text` answered `[LAW_NOT_FOUND] s 86
+  // is not in the latest table of contents` about a section that is in it.
+  // An absence this module reports has to be an absence it established.
+  return new RegExp(`^${number}\\.?(?=${gap}|$)`)
 }
 
 /**
@@ -559,13 +681,36 @@ export function refToNcxLabelPattern(ref: SectionRef): RegExp {
  * different section that really exists, and whose heading a citation checker
  * will happily tick the citation off against. A reference that does not end
  * where the match ends is not a reference this scanner reports.
+ *
+ * The second pass is `LETTERED_STRUCTURAL_SCANNER`, whose matches are dropped
+ * wherever the first pass already found something: the two grammars overlap on
+ * `Part I` and only the number-carrying one may win.
  */
 export function extractSectionRefs(text: string): SectionRef[] {
   if (!text) return []
   const scanner = new RegExp(`(?<![A-Za-z])${REF_BODY}(?![0-9A-Za-z])`, "gi")
+  const numbered = [...text.matchAll(scanner)].map((match) => ({
+    index: match.index,
+    end: match.index + match[0].length,
+    text: match[0],
+  }))
+
+  // Both lists arrive sorted and internally non-overlapping, so one forward
+  // pointer is enough to test each lettered hit against the numbered ones.
+  const hits = [...numbered]
+  let cursor = 0
+  for (const match of text.matchAll(LETTERED_STRUCTURAL_SCANNER)) {
+    const index = match.index
+    const end = index + match[0].length
+    while (cursor < numbered.length && numbered[cursor].end <= index) cursor++
+    if (cursor < numbered.length && numbered[cursor].index < end) continue
+    hits.push({ index, end, text: match[0] })
+  }
+  hits.sort((a, b) => a.index - b.index)
+
   const out: SectionRef[] = []
-  for (const match of text.matchAll(scanner)) {
-    const ref = parseSectionRef(match[0].trim())
+  for (const hit of hits) {
+    const ref = parseSectionRef(hit.text.trim())
     if (ref) out.push(ref)
   }
   return out

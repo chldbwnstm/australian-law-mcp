@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url"
 import { beforeEach, describe, expect, it } from "vitest"
 import { normalizeFrlVersion, type AuApiClient } from "../lib/api-client.js"
 import { lawCache } from "../lib/cache.js"
-import { parseSectionRef } from "../lib/section-ref.js"
+import { formatRef, parseSectionRef } from "../lib/section-ref.js"
 import type { FrlTitle, FrlVersion } from "../lib/types.js"
 import { enablingProvisionCall, instrumentRadar } from "./instrument-radar.js"
 import { requireRef } from "./statute-helpers/toc.js"
@@ -173,18 +173,38 @@ const REGISTER_ENABLING_PROVISIONS = [
   "s 140GBA(4), (5), (6A)",
 ] as const
 
+/**
+ * The Register's **paragraph** forms, from the same live scan: 8 of the 61
+ * distinct `affectingProvisions` values returned for in-force legislative
+ * instruments are shaped like these three.
+ *
+ * They are kept apart from the list above because they have no answer yet — a
+ * paragraph reference does not survive `formatRef` → `parseSectionRef`, so the
+ * honest output is no suggestion at all. What must never happen is the third
+ * possibility, and it is what shipped: `para 1020F(1)(c)` printed as
+ * `para (1020F)`, which `requireRef` rejects, and `para 184(a)` printed as
+ * `para (184)`, which it accepts as a different provision.
+ */
+const REGISTER_PARAGRAPH_PROVISIONS = ["para 1020F(1)(c)", "para 601QA(1)(a), (b)", "para 184(a)"] as const
+
 /** Every `provision:"…"` argument the rendered output offers the caller. */
 function suggestedProvisions(text: string): string[] {
   return [...text.matchAll(/provision:"([^"]*)"/g)].map((match) => match[1])
 }
 
+/** How many bracketed components the Register wrote — `s 109(1)(b)` has two. */
+function bracketedComponents(value: string): number {
+  return [...value.matchAll(/\(([A-Za-z0-9]{1,4})\)/g)].length
+}
+
 describe("instrument_radar never suggests a call its own parser would reject", () => {
-  it.each(REGISTER_ENABLING_PROVISIONS)("%s", async (raw) => {
+  it.each([...REGISTER_ENABLING_PROVISIONS, ...REGISTER_PARAGRAPH_PROVISIONS])("%s", async (raw) => {
     const text = (await run(client({ enablingProvision: raw }))).content[0].text
     // Reproduced before the fix by this same loop: the eight unparseable
     // values came back as `provision:"s 134(1) of sch 2"` and friends, and
     // `requireRef` on them throws `[INVALID_PARAMETER] Not a recognisable
-    // provision reference`.
+    // provision reference`. The paragraph rows reproduce the same throw one
+    // step later — the value parsed, and `formatRef`'s output did not.
     for (const suggestion of suggestedProvisions(text)) {
       expect(() => requireRef(suggestion), `${raw} → provision:"${suggestion}"`).not.toThrow()
     }
@@ -234,6 +254,41 @@ describe("enablingProvisionCall", () => {
       expect(() => requireRef(call.provision as string), raw).not.toThrow()
       expect(parseSectionRef(call.provision as string), raw).not.toBeNull()
     }
+  })
+
+  // The mechanism, stated as a property over every live value rather than as
+  // the eight strings that happened to break. The suggestion is printed, and
+  // then re-parsed by the caller, so parsing the Register's string proves
+  // nothing: what has to hold is that the printed form survives the trip back.
+  //
+  // Nothing here asserts what `formatRef` emits — that grammar is
+  // `section-ref.ts`'s. A kind that cannot round-trip today simply yields no
+  // suggestion; the day it can, these rows pass with one.
+  it.each([...REGISTER_ENABLING_PROVISIONS, ...REGISTER_PARAGRAPH_PROVISIONS])(
+    "round-trips whatever it suggests for %s",
+    (raw) => {
+      const suggestion = enablingProvisionCall(raw).provision
+      if (suggestion === undefined) return
+      const ref = parseSectionRef(suggestion)
+      expect(ref, `${raw} → "${suggestion}" does not parse`).not.toBeNull()
+      expect(formatRef(ref!), `${raw} → "${suggestion}" is not stable under the parser`).toBe(suggestion)
+      expect(() => requireRef(suggestion), `${raw} → "${suggestion}"`).not.toThrow()
+    },
+  )
+
+  // The other half: a suggestion that parses can still be the wrong provision.
+  // `para 184(a)` formatted to `para (184)` — paragraph 184, not paragraph (a)
+  // of s 184 — and was printed as the canonical form of the Register's own
+  // record of the power.
+  it.each(REGISTER_PARAGRAPH_PROVISIONS)("never drops a bracketed component of %s", (raw) => {
+    const suggestion = enablingProvisionCall(raw).provision
+    if (suggestion === undefined) return
+    const ref = parseSectionRef(suggestion)
+    expect(ref, `${raw} → "${suggestion}" does not parse`).not.toBeNull()
+    const member = raw.split(/\s*,\s*|\s+and\s+/)[0]
+    expect(ref!.subsections.length, `${raw} → "${suggestion}" lost a bracketed component`).toBeGreaterThanOrEqual(
+      bracketedComponents(member),
+    )
   })
 
   it("keeps the Register's string whenever the call differs from it", () => {
