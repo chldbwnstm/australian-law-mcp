@@ -9,7 +9,13 @@
 
 > Every source is a **keyless public endpoint** — the Federal Register of Legislation, NSW Caselaw, the High Court, Queensland Judgments, the State registers, the ATO, the Fair Work Commission, the OAIC, the NACC and DFAT. **There is no API key to configure.** Works with Claude Desktop, Claude Code, Cursor, Windsurf, VS Code, Zed, Gemini CLI, and any MCP client.
 
-It is built for the moments where a plausible answer is the wrong one: a section number that exists but says something else, a compilation that is not the one in force on the day the conduct happened, a source that refused the request and was reported as "no such case". **The server never reports an absence it did not establish**, and its citation checker verifies **content**, not just existence.
+**Best used when you need to:**
+
+- **Check the citations in a draft** — every statutory pinpoint is verified against the Register's actual text, not just its existence.
+- **Know what a provision said on a given date** — the compilation in force that day, a diff against today, and the transitional provisions.
+- **Read a provision or a schedule mid-task** — `ACL s 18` is fetched as `sch 2 s 18`, and the Act's own s 18 is flagged as a different provision.
+- **Find a tribunal or regulator decision** — the Fair Work Commission, ATO rulings, the OAIC, the NACC and fourteen more domains from one search.
+- **Check delegated legislation against its enabling Act** — has the Act moved since the instrument was last compiled?
 
 ---
 
