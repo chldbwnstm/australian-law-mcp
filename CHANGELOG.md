@@ -4,6 +4,110 @@ All notable changes to this project are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] — 2026-09-05
+
+First stable release. The tool surface is unchanged from 0.1.0 — 81 tools
+registered, 10 advertised — and everything below is a correctness fix, a rename,
+or a test that keeps a fixed defect fixed. Six adversarial review rounds and two
+live-verification passes closed 97 confirmed defects; the ones a user would
+notice are listed here.
+
+### Changed
+
+- **The npm package is now `au-law-mcp`.** The unscoped name
+  `australian-law-mcp` on the npm registry belongs to an unrelated project, so
+  `npx -y australian-law-mcp` installed somebody else's package. Install with
+  `npx -y --ignore-scripts au-law-mcp setup`, or add
+  `"args": ["-y", "au-law-mcp"]` to your client config. The GitHub repository
+  and the project title stay `australian-law-mcp`, the CLI binary stays
+  `australian-law`, and the key the setup wizard writes into client configs
+  stays `australian-law` — an existing install keeps working untouched.
+- **The provision grammar was rebuilt against the statute book rather than
+  against the examples at hand.** Every provision label in five recorded Federal
+  Register tables of contents — the *Corporations Act 2001*, the *Income Tax
+  Assessment Act 1997*, the *Crimes Act 1914*, the *Commonwealth of Australia
+  Constitution Act* and the *Competition and Consumer Act 2010* — must now
+  parse, round-trip, address its own label and no other, and survive being
+  re-cited the way writers cite (plural, dashed pairs, `and`/`to`/comma joins).
+  The two letter classes in the grammar are set from the population rather than
+  a sample: the tables of contents of all 1,177 in-force principal Commonwealth
+  Acts, 126,207 labels. The narrower class the previous release used silently
+  dropped 29 real units, among them *Migration Act* Subdivisions AI, AJ and AL.
+- **The compound and lettered forms the register actually prints are now
+  citations, not parse failures** — `Part 2A.1`, `Part 2F.1A`,
+  `Subdivision 83A-C`, `Part IAABA`, and untitled bare-number labels such as the
+  Constitution's `86.`
+- **The deadline tests no longer pace off the wall clock.** They virtualise the
+  one timer the deadline machinery uses, so the suite is deterministic under CPU
+  load and runs in about 6 seconds instead of 30. No production behaviour
+  changed.
+
+### Fixed
+
+- **`ACL s 18` returns schedule 2 everywhere, enforced rather than promised.**
+  The Australian Consumer Law is schedule 2 of the *Competition and Consumer Act
+  2010*, and that Act's own body has a different s 18 (*Meetings of
+  Commission*). The alias-to-schedule rewrite now sits at one choke point, and a
+  registry-wide guard drives every registered tool that takes a law and a
+  provision with a schedule-carrying alias and asserts what was **served**:
+  a text-serving tool must return the schedule provision's words and neither
+  marker of the body provision. The in-scope list is exact, so a tool the guard
+  cannot drive fails the build rather than being skipped.
+  `get_instrument_provisions` and `get_historical_law` really were serving the
+  body's s 18 under an ACL request, and no longer do.
+- **The deep links carry the schedule too, not just a warning beside them.**
+  `get_external_links` sent AustLII the bare reference — a search for
+  "...Act 2010 s 18", pointed at the body provision — and built
+  consolidated-act section URLs such as `/s18.html`, which *is* the body
+  provision's page, for schedule references. Every address now carries `sch 2`,
+  no section page is built from a slug for a schedule provision, and a lettered
+  section keeps its letters (`s 10AA` was building `/s10.html`, a different real
+  section).
+- **The citation scanner no longer invents or truncates provision numbers.**
+  A match continued by more number is dropped whole rather than served as its
+  front half, so `s 8AAZLGA` is no longer read as `s 8AAZL` and `Part 2D.1` no
+  longer becomes `pt 2D`. Bare lettered structural units (`Subdivision C`, `CA`,
+  `DA`) are recognised instead of being dropped in silence, two ranges
+  fabricated out of real headings are gone, and `sub-s 5(2)` no longer collapses
+  to `sub-s (5)`, which is a different provision.
+- **A refused list member no longer takes the rest of the list with it.**
+  `ss 51AC, 52 and 53` yielded one citation and no record of the other two, so
+  `verify_citations` printed `[VERIFIED]` — "1 checked of 1 found" — over a
+  sentence naming three sections. A member the scanner will not read is now
+  reported as an unread span and the scan continues to the true end of the list,
+  including everything past the list-length ceiling. The order of preference is
+  explicit: an honest "unread" beats a silent drop, and both beat a fabricated
+  citation.
+- **`instrument_radar` only suggests provisions that parse.** `canonical()`
+  checked that the register's own string parsed and then emitted a reformatted
+  version unchecked, so `para 1020F(1)(c)` came back as the suggestion
+  `para (1020F)`, which the next call rejects. A formatted reference that does
+  not itself parse is never suggested.
+- **`setup` resolves client-config paths for the platform it is writing for**
+  rather than for the host running it, which turned a macOS path into a Windows
+  one when the two disagreed.
+- **An upstream that failed is never reported as an absence.** This is the rule
+  the project exists to keep, and this release closes the paths that broke it: a
+  blocked or silent source returns `[UPSTREAM_BLOCKED]` or `[UPSTREAM_NO_DATA]`
+  — with a deep link where one exists — and only a source that authoritatively
+  covers the record may answer `[NOT_FOUND]`.
+
+### Added
+
+- **A real-corpus grammar harness** (`src/lib/section-ref.corpus.test.ts`) that
+  reads recorded Federal Register tables of contents verbatim out of
+  `__fixtures__/` and asserts the four properties above over every label in
+  them. Dropping another recorded table of contents into that directory extends
+  the corpus with no code change. Run against the previous grammar it reports
+  97.13% parse, 2 labels resolving to the wrong provision and 454 scanned wrong
+  — the regression class it exists to catch.
+- **The release metadata npm expects** — `repository`, `homepage` and `bugs` —
+  and a `prepublishOnly` script that runs the typecheck, the full test suite and
+  a clean build, so a published tarball can never carry a stale or empty
+  `build/`.
+- The offline suite is now more than 2,400 tests across 105 files and still
+  touches no network; the 18 live-gated tests run only with `LIVE=1`.
+
 ## [0.1.0] — 2026-09-04
 
 Initial release.

@@ -1,4 +1,4 @@
-# australian-law-mcp — container image
+# au-law-mcp — container image
 
 # --- Build Stage ---
 FROM node:22-alpine AS builder
@@ -38,7 +38,7 @@ ENV PORT=3000
 # fail startup unless the operator supplies MCP_AUTH_TOKEN (or deliberately
 # opts into MCP_ALLOW_UNAUTHENTICATED_REMOTE at runtime):
 #
-#   docker run -p 3000:3000 -e MCP_AUTH_TOKEN=replace-with-a-secret australian-law-mcp
+#   docker run -p 3000:3000 -e MCP_AUTH_TOKEN=replace-with-a-secret au-law-mcp
 #
 # Behind a reverse proxy add -e TRUST_PROXY=1 (the exact hop count — never
 # "true"), and -e ALLOWED_ORIGINS=https://your.app if a browser calls /mcp.

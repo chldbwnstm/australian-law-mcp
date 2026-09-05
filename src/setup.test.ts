@@ -26,12 +26,12 @@ describe("the registered entry", () => {
   // Australian sources are keyless, so there is nothing to put in `env` — an
   // empty env block would only invite someone to paste a credential into it.
   it("carries no API key", () => {
-    expect(buildServerEntry()).toEqual({ command: "npx", args: ["-y", "australian-law-mcp"] })
+    expect(buildServerEntry()).toEqual({ command: "npx", args: ["-y", "au-law-mcp"] })
     expect(JSON.stringify(buildServerEntry())).not.toMatch(/env|key/i)
   })
 
   it("nests the command for Zed", () => {
-    expect(buildZedEntry()).toEqual({ command: { path: "npx", args: ["-y", "australian-law-mcp"] } })
+    expect(buildZedEntry()).toEqual({ command: { path: "npx", args: ["-y", "au-law-mcp"] } })
     expect(entryFor("context_servers")).toEqual(buildZedEntry())
     expect(entryFor("servers")).toEqual(buildServerEntry())
   })

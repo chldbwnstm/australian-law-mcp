@@ -39,13 +39,13 @@ function createServer(executionLimits: ExecutionLimits = readExecutionLimits()):
   return server
 }
 
-const USAGE = `australian-law-mcp ${VERSION}
+const USAGE = `au-law-mcp ${VERSION}
 
-  australian-law-mcp                      start on stdio (what an MCP client spawns)
-  australian-law-mcp --mode http [--port 8000]
+  au-law-mcp                              start on stdio (what an MCP client spawns)
+  au-law-mcp --mode http [--port 8000]
                                           start the stateless Streamable HTTP server
-  australian-law-mcp setup                register this server in your MCP client configs
-  australian-law-mcp --version | --help
+  au-law-mcp setup                        register this server in your MCP client configs
+  au-law-mcp --version | --help
 
 HTTP mode binds 127.0.0.1 by default. A non-loopback MCP_HTTP_HOST requires
 MCP_AUTH_TOKEN (or an explicit MCP_ALLOW_UNAUTHENTICATED_REMOTE=1). See

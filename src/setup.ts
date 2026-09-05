@@ -1,5 +1,5 @@
 /**
- * Interactive setup wizard — `australian-law-mcp setup`.
+ * Interactive setup wizard — `au-law-mcp setup`.
  *
  * It registers this server in the MCP client configuration files that are
  * already on the machine. There is **no API key step**: every Australian source
@@ -25,8 +25,8 @@ import { createInterface } from "node:readline/promises"
 /** The key this server is registered under, in every client. */
 export const SERVER_KEY = "australian-law"
 
-/** The npm package that provides the `australian-law-mcp` binary. */
-const PACKAGE_NAME = "australian-law-mcp"
+/** The npm package that provides the `au-law-mcp` binary. */
+const PACKAGE_NAME = "au-law-mcp"
 
 export interface ClientConfig {
   readonly name: string
@@ -69,7 +69,7 @@ export function detectClients(home = homedir(), os = platform(), cwd = process.c
 }
 
 /**
- * `npx -y` rather than a bare `australian-law-mcp`: the wizard runs before any
+ * `npx -y` rather than a bare `au-law-mcp`: the wizard runs before any
  * global install exists, and a command that is not on the client's PATH fails
  * with "server disconnected" rather than anything a user can act on.
  */

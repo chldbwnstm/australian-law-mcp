@@ -1,6 +1,6 @@
 {
-  "name": "australian-law-mcp",
-  "version": "0.1.0",
+  "name": "au-law-mcp",
+  "version": "1.0.0",
   "description": "MCP server for Australian law — legislation, case law and delegated instruments from keyless public sources, exposed as MCP tools and a natural-language CLI",
   "type": "module",
   "main": "build/index.js",
@@ -24,7 +24,7 @@
     }
   },
   "bin": {
-    "australian-law-mcp": "build/index.js",
+    "au-law-mcp": "build/index.js",
     "australian-law": "build/cli.js"
   },
   "scripts": {
@@ -37,21 +37,32 @@
     "cli": "node build/cli.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "keywords": [
     "mcp",
     "mcp-server",
     "australian-law",
+    "australia",
     "legislation",
     "case-law",
     "austlii",
     "claude",
     "model-context-protocol",
     "legal-ai",
+    "federal-register-of-legislation",
     "cli"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chldbwnstm/australian-law-mcp.git"
+  },
+  "homepage": "https://github.com/chldbwnstm/australian-law-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/chldbwnstm/australian-law-mcp/issues"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
     "commander": "^14.0.3",

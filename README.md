@@ -2,7 +2,7 @@
 
 **81 tools compressed into 10.** Search, retrieve and analyse Australian law — Commonwealth legislation, State and Territory registers, judgments, tribunal decisions, ATO rulings, treaties and delegated instruments — plus **a citation hallucination guard that checks content, not just existence**, **a case citator (`cite_check`)**, **point-in-time law resolution (`applicable_law`)** and **an instrument staleness radar (`instrument_radar`)**.
 
-![npm](https://img.shields.io/npm/v/australian-law-mcp)
+![npm](https://img.shields.io/npm/v/au-law-mcp)
 ![MCP](https://img.shields.io/badge/MCP-1.27-blue)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue)
@@ -25,12 +25,14 @@ The other half of the problem is access. Several of the sources a researcher wou
 
 ## Quick Start
 
+> The package is published on npm as **`au-law-mcp`**, because the unscoped `australian-law-mcp` name already belongs to an unrelated project.
+
 ### Option 1 — MCP server (Claude Desktop, Claude Code, Cursor, Windsurf, VS Code, Zed, Gemini CLI)
 
 **Automatic (recommended).** The wizard detects which clients are installed, shows you the config paths, and merges the entry into each file it is allowed to touch:
 
 ```bash
-npx -y --ignore-scripts australian-law-mcp setup
+npx -y --ignore-scripts au-law-mcp setup
 ```
 
 There is no API-key step. The wizard reads an existing config, merges, and rewrites — it never replaces a file that already holds your other servers.
@@ -42,7 +44,7 @@ There is no API-key step. The wizard reads an existing config, merges, and rewri
   "mcpServers": {
     "australian-law": {
       "command": "npx",
-      "args": ["-y", "australian-law-mcp"]
+      "args": ["-y", "au-law-mcp"]
     }
   }
 }
@@ -61,7 +63,7 @@ There is no API-key step. The wizard reads an existing config, merges, and rewri
 ### Option 2 — CLI
 
 ```bash
-npm install -g --ignore-scripts --omit=optional australian-law-mcp
+npm install -g --ignore-scripts --omit=optional au-law-mcp
 
 australian-law "what does s 18 of the ACL say"        # plain English, routed to a tool
 australian-law "is [2020] HCA 41 still good law"      # → cite_check
@@ -74,8 +76,8 @@ australian-law                                        # interactive REPL
 ### Option 3 — Docker
 
 ```bash
-docker build -t australian-law-mcp .
-docker run -p 3000:3000 -e MCP_AUTH_TOKEN=replace-with-a-secret australian-law-mcp
+docker build -t au-law-mcp .
+docker run -p 3000:3000 -e MCP_AUTH_TOKEN=replace-with-a-secret au-law-mcp
 ```
 
 The image binds `0.0.0.0` because a container *is* a remote deployment. Startup fails without `MCP_AUTH_TOKEN` unless you deliberately set `MCP_ALLOW_UNAUTHENTICATED_REMOTE=1`.
@@ -83,7 +85,7 @@ The image binds `0.0.0.0` because a container *is* a remote deployment. Startup 
 ### Option 4 — HTTP deployment
 
 ```bash
-australian-law-mcp --mode http --port 8000
+au-law-mcp --mode http --port 8000
 ```
 
 Stateless Streamable HTTP: `POST /mcp` needs no session handshake, so any number of replicas can sit behind one load balancer. `GET /` reports the tool counts and `GET /health` is a plain liveness probe; both stay open when a token is set so a balancer can reach them.
