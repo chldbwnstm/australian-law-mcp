@@ -1,6 +1,6 @@
 # Australian Law MCP
 
-**81 tools compressed into 10.** Search, retrieve and analyse Australian law — Commonwealth legislation, State and Territory registers, judgments, tribunal decisions, ATO rulings, treaties and delegated instruments — plus **a citation hallucination guard that checks content, not just existence**, **a case citator (`cite_check`)**, **point-in-time law resolution (`applicable_law`)** and **an instrument staleness radar (`instrument_radar`)**.
+**Australian legislation, decisions and citation checking, inside the AI tools a practitioner already uses.** Commonwealth Acts and instruments as compiled on any date, State and Territory registers, judgments, tribunal decisions, ATO rulings, treaties and explanatory material — all from keyless public sources, exposed as MCP tools and a natural-language CLI. Published on npm as **`au-law-mcp`**.
 
 ![npm](https://img.shields.io/npm/v/au-law-mcp)
 ![MCP](https://img.shields.io/badge/MCP-1.27-blue)
@@ -9,9 +9,145 @@
 
 > Every source is a **keyless public endpoint** — the Federal Register of Legislation, NSW Caselaw, the High Court, Queensland Judgments, the State registers, the ATO, the Fair Work Commission, the OAIC, the NACC and DFAT. **There is no API key to configure.** Works with Claude Desktop, Claude Code, Cursor, Windsurf, VS Code, Zed, Gemini CLI, and any MCP client.
 
+It is built for the moments where a plausible answer is the wrong one: a section number that exists but says something else, a compilation that is not the one in force on the day the conduct happened, a source that refused the request and was reported as "no such case". **The server never reports an absence it did not establish**, and its citation checker verifies **content**, not just existence.
+
 ---
 
-## Why this exists
+## When a practitioner reaches for it
+
+This is not a replacement for a case-law database. It is the tool for the legislation-facing parts of ordinary practice, where the cost of a small error is high and the answer is on a public register that is slow to navigate by hand. Every row below is something the verification run actually did; the transcripts are in [`docs/VERIFICATION.md`](docs/VERIFICATION.md).
+
+| You are… | You ask | What comes back | Behind it |
+|---|---|---|---|
+| **Checking a draft** advice, letter or submission before it leaves your desk — especially one an AI helped write | "Check every citation in this" | Each statutory pinpoint resolved against the Register's actual text and marked `✓`, `✗` or `⚠` with the reason. A section that exists but does not say what the draft claims is an `✗`, not a tick. A fabricated citation in a filed document is a professional problem, not a typo. | `legal_analysis` · `verify_citations` |
+| **Advising on conduct** that happened on a particular date | "What did s 52 say on 30 June 2010, and under which title?" | The compilation in force that day, the provision as it then stood, a diff against today, the rename-or-repeal history, and the transitional provisions of the amending Acts. | `legal_analysis` · `applicable_law` |
+| **Reading a provision**, a schedule or a fee table in the middle of something else | "What does ACL s 18 say" · "Which schedule carries the penalty table" | The provision from the authorised compilation, with its position in the Act. `ACL s 18` is fetched as `sch 2 s 18`, and the note says the body of the Act has its own s 18 and that it is a different provision. | `get_law_text`, `get_schedules` |
+| **Telling a client what changed** | "How has FW Act s 340 changed since 2022, and by which Acts" | The amendment history of that provision read from the compilation's own endnotes, with each amending Act and its register id. | `legal_research` · `amendment_track` |
+| **Reviewing delegated legislation** for compliance or in-house work | "Has the enabling Act moved since this instrument was last compiled?" | The enabling provisions, the Act's intervening amendments with register ids, and a flag that is a prompt to review — **not** a finding that the instrument is invalid. | `instrument_radar` |
+| **Looking for a tribunal or regulator decision** that lives on a site you rarely visit | "Unfair dismissal decisions on serious misconduct" · "The ATO's decision impact statement on that case" | One search across the Fair Work Commission, the ATO Legal Database, the OAIC, the NACC, the Merit Protection Commissioner and thirteen other domains, each answer labelled with its source and with what the source did not hand over. | `search_decisions`, `get_decision_text` |
+| **Building an interpretation argument** | "The explanatory memorandum for the 2010 consumer-law amendments" | The explanatory memorandum or explanatory statement — extrinsic material a court may use under s 15AB of the *Acts Interpretation Act 1901*. Evidence, not commentary. | `search_decisions` · `explanatory` |
+| **Orienting across jurisdictions** | "Which State Acts correspond to this Commonwealth one?" | The State and Territory counterparts wherever a register can be queried, and a deep link with an explicit "not queried" label where it cannot (NSW, SA). | `legal_research` · `state_law_compare` |
+
+### What that looks like
+
+**The draft check.** An LLM writes a paragraph of advice:
+
+> Under the Competition and Consumer Act 2010 (Cth) s 18, misleading conduct is prohibited; see also Privacy Act 1988 (Cth) s 999.
+
+`legal_analysis({mode:"verify_citations", text: "…"})`:
+
+```
+[CITATION_ERRORS_FOUND] Citation check
+Statute citations: 2 | ✓ 0 verified | ✗ 2 cannot be right | ⚠ 0 not checked here
+
+✗ CONTENT_MISMATCH: Competition and Consumer Act 2010 (Cth) s 18 is 'Meetings of
+  Commission'; misleading conduct is sch 2 s 18 (Australian Consumer Law)
+✗ NOT_FOUND: Privacy Act 1988 (Cth) s 999 — Privacy Act 1988 [C2004A03712] has no
+  s 999 in its current compilation. the body of the Act runs from s 1 to s 100 in
+  this compilation (313 numbered entries). Nearest entries: 100 Regulations |
+  99A Conduct of directors, employees and agents | 98A Treatment of partnerships
+
+⚠️ 2 citation(s) cannot be right as written … Do NOT answer "verified".
+```
+
+Both citations are of real Acts. One section exists but says something else; the other does not exist. An existence-only checker catches the second and ticks the first.
+
+**The date question.** `legal_analysis({mode:"applicable_law", lawName:"Trade Practices Act", date:"2010-06-30", provision:"s 52"})`:
+
+```
+▶ In force on that date
+  Trade Practices Act 1974 — compilation window 2010-04-15 → 2010-07-01, registerId C2010C00331
+  ⚠️ On that date this law was titled "Trade Practices Act 1974". It is now
+     "Competition and Consumer Act 2010" — the SAME Act, renamed, NOT repealed
+     and replaced. Cite it as "Trade Practices Act 1974" for conduct on 2010-06-30.
+
+▶ s 52 as at 2010-06-30
+52 Misleading or deceptive conduct
+    (1) A corporation shall not, in trade or commerce, engage in conduct that is
+        misleading or deceptive or is likely to mislead or deceive.
+
+▶ Compared with today: CHANGED — 14 line(s) added, 4 removed.
+- 52 Misleading or deceptive conduct
++ 52 Guarantee as to undisturbed possession
+
+▶ Application / saving / transitional provisions in the 1 most recent amending Act(s)
+  Trade Practices Amendment (Australian Consumer Law) Act (No. 2) 2010 [C2010A00103]
+    • Schedule 2—Application of the Australian Consumer Law
+    • Schedule 7—Transitional matters
+```
+
+Today's s 52 is a different provision. Answering from the current text would have been confidently wrong.
+
+**The schedule trap, from the CLI.**
+
+```bash
+$ australian-law "what does s 18 of the ACL say"
+  [routing] get_law_text — statute name + provision reference → get_law_text
+  also: ACL is schedule 2 of Competition and Consumer Act 2010, so the reference
+  was read as "sch 2 s 18". The body of the Act has its own section of that
+  number, and it is a different provision.
+
+Provision: sch 2 s 18 — 18 Misleading or deceptive conduct
+In: Volume 4 › Schedule 2—The Australian Consumer Law › Chapter 2—General
+    protections › Part 2-1—Misleading or deceptive conduct
+18 Misleading or deceptive conduct
+    (1) A person must not, in trade or commerce, engage in conduct that is
+        misleading or deceptive or is likely to mislead or deceive.
+```
+
+### The calls behind the prompts
+
+```
+User: "what does s 18 of the ACL say"
+→ get_schedules(registerId="C2004A00109") → get_law_text(registerId="C2004A00109", provision="sch 2 s 18")
+
+User: "was misleading conduct illegal in 2010 and under which Act"
+→ legal_analysis(mode="applicable_law", lawName="Trade Practices Act", date="2010-06-30", provision="s 52")
+
+User: "find unfair dismissal decisions about serious misconduct"
+→ search_decisions(domain="workplace", query="serious misconduct") → get_decision_text(domain="workplace", id="…")
+
+User: "what tools do you have for point-in-time law"
+→ discover_tools(intent="point in time law") → execute_tool(tool_name="get_provision_history", params={…})
+```
+
+---
+
+## When not to reach for it
+
+The limits are stated up front because a tool that is silent about them produces the confident wrong answer it was built to prevent. The full list is under [Honest limitations](#honest-limitations).
+
+- **Case-law research proper.** AustLII, LawCite and the Federal Court refuse automated clients; reported series (CLR, FCR, NSWLR) cannot be verified; only NSW, the High Court and Queensland judgments are searched. Use Westlaw, Lexis, JADE or AustLII directly. This server gives you the deep link and says, in words, that it did not look.
+- **"Is this case still good law?"** `cite_check` scans what it can reach and scopes its verdict to that. It is a mention search, not editorial treatment, and it never presents a partial scan as a clean bill of health. A practitioner uses a citator with treatment flags for this:
+
+  ```
+  ▶ Verdict: cited — later judgments mention this case and no contrary appellate
+    language was found in what was scanned
+
+  ▶ Later cases mentioning [2020] HCA 41 (13 found)
+    NSW Caselaw: 1 mention(s)
+    Queensland Judgments: 0 mention(s)
+    High Court of Australia: 12 mention(s) (source reports 74)
+  ```
+
+- **NSW and SA statute text.** Both registers discourage automated access, so this server refuses to request them and hands back a link:
+
+  ```
+  [UPSTREAM_BLOCKED] nswLegislation is not fetched by this server (no public query
+  surface and the register discourages automated access). This is a refusal to
+  request, not an observation about the record — nothing here says the material is
+  absent.
+  Suggestions:
+    1. ⚠️ Do not report this as 'no such case/legislation'. The source was never
+       queried, so this response carries no evidence either way.
+    2. Open directly: https://legislation.nsw.gov.au
+  ```
+
+- **Advice.** This software retrieves and formats public legal material. Reading the authorised text and forming a view is still the practitioner's work, and nothing here substitutes for it.
+
+---
+
+## Why wrong answers happen in Australian law
 
 Australian law is split three ways and the split is where wrong answers come from.
 
@@ -88,34 +224,7 @@ The image binds `0.0.0.0` because a container *is* a remote deployment. Startup 
 au-law-mcp --mode http --port 8000
 ```
 
-Stateless Streamable HTTP: `POST /mcp` needs no session handshake, so any number of replicas can sit behind one load balancer. `GET /` reports the tool counts and `GET /health` is a plain liveness probe; both stay open when a token is set so a balancer can reach them.
-
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `PORT` | No | `8000` | Listening port. `--port` wins over it. |
-| `MCP_HTTP_HOST` | No | `127.0.0.1` | Bind address. A non-loopback host **requires** `MCP_AUTH_TOKEN` or an explicit `MCP_ALLOW_UNAUTHENTICATED_REMOTE=1`. |
-| `MCP_AUTH_TOKEN` | No | — | When set, `/mcp` requires `x-mcp-token: <token>` or `Authorization: Bearer <token>`. `/health` and `/` stay open. |
-| `MCP_ALLOW_UNAUTHENTICATED_REMOTE` | No | `0` | Set to `1` only for a deliberately public deployment with another access boundary in front of it. Emits a startup warning. |
-| `ALLOWED_ORIGINS` | No | — | Comma-separated `Origin` allowlist (DNS-rebinding defence). A request carrying an `Origin` is refused unless listed; ordinary MCP clients send none and are unaffected. |
-| `CORS_ORIGIN` | No | — | `Access-Control-Allow-Origin` for requests with no `Origin` header. Setting it also lets that origin pass validation. |
-| `TRUST_PROXY` | No | — | Trusted reverse-proxy hops, `1`–`10`. Never `true`: trusting every hop makes `X-Forwarded-For`, and so the per-IP limit, client-controlled. |
-| `RATE_LIMIT_RPM` | No | `60` | `tools/call` per minute per IP. `0` disables only this limiter. The handshake is never rate limited. |
-| `MCP_MAX_BATCH_CALLS` | No | `20` | Maximum `tools/call` items in one JSON-RPC envelope. |
-| `MCP_MAX_BODY_BYTES` | No | `102400` | Maximum incoming JSON request size. The older `MCP_BODY_LIMIT` spelling (`"100kb"`) is still accepted. |
-| `ALLOW_QUERY_API_KEY` | No | `1` | Set to `0` to reject `?apikey=` — query strings land in proxy access logs in plain text. Headers are unaffected. |
-| `ACCESS_LOG` | No | `0` | `1` for one log line per request. The path only, never the query string. |
-| `MCP_MAX_UPSTREAM_REQUESTS` | No | `48` | Request-wide upstream attempt budget, retries included. A batch and every chain step share one budget. |
-| `MCP_MAX_UPSTREAM_BODY_BYTES` | No | `8388608` | Bytes read from one upstream response. The Register serves Act text as whole epub volumes — the CCA's are 2.0 MiB and 4.1 MiB — so lowering this below ~5 MiB makes `get_law_text` fail on the largest Acts. |
-| `MCP_MAX_TOTAL_UPSTREAM_BODY_BYTES` | No | `33554432` | Upstream body bytes for one outer request (~4 full-size volumes). Must be ≥ `MCP_MAX_UPSTREAM_BODY_BYTES`. |
-| `MCP_MAX_TOOL_RESPONSE_CHARS` | No | `50000` | Characters returned in one tool response. |
-| `MCP_CHAIN_DEADLINE_MS` | No | `45000` | Deadline for chain tools. On expiry the chain returns what arrived and marks the rest, instead of losing everything to a client timeout. |
-| `FALLBACK_RATE_LIMIT_RPM` | No | `120` | Shared upstream allowance, refilled per minute. These sources are scraped public sites with politeness intervals, not a paid quota. |
-| `FALLBACK_RATE_LIMIT_BURST` | No | `120` | Burst the shared bucket holds. |
-| `FALLBACK_DAILY_CAP` | No | `0` | Rolling 24-hour cap on that shared path. `0` disables it. |
-| `LAW_USER_AGENT` | No | a browser UA | Some upstreams reject Node's default undici agent. |
-| `LAW_REFERER` | No | — | Sent as `Referer` on every upstream request when set. |
-
-Every numeric setting is validated as a whole integer at startup. An invalid value **fails the boot** rather than quietly disabling the limit it configures — `parseInt("60x")` is `60`, and `NaN > limit` is `false`, and either one turns a gate off with nothing in the logs.
+Stateless Streamable HTTP: `POST /mcp` needs no session handshake, so any number of replicas can sit behind one load balancer. `GET /` reports the tool counts and `GET /health` is a plain liveness probe; both stay open when a token is set so a balancer can reach them. Every variable is documented in the [configuration reference](#configuration-reference) below.
 
 ---
 
@@ -199,135 +308,11 @@ This software retrieves and formats public legal material. It does not give lega
 
 ---
 
-## Usage examples
-
-Real output from the verification run. Full transcripts in [`docs/VERIFICATION.md`](docs/VERIFICATION.md).
-
-### The citation hallucination guard
-
-An LLM writes a paragraph of advice:
-
-> Under the Competition and Consumer Act 2010 (Cth) s 18, misleading conduct is prohibited; see also Privacy Act 1988 (Cth) s 999.
-
-`legal_analysis({mode:"verify_citations", text: "…"})`:
-
-```
-[CITATION_ERRORS_FOUND] Citation check
-Statute citations: 2 | ✓ 0 verified | ✗ 2 cannot be right | ⚠ 0 not checked here
-
-✗ CONTENT_MISMATCH: Competition and Consumer Act 2010 (Cth) s 18 is 'Meetings of
-  Commission'; misleading conduct is sch 2 s 18 (Australian Consumer Law)
-✗ NOT_FOUND: Privacy Act 1988 (Cth) s 999 — Privacy Act 1988 [C2004A03712] has no
-  s 999 in its current compilation. the body of the Act runs from s 1 to s 100 in
-  this compilation (313 numbered entries). Nearest entries: 100 Regulations |
-  99A Conduct of directors, employees and agents | 98A Treatment of partnerships
-
-⚠️ 2 citation(s) cannot be right as written … Do NOT answer "verified".
-```
-
-Both citations are of real Acts. One section exists but says something else; the other does not exist. An existence-only checker catches the second and ticks the first.
-
-### Point-in-time law
-
-`legal_analysis({mode:"applicable_law", lawName:"Trade Practices Act", date:"2010-06-30", provision:"s 52"})`:
-
-```
-▶ In force on that date
-  Trade Practices Act 1974 — compilation window 2010-04-15 → 2010-07-01, registerId C2010C00331
-  ⚠️ On that date this law was titled "Trade Practices Act 1974". It is now
-     "Competition and Consumer Act 2010" — the SAME Act, renamed, NOT repealed
-     and replaced. Cite it as "Trade Practices Act 1974" for conduct on 2010-06-30.
-
-▶ s 52 as at 2010-06-30
-52 Misleading or deceptive conduct
-    (1) A corporation shall not, in trade or commerce, engage in conduct that is
-        misleading or deceptive or is likely to mislead or deceive.
-
-▶ Compared with today: CHANGED — 14 line(s) added, 4 removed.
-- 52 Misleading or deceptive conduct
-+ 52 Guarantee as to undisturbed possession
-
-▶ Application / saving / transitional provisions in the 1 most recent amending Act(s)
-  Trade Practices Amendment (Australian Consumer Law) Act (No. 2) 2010 [C2010A00103]
-    • Schedule 2—Application of the Australian Consumer Law
-    • Schedule 7—Transitional matters
-```
-
-Today's s 52 is a different provision. Answering from the current text would have been confidently wrong.
-
-### The citator
-
-`legal_analysis({mode:"cite_check", caseNumber:"[2020] HCA 41"})`:
-
-```
-▶ The case itself
-  ✓ Calidad Pty Ltd v Seiko Epson Corporation, 12 Nov 2020 — High Court of Australia
-
-▶ Verdict: cited — later judgments mention this case and no contrary appellate
-  language was found in what was scanned
-
-▶ Later cases mentioning [2020] HCA 41 (13 found)
-  NSW Caselaw: 1 mention(s)
-  Queensland Judgments: 0 mention(s)
-  High Court of Australia: 12 mention(s) (source reports 74)
-```
-
-Note "in what was scanned" and "source reports 74". The verdict is scoped to the evidence.
-
-### The schedule trap, from the CLI
-
-```bash
-$ australian-law "what does s 18 of the ACL say"
-  [routing] get_law_text — statute name + provision reference → get_law_text
-  also: ACL is schedule 2 of Competition and Consumer Act 2010, so the reference
-  was read as "sch 2 s 18". The body of the Act has its own section of that
-  number, and it is a different provision.
-
-Provision: sch 2 s 18 — 18 Misleading or deceptive conduct
-In: Volume 4 › Schedule 2—The Australian Consumer Law › Chapter 2—General
-    protections › Part 2-1—Misleading or deceptive conduct
-18 Misleading or deceptive conduct
-    (1) A person must not, in trade or commerce, engage in conduct that is
-        misleading or deceptive or is likely to mislead or deceive.
-```
-
-### Blocked, not absent
-
-```
-$ search_decisions {domain:"state_law", query:"residential tenancies", options:{jurisdiction:"nsw"}}
-
-[UPSTREAM_BLOCKED] nswLegislation is not fetched by this server (no public query
-surface and the register discourages automated access). This is a refusal to
-request, not an observation about the record — nothing here says the material is
-absent.
-Suggestions:
-  1. ⚠️ Do not report this as 'no such case/legislation'. The source was never
-     queried, so this response carries no evidence either way.
-  2. Open directly: https://legislation.nsw.gov.au
-```
-
-### Typical call chains
-
-```
-User: "what does s 18 of the ACL say"
-→ get_schedules(registerId="C2004A00109") → get_law_text(registerId="C2004A00109", provision="sch 2 s 18")
-
-User: "was misleading conduct illegal in 2010 and under which Act"
-→ legal_analysis(mode="applicable_law", lawName="Trade Practices Act", date="2010-06-30", provision="s 52")
-
-User: "find unfair dismissal decisions about serious misconduct"
-→ search_decisions(domain="workplace", query="serious misconduct") → get_decision_text(domain="workplace", id="…")
-
-User: "what tools do you have for point-in-time law"
-→ discover_tools(intent="point in time law") → execute_tool(tool_name="get_provision_history", params={…})
-```
-
----
-
-## Features
+## Under the hood
 
 - **Two-list registry** — 81 tools registered, 10 advertised. Everything stays callable by name forever; the advertised surface is a projection, not the truth.
 - **Bracket-labelled errors** — `[NOT_FOUND]`, `[UPSTREAM_NO_DATA]`, `[UPSTREAM_BLOCKED]`, `[EXTERNAL_API_ERROR]` and the rest are a machine-readable contract, and the three "we don't have it" cases are kept strictly apart because they mean different things to a caller.
+- **A provision grammar checked against the statute book** — the reference parser is tested against every provision label of five recorded Federal Register tables of contents (12,642 labels), and its letter classes are set from all 1,177 in-force principal Commonwealth Acts, not from a sample.
 - **One execution budget per request** — a JSON-RPC batch and every chain step share one allowance, held in `AsyncLocalStorage`, so a single envelope cannot multiply the upstream footprint.
 - **Chains that degrade rather than die** — on deadline a chain assembles what arrived and marks the rest, instead of losing everything to a client timeout.
 - **Per-host politeness** — every upstream has its own timeout and minimum interval, sized from measurement (Queensland content search takes up to 90s; the ATO form up to 60s), so one slow host does not stall every other tool.
@@ -336,13 +321,47 @@ User: "what tools do you have for point-in-time law"
 
 ---
 
+## Configuration reference
+
+All variables apply to `--mode http`; the stdio server needs none of them.
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `PORT` | No | `8000` | Listening port. `--port` wins over it. |
+| `MCP_HTTP_HOST` | No | `127.0.0.1` | Bind address. A non-loopback host **requires** `MCP_AUTH_TOKEN` or an explicit `MCP_ALLOW_UNAUTHENTICATED_REMOTE=1`. |
+| `MCP_AUTH_TOKEN` | No | — | When set, `/mcp` requires `x-mcp-token: <token>` or `Authorization: Bearer <token>`. `/health` and `/` stay open. |
+| `MCP_ALLOW_UNAUTHENTICATED_REMOTE` | No | `0` | Set to `1` only for a deliberately public deployment with another access boundary in front of it. Emits a startup warning. |
+| `ALLOWED_ORIGINS` | No | — | Comma-separated `Origin` allowlist (DNS-rebinding defence). A request carrying an `Origin` is refused unless listed; ordinary MCP clients send none and are unaffected. |
+| `CORS_ORIGIN` | No | — | `Access-Control-Allow-Origin` for requests with no `Origin` header. Setting it also lets that origin pass validation. |
+| `TRUST_PROXY` | No | — | Trusted reverse-proxy hops, `1`–`10`. Never `true`: trusting every hop makes `X-Forwarded-For`, and so the per-IP limit, client-controlled. |
+| `RATE_LIMIT_RPM` | No | `60` | `tools/call` per minute per IP. `0` disables only this limiter. The handshake is never rate limited. |
+| `MCP_MAX_BATCH_CALLS` | No | `20` | Maximum `tools/call` items in one JSON-RPC envelope. |
+| `MCP_MAX_BODY_BYTES` | No | `102400` | Maximum incoming JSON request size. The older `MCP_BODY_LIMIT` spelling (`"100kb"`) is still accepted. |
+| `ALLOW_QUERY_API_KEY` | No | `1` | Set to `0` to reject `?apikey=` — query strings land in proxy access logs in plain text. Headers are unaffected. |
+| `ACCESS_LOG` | No | `0` | `1` for one log line per request. The path only, never the query string. |
+| `MCP_MAX_UPSTREAM_REQUESTS` | No | `48` | Request-wide upstream attempt budget, retries included. A batch and every chain step share one budget. |
+| `MCP_MAX_UPSTREAM_BODY_BYTES` | No | `8388608` | Bytes read from one upstream response. The Register serves Act text as whole epub volumes — the CCA's are 2.0 MiB and 4.1 MiB — so lowering this below ~5 MiB makes `get_law_text` fail on the largest Acts. |
+| `MCP_MAX_TOTAL_UPSTREAM_BODY_BYTES` | No | `33554432` | Upstream body bytes for one outer request (~4 full-size volumes). Must be ≥ `MCP_MAX_UPSTREAM_BODY_BYTES`. |
+| `MCP_MAX_TOOL_RESPONSE_CHARS` | No | `50000` | Characters returned in one tool response. |
+| `MCP_CHAIN_DEADLINE_MS` | No | `45000` | Deadline for chain tools. On expiry the chain returns what arrived and marks the rest, instead of losing everything to a client timeout. |
+| `FALLBACK_RATE_LIMIT_RPM` | No | `120` | Shared upstream allowance, refilled per minute. These sources are scraped public sites with politeness intervals, not a paid quota. |
+| `FALLBACK_RATE_LIMIT_BURST` | No | `120` | Burst the shared bucket holds. |
+| `FALLBACK_DAILY_CAP` | No | `0` | Rolling 24-hour cap on that shared path. `0` disables it. |
+| `LAW_USER_AGENT` | No | a browser UA | Some upstreams reject Node's default undici agent. |
+| `LAW_REFERER` | No | — | Sent as `Referer` on every upstream request when set. |
+
+Every numeric setting is validated as a whole integer at startup. An invalid value **fails the boot** rather than quietly disabling the limit it configures — `parseInt("60x")` is `60`, and `NaN > limit` is `false`, and either one turns a gate off with nothing in the logs.
+
+---
+
 ## Documentation
 
 - [`docs/API.md`](docs/API.md) — tool reference: id formats, error taxonomy, caching and limits, all 10 advertised tools with parameters, category tables for the other 71, workflow examples.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — sources, layering, the client contract.
-- [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) — build, test, fixture-recording conventions, how to add a tool or a domain.
+- [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) — the project's rules, build, test, fixture-recording conventions, how to add a tool or a domain.
 - [`docs/TOOL-MAPPING.md`](docs/TOOL-MAPPING.md) — how each tool maps onto an Australian source.
-- [`docs/VERIFICATION.md`](docs/VERIFICATION.md) — the live verification log this README's grades come from.
+- [`docs/VERIFICATION.md`](docs/VERIFICATION.md) — the live verification log this README's grades and examples come from.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — the short version of what a change has to clear.
 - [`CHANGELOG.md`](CHANGELOG.md) — release history.
 
 ---
