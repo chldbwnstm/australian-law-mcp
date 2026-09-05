@@ -1,5 +1,7 @@
 # Live verification log
 
+*Recorded against 0.1.0. The package was renamed `au-law-mcp` in 1.0.0; the packaging rows below name the 0.1.0 tarball and bin.*
+
 > **v0.1.0** | Re-run 2026-09-04 against `882b13d` + the fixes in §7, macOS 15
 > (darwin 25.6.0), Node 22, from a residential Australian-reachable IP. Every
 > result below is from the **real built server** talking to the **real
