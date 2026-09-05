@@ -7,8 +7,17 @@
  * so the three wide chains assemble what arrived and mark the rest.
  *
  * Every upstream is mocked. A slow branch is a promise that never settles, and
- * the deadline is shortened through the environment so nothing here actually
- * waits 45 seconds.
+ * only the deadline can cut it.
+ *
+ * The clock is virtual (`vi.useFakeTimers`). The deadline is one `setTimeout`
+ * inside `startChainDeadline`, every stub here settles on microtasks alone,
+ * and no real I/O interleaves — so advancing the fake clock past the deadline
+ * is the whole of "time ran out". Against real timers this file paced itself
+ * off the wall clock into the 5-second MIN_DEADLINE_MS floor: ~30 seconds of
+ * genuine waiting per run, guarded only by real-time margins (20 s per-test
+ * timeouts over 5 s waits, one 15 s elapsed bound) that full-suite load can
+ * consume. The environment still shortens the deadline to the floor so one
+ * small advance crosses it, and so the override path itself stays exercised.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { AuApiClient } from "../lib/api-client.js"
@@ -58,11 +67,27 @@ const { chainActionBasis, chainDisputePrep, chainFullResearch } = await import("
 const client = {} as AuApiClient
 const CCA = { registerId: "C2004A00109", name: "Competition and Consumer Act 2010", collection: "Act", status: "InForce" }
 
+/** MIN_DEADLINE_MS — the smallest deadline the env accepts. */
+const DEADLINE_MS = 5_000
+
+/**
+ * Run a chain to completion under the virtual clock.
+ *
+ * The chain must already be running: `startChainDeadline` schedules its timer
+ * synchronously at call time, and a clock advanced before that timer exists
+ * never fires it — the hanging branch would then hang the test instead.
+ */
+async function settleAfter<T>(pending: Promise<T>, virtualMs: number): Promise<T> {
+  await vi.advanceTimersByTimeAsync(virtualMs)
+  return pending
+}
+
 const ORIGINAL = process.env.MCP_CHAIN_DEADLINE_MS
 
 beforeEach(() => {
   vi.clearAllMocks()
-  process.env.MCP_CHAIN_DEADLINE_MS = "5000"
+  vi.useFakeTimers()
+  process.env.MCP_CHAIN_DEADLINE_MS = String(DEADLINE_MS)
   resolveChainBaseLaw.mockResolvedValue({ laws: [CCA], searchedWith: "CCA", attempts: ["CCA"] })
   fetchSearchDetailChain.mockResolvedValue(null)
   for (const stub of [getThreeTier, getSchedules, searchCases, searchRulings, searchAdminAppeals, searchAiLaw, getLawText]) {
@@ -71,18 +96,18 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   if (ORIGINAL === undefined) delete process.env.MCP_CHAIN_DEADLINE_MS
   else process.env.MCP_CHAIN_DEADLINE_MS = ORIGINAL
 })
 
 describe("a branch that never answers", () => {
   it("becomes a marker naming the tool that fetches it alone, and marks nothing else", async () => {
-    // Two assertions in one run because each run costs a real deadline: the
-    // branch that hung gets a marker, and the branch nobody asked for — a
-    // `Promise.resolve(null)`, which also races to `{ok:false}` after expiry —
-    // does not.
+    // Two assertions in one run: the branch that hung gets a marker, and the
+    // branch nobody asked for — a `Promise.resolve(null)`, which also races to
+    // `{ok:false}` after expiry — does not.
     getThreeTier.mockImplementation(hang)
-    const result = await chainActionBasis(client, { query: "what authorises this direction" })
+    const result = await settleAfter(chainActionBasis(client, { query: "what authorises this direction" }), DEADLINE_MS)
     const text = result.content[0].text
 
     expect(text).toContain("Legal basis")
@@ -97,7 +122,7 @@ describe("a branch that never answers", () => {
     // Racing the pair as one unit throws away a result that did arrive.
     searchCases.mockResolvedValue(ok("1. Smith v Jones\n   id: nsw:aaa"))
     fetchSearchDetailChain.mockImplementation(hang)
-    const text = (await chainActionBasis(client, { query: "misleading conduct" })).content[0].text
+    const text = (await settleAfter(chainActionBasis(client, { query: "misleading conduct" }), DEADLINE_MS)).content[0].text
 
     expect(text).toContain("Smith v Jones")
     expect(text).toMatch(/▶ Case in full\n⏱/)
@@ -108,7 +133,7 @@ describe("the deadline covers the chain's groundwork too", () => {
   it("returns partially rather than hanging when the base-law search stalls", async () => {
     resolveChainBaseLaw.mockImplementation(hang)
     const started = Date.now()
-    const result = await chainActionBasis(client, { query: "renewal of a licence" })
+    const result = await settleAfter(chainActionBasis(client, { query: "renewal of a licence" }), DEADLINE_MS)
     const text = result.content[0].text
 
     expect(Date.now() - started).toBeLessThan(15_000)
@@ -120,11 +145,13 @@ describe("the deadline covers the chain's groundwork too", () => {
   }, 20_000)
 
   it("does not report an expiry-emptied search as 'no such law'", async () => {
+    // Resolves 1.5 s after the deadline — the advance covers both timers.
     resolveChainBaseLaw.mockImplementation(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 6_500))
+      await new Promise((resolve) => setTimeout(resolve, DEADLINE_MS + 1_500))
       return { laws: [], attempts: ["x"] }
     })
-    const text = (await chainActionBasis(client, { query: "renewal of a licence" })).content[0].text
+    const text = (await settleAfter(chainActionBasis(client, { query: "renewal of a licence" }), DEADLINE_MS + 1_500))
+      .content[0].text
     expect(text).not.toContain("[NOT_FOUND]")
     expect(text).toContain("time limit")
   }, 20_000)
@@ -132,7 +159,7 @@ describe("the deadline covers the chain's groundwork too", () => {
   it("full_research keeps the sections it collected before the stall", async () => {
     searchAiLaw.mockResolvedValue(ok("Fair Work Act 2009 [C2009A00028]"))
     getLawText.mockImplementation(hang)
-    const result = await chainFullResearch(client, { query: "stood down without pay" })
+    const result = await settleAfter(chainFullResearch(client, { query: "stood down without pay" }), DEADLINE_MS)
     const text = result.content[0].text
 
     expect(text).toContain("Fair Work Act 2009")
@@ -143,7 +170,7 @@ describe("the deadline covers the chain's groundwork too", () => {
   it("dispute_prep shows the branch that answered next to the one that did not", async () => {
     searchCases.mockImplementation(hang)
     searchAdminAppeals.mockResolvedValue(ok("1. Tribunal matter\n   id: ncat:aaa"))
-    const result = await chainDisputePrep(client, { query: "unfair dismissal" })
+    const result = await settleAfter(chainDisputePrep(client, { query: "unfair dismissal" }), DEADLINE_MS)
     const text = result.content[0].text
 
     expect(text).toMatch(/▶ Court judgments\n⏱/)
