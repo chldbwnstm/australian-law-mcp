@@ -1,6 +1,6 @@
 # Australian Law MCP — Developer Guide
 
-> **v0.1.0** | Build, test and extension conventions for contributors and coding agents
+> **v1.0.0** | Build, test and extension conventions for contributors and coding agents
 
 The behavioural rules in [CLAUDE.md](../CLAUDE.md) are canonical. This document is how
 you build, test and extend the thing without breaking them.
@@ -94,7 +94,7 @@ will produce two plausible answers.
 npm run build          # clean + tsc
 npm run watch          # tsc --watch
 npm run typecheck      # tsc --noEmit
-npm test               # vitest run   — 105 files / 2,429 tests, no network (2026-09 measured)
+npm test               # vitest run   — 105 files / 2,477 tests, no network (2026-09 measured)
 npm run test:watch     # vitest
 npm start              # stdio server
 npm run start:http     # HTTP server
@@ -153,9 +153,25 @@ Recording one:
 3. Trim only for **size**, and only by removing whole repeated records — a search page
    with 3 result rows instead of 50 is still the real shape. Name a trimmed fixture
    `-slice` (`cca-vol1-slice.html`).
-4. Note the URL and the date it was captured in the test that loads it, so the next
+4. **Compress rather than trim when the fixture has to stay complete.** The grammar
+   corpus in `src/lib/__fixtures__/` needs *every* navLabel of an Act's table of
+   contents, so a slice would defeat it: `corporations-document.ncx.gz` (5,569
+   navPoints, 1.7 MB inflated) and `itaa97-document.ncx.gz` (6,772, 2.1 MB) are stored
+   `gzip -n -9` — `-n` so the archive carries no timestamp and is reproducible from the
+   capture — and the bytes inside are exactly what the register served. Compression is
+   not a trim, so rule 2 still holds. `section-ref.corpus.test.ts` picks up `*.ncx` and
+   `*.ncx.gz` alike from that directory and inflates with `node:zlib`:
+
+   ```bash
+   gzip -n -9 corporations-document.ncx          # record
+   gzip -dc src/lib/__fixtures__/corporations-document.ncx.gz | less   # read one back
+   ```
+
+   Provenance for all five corpus captures — register ids, navPoint counts, capture
+   date — is in `src/lib/__fixtures__/PROVENANCE.txt`.
+5. Note the URL and the date it was captured in the test that loads it, so the next
    person can tell a stale fixture from a changed parser.
-5. **Never hand-write a fixture.** A fixture that was invented tests the parser against
+6. **Never hand-write a fixture.** A fixture that was invented tests the parser against
    your idea of the page, which is exactly the belief the fixture was supposed to check.
 
 ### What a test should pin
@@ -322,8 +338,8 @@ directory and run both bins:
 
 ```bash
 npm pack --pack-destination /tmp/packtest
-cd /tmp/packtest && npm init -y && npm install ./australian-law-mcp-*.tgz
-./node_modules/.bin/australian-law-mcp --version
+cd /tmp/packtest && npm init -y && npm install ./au-law-mcp-*.tgz
+./node_modules/.bin/au-law-mcp --version
 ./node_modules/.bin/australian-law list --category treaties
 ```
 

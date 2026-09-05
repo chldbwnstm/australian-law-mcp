@@ -89,7 +89,8 @@ The server builds deep links to them and never requests them:
   NSW legislation — https://legislation.nsw.gov.au/
   SA legislation — https://www.legislation.sa.gov.au/
     No public query surface; both registers discourage automated access.
-  ACCC and the Australian Competition Tribunal — https://www.accc.gov.au/
+  ACCC and the Australian Competition Tribunal — https://www.accc.gov.au/,
+    https://www.competitiontribunal.gov.au/
     403 to non-browser clients.
   Commonwealth Ombudsman — https://www.ombudsman.gov.au/
     Cloudflare-gated.

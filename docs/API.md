@@ -1,6 +1,6 @@
 # Australian Law MCP — API Reference
 
-> **v0.1.0** | 10 advertised tools (81 registered; the other 71 are reached with `execute_tool`, or called directly by name)
+> **v1.0.0** | 10 advertised tools (81 registered; the other 71 are reached with `execute_tool`, or called directly by name)
 
 Tool structure and the honest-limitations tables are in [README.md](../README.md).
 Exhaustive parameter definitions are the Zod schemas in `src/tools/*.ts` — this

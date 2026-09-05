@@ -1,6 +1,6 @@
 # Australian Law MCP — Architecture
 
-> **v0.1.0 — shipped.** Functional doppelganger of [korean-law-mcp](https://github.com/chrisryugj/korean-law-mcp) v4.12 for Australian law.
+> **v1.0.0 — shipped.** Functional doppelganger of [korean-law-mcp](https://github.com/chrisryugj/korean-law-mcp) v4.12 for Australian law.
 > Reference clone: `/tmp/korean-law-mcp` (read-only). Research basis: `docs/research/*.md` (endpoints live-verified 2026-09-03; a few
 > relations the research did not settle were verified against the live upstream during implementation and are dated in the code that uses them —
 > see `src/tools/statute-helpers/instruments.ts`). End-to-end verification log: `docs/VERIFICATION.md`.
@@ -193,6 +193,6 @@ behaviour — cite a `docs/research/*` line for every endpoint used, or, where t
 research does not settle it, record the live verification and its date in the code
 that depends on it.
 
-As shipped: **95 test files, 1,708 offline tests, 18 live-gated.** See
+As shipped: **105 test files, 2,477 offline tests, 18 live-gated** (2026-09 measured). See
 `docs/DEVELOPMENT.md` for the conventions and `docs/VERIFICATION.md` for the
 end-to-end run.

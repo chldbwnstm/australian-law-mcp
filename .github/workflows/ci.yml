@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    name: node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # package.json engines: >=20.19.0. 20.19 is the floor; 22 is current LTS.
+        node: ["20.19", "22"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      # --ignore-scripts: nothing in this tree needs a postinstall, and a lockfile
+      # install that can run arbitrary scripts is not something CI should offer.
+      - run: npm ci --ignore-scripts
+
+      - run: npm run typecheck
+
+      # The offline suite reaches no network: every parser test runs against a
+      # recorded fixture. The live suite is gated on LIVE=1 and is deliberately
+      # NOT run here — it asserts on upstreams that are free to change, so it
+      # would turn someone else's site outage into a red build.
+      - run: npm test
+
+      - run: npm run build
+
+      # The tarball is an allowlist (`files` in package.json). Packing here is
+      # what catches a build output that stopped being included.
+      - run: npm pack --dry-run

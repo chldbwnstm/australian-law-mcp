@@ -1,6 +1,6 @@
 # Australian Law MCP — Tool Mapping
 
-> **v0.1.0 — as built.** Originally the architect's draft; the tables below have been
+> **v1.0.0 — as built.** Originally the architect's draft; the tables below have been
 > reconciled against the shipped registry (`src/tool-registry.ts`, `src/lib/tool-profiles.ts`)
 > and against a live run of all 18 domains on 2026-09-04 (`docs/VERIFICATION.md`).
 

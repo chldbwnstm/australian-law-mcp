@@ -13,3 +13,6 @@ test-results-*.txt
 .claude/memory/
 .claude/plans/
 *.tgz
+
+# Local state written by MCP tools run inside this checkout, not part of the server
+.debate-war/
