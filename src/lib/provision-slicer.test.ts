@@ -348,15 +348,121 @@ describe("duplicateNumberNote — a guide that restarts at 1 is not an ambiguity
     // The restart rule must not eat the one duplication that is real: the
     // covering clauses open the rooted stream and the Constitution's own
     // sections open the contained stream, so neither restarts anything.
+    // `constitution-toc.ncx` is the whole C2004Q00685 table of contents
+    // (157 navPoints, captured 2026-09-05) — provenance in
+    // `__fixtures__/PROVENANCE.txt`.
     const constitution = parseNcx(
-      gunzipSync(
-        readFileSync(new URL("./__fixtures__/constitution-document.ncx.gz", import.meta.url)),
-      ).toString("utf-8"),
+      readFileSync(new URL("./__fixtures__/constitution-toc.ncx", import.meta.url), "utf-8"),
     )
     const body = findNavPoint(ref("s 7"), constitution)!
     expect(duplicateNumberNote(body, constitution)).toContain('Ask for it as "cl 7".')
     const covering = findNavPoint(ref("cl 7"), constitution)!
     expect(duplicateNumberNote(covering, constitution)).toContain('Ask for it as "s 7".')
+  })
+})
+
+/*
+ * ── Numbering that restarts inside a Part is not an ambiguity ──────────────
+ *
+ * A faithful miniature of the *Corporations Act 2001*'s Chapter 1 (register id
+ * C2004A00818). Labels, anchors and nesting are verbatim from the live NCX at
+ * https://www.legislation.gov.au/C2004A00818/latest/latest/text/latest/epub/OEBPS/document.ncx
+ * (5,569 navPoints, read 2026-09-05); only the entries nobody needs here are cut.
+ *
+ * The shape is the point. "Part 1.5—Small business guide" is a non-operative
+ * reader's aid whose paragraphs are numbered 1–12, so every one of them shares
+ * a leading number with a real section of Part 1.1 or Part 1.2 — 22 entries
+ * across 11 numbers in the live document. None of it makes "Corporations Act
+ * s 9" ambiguous: only one of the two is a section.
+ */
+const CORPORATIONS_NCX =
+  '<?xml version="1.0" encoding="utf-8"?><ncx><docTitle><text>Title</text></docTitle><navMap>' +
+  nav(
+    "Volume 1",
+    null,
+    nav(
+      "Chapter&#xa0;1&#8212;Introductory",
+      "_Toc236051746",
+      nav(
+        "Part&#xa0;1.1&#8212;Preliminary",
+        "_Toc236051747",
+        nav("1  Short title", "_Toc236051748") + nav("2  Commencement", "_Toc236051749"),
+      ) +
+        nav(
+          "Part&#xa0;1.2&#8212;Interpretation",
+          "_Toc236051762",
+          nav(
+            "Division&#xa0;1&#8212;General",
+            "_Toc236051763",
+            nav("6  Effect of this Part", "_Toc236051765") +
+              nav("7  Identifying defined terms", "_Toc236051766") +
+              nav("9  Dictionary", "_Toc236051767"),
+          ),
+        ) +
+        nav(
+          "Part&#xa0;1.5&#8212;Small business guide",
+          "_Toc236051898",
+          nav("1  What registration means", "_Toc236051899") +
+            nav("2  The company structure for small business", "_Toc236051900") +
+            nav("7  Signing company documents", "_Toc236051905") +
+            nav("9  Returns to shareholders", "_Toc236051907"),
+        ),
+    ),
+  ) +
+  "</navMap></ncx>"
+
+const CORPORATIONS = parseNcx(CORPORATIONS_NCX)
+
+describe("duplicateNumberNote — a renumbered guide is not a rival reference", () => {
+  const corporations = (input: string) => duplicateNumberNote(findNavPoint(ref(input), CORPORATIONS)!, CORPORATIONS)
+
+  it("says nothing about s 9, which is the Dictionary and nothing else", () => {
+    // Before the narrowing this served the Dictionary under 'Note: this
+    // compilation numbers "9" more than once … also numbered 9: 9 Returns to
+    // shareholders — in Part 1.5—Small business guide. No reference form
+    // distinguishes it', an ambiguity warning over an unambiguous answer on
+    // the second-most-cited Australian Act.
+    expect(findNavPoint(ref("s 9"), CORPORATIONS)?.label).toBe("9 Dictionary")
+    expect(corporations("s 9")).toBeUndefined()
+  })
+
+  // Enumerated, because one rule mis-warned on every number the guide reuses.
+  it.each(["s 1", "s 2", "s 7", "s 9"])("%s is served without an ambiguity warning", (input) => {
+    expect(corporations(input)).toBeUndefined()
+  })
+
+  it("stays silent when the guide's own paragraph is what was resolved", () => {
+    // Symmetry: whichever of the two `resolveNavPoint` picks, neither is a
+    // provision the caller could have addressed with the other's designation.
+    const guideEntry = CORPORATIONS.find((entry) => entry.label === "9 Returns to shareholders")!
+    expect(duplicateNumberNote(guideEntry, CORPORATIONS)).toBeUndefined()
+  })
+
+  it("still names the covering-clause collision it exists for", () => {
+    // The narrowing must not cost the Constitution case — the two sit on
+    // opposite sides of the root/structure line, and `cl 7` reaches the other.
+    expect(duplicateNumberNote(findNavPoint(ref("s 7"), CONSTITUTION)!, CONSTITUTION)).toContain(
+      'Ask for it as "cl 7".',
+    )
+  })
+
+  it("never offers a designation that does not reach the other entry", () => {
+    // The note's whole value is the follow-up call it prints, so every note any
+    // of these two documents can produce must name a reachable twin.
+    for (const [entries, doc] of [
+      [CONSTITUTION, "Constitution"],
+      [CORPORATIONS, "Corporations Act"],
+    ] as const) {
+      for (const entry of entries) {
+        const note = duplicateNumberNote(entry, entries)
+        if (note === undefined) continue
+        const asked = /Ask for it as "(cl|s) (\S+?)"/.exec(note)
+        expect(asked, `${doc}: ${entry.label} was warned about with no way to ask for the twin:\n${note}`).not.toBeNull()
+        const twin = findNavPoint(ref(`${asked![1]} ${asked![2]}`), entries)
+        expect(twin, `${doc}: '${asked![0]}' resolves to nothing`).toBeDefined()
+        expect(twin).not.toBe(entry)
+      }
+    }
   })
 })
 

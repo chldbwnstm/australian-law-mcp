@@ -43,14 +43,24 @@ frl-versions-find-spec.json
 
 corporations-document.ncx.gz     (C2004A00818, Corporations Act 2001)
 itaa97-document.ncx.gz           (C2004A05138, Income Tax Assessment Act 1997)
-crimes1914-document.ncx.gz       (C1914A00012, Crimes Act 1914)
-constitution-document.ncx.gz     (C2004Q00685, Commonwealth of Australia Constitution Act)
+crimes-act-toc.ncx               (C1914A00012, Crimes Act 1914)
+constitution-toc.ncx             (C2004Q00685, Commonwealth of Australia
+                                  Constitution Act)
   GET https://www.legislation.gov.au/{id}/latest/latest/text/latest/epub/OEBPS/document.ncx
   Captured 2026-09-05 with curl and the same browser user agent
   fetch-with-retry sends. These four are the corpus for
   section-ref.corpus.test.ts, which needs EVERY navLabel — so unlike
-  cca-document.ncx they are not pruned. The bytes are verbatim (5,569 /
-  6,772 / 1,064 / 157 navPoints; 1,786,308 / 2,200,723 / 323,849 / 43,156
-  bytes uncompressed) and only gzipped for storage; `gzip -n -9`, so the
-  archives are deterministic and the test inflates with node:zlib.
+  cca-document.ncx none of them is pruned. Each is the whole table of
+  contents, byte-verbatim: 5,569 / 6,772 / 1,064 / 157 navPoints, and
+  1,786,308 / 2,200,723 / 323,849 / 43,156 bytes.
+
+  The two big ones are stored gzipped and nothing else — `gzip -n -9`, so
+  the archive carries no timestamp and is reproducible from the capture.
+  The test inflates them with node:zlib; compression is not a trim, so the
+  parser still sees the bytes the register served. The other two are small
+  enough to store as they came.
+
   Inspect one with: gzip -dc corporations-document.ncx.gz | less
+
+  Together with cca-document.ncx the corpus is 13,856 navLabels across five
+  compilations.

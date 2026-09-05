@@ -6,22 +6,38 @@
  * gets **nothing**. When time runs out we assemble what did arrive and leave a
  * marker, not silence, where something did not.
  *
- * Every delay here is mocked — no real upstream is waited on.
+ * Expiry is the one wall-clock event in a chain, so it is driven by hand here
+ * through `createManualChainClock()`: "the branch answered" and "the limit
+ * passed" must not be a race the machine adjudicates. Exactly one test below
+ * still uses the real timer, and it is the one asserting that production still
+ * has one.
  */
-import { describe, it, expect } from "vitest"
+import { afterEach, describe, it, expect } from "vitest"
 import {
   DEFAULT_CHAIN_DEADLINE_MS,
+  createManualChainClock,
   resolveChainDeadlineMs,
+  setChainDeadlineTimer,
   startChainDeadline,
   raceDeadline,
   timedOutSection,
   timedOutChainNotice,
+  type ManualChainClock,
 } from "./chain-deadline.js"
 
 /** A branch that never settles on its own — the deadline has to cut it */
 const never = <T>(): Promise<T> => new Promise<T>(() => {})
-const after = <T>(ms: number, value: T): Promise<T> =>
-  new Promise(resolve => setTimeout(() => resolve(value), ms))
+
+let installed: ManualChainClock | undefined
+function manualClock(): ManualChainClock {
+  installed = createManualChainClock()
+  return installed
+}
+
+afterEach(() => {
+  installed?.restore()
+  installed = undefined
+})
 
 describe("deadline value", () => {
   it("defaults comfortably below the client limit (60s)", () => {
@@ -42,14 +58,101 @@ describe("deadline value", () => {
   })
 })
 
+describe("the timer seam", () => {
+  it("still arms a real timer when nothing is installed — production keeps its wall clock", async () => {
+    // The one wall-clock test in the file, and the reason the seam is safe: if
+    // a future change left `setChainDeadlineTimer` installed, or wired
+    // `startChainDeadline` to a timer that is never armed, no deadline would
+    // ever fire in production and this would hang rather than pass quietly.
+    const d = startChainDeadline(10)
+    try {
+      expect((await raceDeadline(d, never<string>())).ok).toBe(false)
+      expect(d.expired()).toBe(true)
+    } finally {
+      d.dispose()
+    }
+  })
+
+  it("hands the limit to the test, with no clock involved", () => {
+    const clock = manualClock()
+    const d = startChainDeadline(45_000)
+    try {
+      expect(clock.armed).toBe(1)
+      expect(d.expired()).toBe(false)
+      expect(d.signal.aborted).toBe(false)
+
+      clock.expire()
+
+      expect(d.expired()).toBe(true)
+      expect(d.signal.aborted).toBe(true)
+      expect(clock.armed).toBe(0)
+    } finally {
+      d.dispose()
+    }
+  })
+
+  it("counts a disposed deadline as no longer waiting on time", () => {
+    const clock = manualClock()
+    const d = startChainDeadline(45_000)
+    expect(clock.armed).toBe(1)
+    d.dispose()
+    expect(clock.armed).toBe(0)
+    // Firing an empty clock is a no-op, not a crash: a chain that finished
+    // early must not be abortable after the fact.
+    clock.expire()
+    expect(d.expired()).toBe(false)
+    expect(d.signal.aborted).toBe(false)
+  })
+
+  it("arms the timer with the limit that was configured, not a fixed one", () => {
+    // The seam's one real hazard: a deadline that is armed with the wrong
+    // duration still fires, so nothing else here would notice that
+    // MCP_CHAIN_DEADLINE_MS had quietly stopped reaching the timer.
+    const armedWith: number[] = []
+    const restore = setChainDeadlineTimer((_fire, ms) => {
+      armedWith.push(ms)
+      return () => {}
+    })
+    const previous = process.env.MCP_CHAIN_DEADLINE_MS
+    try {
+      process.env.MCP_CHAIN_DEADLINE_MS = "20000"
+      startChainDeadline().dispose()
+      delete process.env.MCP_CHAIN_DEADLINE_MS
+      startChainDeadline().dispose()
+      startChainDeadline(7_000).dispose()
+      expect(armedWith).toEqual([20_000, DEFAULT_CHAIN_DEADLINE_MS, 7_000])
+    } finally {
+      if (previous === undefined) delete process.env.MCP_CHAIN_DEADLINE_MS
+      else process.env.MCP_CHAIN_DEADLINE_MS = previous
+      restore()
+    }
+  })
+
+  it("restores the real timer, so one file's clock never leaks into another's", async () => {
+    const restore = setChainDeadlineTimer(() => () => {})
+    restore()
+    const d = startChainDeadline(10)
+    try {
+      expect((await raceDeadline(d, never<string>())).ok).toBe(false)
+    } finally {
+      d.dispose()
+    }
+  })
+})
+
 describe("partial result assembly", () => {
   it("keeps the value of a branch that finished in time and marks only the one that did not", async () => {
-    const d = startChainDeadline(60)
+    const clock = manualClock()
+    const d = startChainDeadline(45_000)
     try {
-      const [fast, slow] = await Promise.all([
-        raceDeadline(d, after(5, "completed section")),
-        raceDeadline(d, never<string>()),
-      ])
+      const fastLeg = raceDeadline(d, Promise.resolve("completed section"))
+      const slowLeg = raceDeadline(d, never<string>())
+      // The fast branch settles on the microtask queue; only then does the
+      // limit pass. Ordering by construction, not by measurement.
+      const fast = await fastLeg
+      clock.expire()
+      const slow = await slowLeg
+
       expect(fast).toEqual({ ok: true, value: "completed section" })
       expect(slow.ok).toBe(false)
     } finally {
@@ -58,10 +161,13 @@ describe("partial result assembly", () => {
   })
 
   it("cancels in-flight requests once the deadline passes — no dangling sockets", async () => {
-    const d = startChainDeadline(30)
+    const clock = manualClock()
+    const d = startChainDeadline(45_000)
     try {
       expect(d.signal.aborted).toBe(false)
-      await raceDeadline(d, never<string>())
+      const leg = raceDeadline(d, never<string>())
+      clock.expire()
+      await leg
       expect(d.signal.aborted).toBe(true)
       expect(d.expired()).toBe(true)
     } finally {
@@ -80,11 +186,15 @@ describe("partial result assembly", () => {
   })
 
   it("treats a failure after the deadline as a timeout", async () => {
-    const d = startChainDeadline(20)
+    const clock = manualClock()
+    const d = startChainDeadline(45_000)
     try {
-      const work = new Promise<string>((_, reject) =>
-        setTimeout(() => reject(new Error("aborted")), 60))
-      expect((await raceDeadline(d, work)).ok).toBe(false)
+      let fail: (error: Error) => void = () => {}
+      const work = new Promise<string>((_, reject) => { fail = reject })
+      const leg = raceDeadline(d, work)
+      clock.expire()
+      fail(new Error("aborted"))
+      expect((await leg).ok).toBe(false)
     } finally {
       d.dispose()
     }

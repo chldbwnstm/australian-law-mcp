@@ -56,6 +56,16 @@
  *    a number shape nobody anticipated, a designation the parser rejects —
  *    surfaces there by itself, rather than waiting for someone to notice a
  *    missing line.
+ *  - **A list that stops names what is left.** `PINPOINT_SHAPE` cannot be that
+ *    net for the members of a multi-provision pinpoint: past the first, a
+ *    member is a bare number carrying no designation, so nothing after the
+ *    point where the reader stops is findable again. Every place the list scan
+ *    stops therefore walks the rest of the list itself and reports it as one
+ *    unread span **with the count of members it covers** — see
+ *    `remainderMembers`. Stopping at "ss 51AC, 52 and 53" and mentioning
+ *    neither 52 nor 53, or reporting the thirteenth of twenty and nothing
+ *    about the other seven, is the same `[VERIFIED]`-over-an-unread-document
+ *    failure wearing a smaller number.
  *
  * The right edge only pays if the number grammar in front of it is the *same*
  * grammar `section-ref.ts` parses. Every place this file was narrower than the
@@ -675,14 +685,13 @@ function overlapSweep(spans: readonly Span[]): (span: Span) => boolean {
  * The shape of a provision number, which is the signal a list continuation is
  * judged against.
  *
- * A member is read only while it keeps the shape of the first, because the
- * alternative — accepting whatever number follows a comma — harvests ordinary
- * prose: "under s 18, 3 March 2020" would yield a citation to `s 3`, and a
- * fabricated citation reported as one the reader wrote is worse than a missed
- * one. Same-shape is the narrow rule for *reading*; a mismatched member is
- * reported unread, never read and never dropped. Only the prose guards — a
- * date, an ordinal, a year — may end the list, because what they match is not
- * a member at all.
+ * A list continues only while its items keep the shape of the first, because
+ * the alternative — accepting whatever number follows a comma — harvests
+ * ordinary prose: "under s 18, 3 March 2020" would yield a citation to `s 3`,
+ * and a fabricated citation reported as one the reader wrote is worse than a
+ * missed one. Same-shape is the narrow rule; anything else is either stopped
+ * (a bare number, which is what prose looks like) or reported unread (a number
+ * carrying letters or separators, which prose does not look like).
  */
 type NumberShape = "roman" | "compound" | "lettered" | "plain" | "other"
 
@@ -694,8 +703,59 @@ function numberShape(value: string): NumberShape {
   return "other"
 }
 
+/**
+ * May a member of this shape continue a list whose head had `headShape`?
+ *
+ * "Only an identical shape" was the earlier answer, and it refused two things
+ * at once when only one of them deserved it:
+ *
+ *  - **A bare number after a differently-shaped head is still refused.** A bare
+ *    number is exactly what prose looks like, which is the whole reason the
+ *    shape rule exists ("ss 18, 3 March 2020"), and nothing about the head
+ *    makes the number after the comma any less ambiguous.
+ *  - **A lettered, dotted or dashed number is not refused any more.** `46A`,
+ *    `45D`, `355-30` are unambiguously provision numbers — no English sentence
+ *    puts one after a comma or an "and" — and `parseSectionRef` reads every one
+ *    of them. "ss 45 and 46A" names two sections of the same Act, and refusing
+ *    the second cost the report a citation it had already located.
+ *
+ * Roman and arabic stay apart in both directions: they are different numbering
+ * series, so a roman member of an arabic list is not another member of the same
+ * list, and `other` is a shape no reading here can use.
+ *
+ * A refusal is never the end of the story — see `remainderMembers`. What this
+ * function declines to read is reported, not dropped.
+ */
+function continuesList(headShape: NumberShape, shape: NumberShape): boolean {
+  if (shape === "other" || headShape === "other") return false
+  if (shape === headShape) return true
+  if (shape === "roman" || headShape === "roman") return false
+  return shape !== "plain"
+}
+
 /** At most this many continuations of one pinpoint. A list is a citation, not a corpus. */
 const MAX_LIST_ITEMS = 12
+
+/**
+ * The dash a `to` join is re-rendered with when its two ends are merged back
+ * into one reference for `parseSectionRef`.
+ *
+ * `section-ref.ts` gives the plain hyphen two roles at once — the character
+ * *inside* an ITAA-style number (`s 355-25`) and the range dash a keyboard
+ * produces — so a hyphenated pair is genuinely ambiguous and that module
+ * resolves it conservatively, by arithmetic and by width. A member of
+ * `RANGE_DASHES` has only the one role: between two numbers it always means
+ * "to" (AGLC r 1.9), whatever the two numbers are.
+ *
+ * Which is exactly the writer's own evidence here. Someone who typed "ss 100
+ * to 140" left nothing to disambiguate, so handing the parser a hyphen threw
+ * that evidence away and put the sentence through a rule written for a
+ * different problem: `ss 5 to 8` merged and `ss 100 to 140` came back as two
+ * citations, `ss 100` and `s 140`, neither of them text the document contains
+ * and neither of them saying a word about ss 101–139 — the reading changing
+ * silently at a width the writer never wrote.
+ */
+const RANGE_JOIN = "–"
 
 /**
  * How the next member of a multi-provision pinpoint may be joined to the last:
@@ -734,7 +794,52 @@ interface ListItem extends Span {
 interface ListScan {
   items: ListItem[]
   /** Located, provision-shaped, and deliberately not read — reported, never dropped. */
-  unread: Span[]
+  unread?: Span
+  /** How many members `unread` covers, so the report can name the count rather than imply one. */
+  unreadCount?: number
+}
+
+/**
+ * Where the reader stopped is not where the list ended.
+ *
+ * Stopping used to mean returning the one member that caused the stop, and
+ * every member after it was never looked at and never mentioned:
+ * "ss 51AC, 52 and 53" reported `ss 51AC` alone, and a twenty-section list
+ * reported thirteen sections plus a single unread `353` while 354–359
+ * disappeared. Both read to `verify_citations` as a complete count of a text it
+ * had only partly read, which is the one thing this module exists to prevent.
+ *
+ * So the members past the stop are walked — with the same joins and the same
+ * refusals, and reading nothing — and returned as one span with the true count.
+ * The refusals are repeated deliberately: a date or a year that ends a list is
+ * prose the reader correctly declined, and renaming it an unread provision
+ * would put a `[PARSE_ERROR]` on ordinary writing.
+ */
+function remainderMembers(text: string, from: number, headNumber: string): Span[] {
+  const members: Span[] = []
+  let cursor = from
+  for (;;) {
+    LIST_ITEM.lastIndex = cursor
+    const match = LIST_ITEM.exec(text)
+    if (!match) break
+    const end = LIST_ITEM.lastIndex
+    const start = end - (match[2].length + match[3].length)
+    const number = match[2]
+    if (DATE_TAIL.test(text.slice(end, end + 12)) || ORDINAL.test(number)) break
+    if (YEAR_ONLY.test(number) && !YEAR_ONLY.test(headNumber)) break
+    members.push({ start, end })
+    cursor = end
+  }
+  return members
+}
+
+/** A run of located-but-unread members as the one span and count a report shows. */
+function unreadRun(members: readonly Span[]): Pick<ListScan, "unread" | "unreadCount"> {
+  if (members.length === 0) return {}
+  return {
+    unread: { start: members[0].start, end: members[members.length - 1].end },
+    unreadCount: members.length,
+  }
 }
 
 /**
@@ -743,22 +848,10 @@ interface ListScan {
  * Only ever called after a **plural** designation (`ss`, `sections`, `pts`):
  * the plural is the writer's own signal that more than one provision is named,
  * and without it "s 18, 3 March 2020" is a section and a date.
- *
- * A refusal is a fact about one member, never a licence to stop reading. The
- * earlier version returned at the first member it would not read, and every
- * member after it vanished — a bare "52" carries no designation, so not even
- * the `PINPOINT_SHAPE` audit could find it again, and `verify_citations`
- * printed `[VERIFIED]` over "ss 51AC, 52 and 53" having read one of the three.
- * So the scan always runs to the end of the list: only the prose guards end
- * it, and every member is read or lands in an unread span. Adjacent unread
- * members merge into one span, so a long refused tail is one reported line
- * naming all of it rather than thirteen.
  */
 function scanProvisionList(text: string, from: number, headShape: NumberShape, headNumber: string): ListScan {
   const items: ListItem[] = []
-  const unread: Span[] = []
   let cursor = from
-  let lastWasUnread = false
   for (;;) {
     LIST_ITEM.lastIndex = cursor
     const match = LIST_ITEM.exec(text)
@@ -767,30 +860,29 @@ function scanProvisionList(text: string, from: number, headShape: NumberShape, h
     const start = end - (match[2].length + match[3].length)
     const number = match[2]
 
+    // The two named refusals, tested before anything else so that neither can
+    // be reported as unread: a date and a year are prose, and the list ended.
     if (DATE_TAIL.test(text.slice(end, end + 12)) || ORDINAL.test(number)) break
-    const shape = numberShape(number)
-    if (shape === "plain" && YEAR_ONLY.test(number) && !YEAR_ONLY.test(headNumber)) break
+    if (YEAR_ONLY.test(number) && !YEAR_ONLY.test(headNumber)) break
 
-    // Three refusals, all reported: a shape the head's rule will not read; the
-    // ceiling — which is on the work, never on what the reader admits to,
-    // because a citation dropped for being the thirteenth is exactly as
-    // unchecked as one nobody could parse; and a range joined onto an unread
-    // member — folding "46A to 50" down onto the last member that *was* read
-    // would fabricate a range the writer never wrote.
-    const joinsAsRange = /\bto\b/.test(match[1])
-    if (shape !== headShape || items.length >= MAX_LIST_ITEMS || (lastWasUnread && joinsAsRange)) {
-      if (lastWasUnread) unread[unread.length - 1].end = end
-      else unread.push({ start, end })
-      lastWasUnread = true
-      cursor = end
-      continue
+    // A shape this list cannot take. Everything from here on is still
+    // list-shaped, so the whole remainder is reported — not just the member
+    // that stopped the reader, which is how the rest used to vanish.
+    if (!continuesList(headShape, numberShape(number))) {
+      return { items, ...unreadRun(remainderMembers(text, cursor, headNumber)) }
+    }
+    // The ceiling is on the work, never on what the reader admits to: a list
+    // that runs past it stops here and says how much it left, because a
+    // citation dropped for being the thirteenth is exactly as unchecked as one
+    // nobody could parse — and so is the twentieth behind it.
+    if (items.length >= MAX_LIST_ITEMS) {
+      return { items, ...unreadRun(remainderMembers(text, cursor, headNumber)) }
     }
 
-    items.push({ number, subsections: match[3], joinsAsRange, start, end })
-    lastWasUnread = false
+    items.push({ number, subsections: match[3], joinsAsRange: /\bto\b/.test(match[1]), start, end })
     cursor = end
   }
-  return { items, unread }
+  return { items }
 }
 
 /**
@@ -818,31 +910,48 @@ function tokenShape(token: string): "digits" | "letters" | "other" {
   return "other"
 }
 
-function scanBracketList(text: string, from: number, headToken: string): ListScan {
-  const items: ListItem[] = []
-  const unread: Span[] = []
-  const headShape = tokenShape(headToken)
-  if (headShape === "other") return { items, unread }
+/**
+ * The bracketed members past the ceiling, for the same reason as
+ * `remainderMembers`: reporting the thirteenth alone says nothing about the
+ * fourteenth.
+ *
+ * A token whose shape changed is **not** walked into the remainder, unlike the
+ * numbered form. A bracketed token has no "more specific" shape to change into
+ * — `(a)`, `(2)` and `(Cth)` are the same three characters of grammar — and the
+ * things that follow a citation in brackets are overwhelmingly prose: a
+ * reported year, a jurisdiction, an *ibid*. Marking those unread would print a
+ * `[PARSE_ERROR]` over ordinary writing, and a warning that fires on everything
+ * is read as firing on nothing.
+ */
+function bracketRemainderMembers(text: string, from: number): Span[] {
+  const members: Span[] = []
   let cursor = from
-  let lastWasUnread = false
   for (;;) {
     BRACKET_ITEM.lastIndex = cursor
     const match = BRACKET_ITEM.exec(text)
     if (!match) break
     const end = BRACKET_ITEM.lastIndex
     const token = match[2]
-    // A year is the prose guard here — "(2020) 15 ALJ 3" — and ends the list.
-    // A mismatched token or one past the ceiling is a member refused, and the
-    // same rule as the numbered form applies: reported, never dropped, and the
-    // scan carries on to the end of the list.
     if (YEAR_ONLY.test(token)) break
-    if (tokenShape(token) !== headShape || items.length >= MAX_LIST_ITEMS) {
-      if (lastWasUnread) unread[unread.length - 1].end = end
-      else unread.push({ start: end - token.length - 2, end })
-      lastWasUnread = true
-      cursor = end
-      continue
-    }
+    members.push({ start: end - token.length - 2, end })
+    cursor = end
+  }
+  return members
+}
+
+function scanBracketList(text: string, from: number, headToken: string): ListScan {
+  const items: ListItem[] = []
+  const headShape = tokenShape(headToken)
+  if (headShape === "other") return { items }
+  let cursor = from
+  for (;;) {
+    BRACKET_ITEM.lastIndex = cursor
+    const match = BRACKET_ITEM.exec(text)
+    if (!match) break
+    const end = BRACKET_ITEM.lastIndex
+    const token = match[2]
+    if (tokenShape(token) !== headShape || YEAR_ONLY.test(token)) break
+    if (items.length >= MAX_LIST_ITEMS) return { items, ...unreadRun(bracketRemainderMembers(text, cursor)) }
     items.push({
       number: token,
       subsections: "",
@@ -851,10 +960,9 @@ function scanBracketList(text: string, from: number, headToken: string): ListSca
       start: end - token.length - 2,
       end,
     })
-    lastWasUnread = false
     cursor = end
   }
-  return { items, unread }
+  return { items }
 }
 
 /**
@@ -867,18 +975,27 @@ function scanBracketList(text: string, from: number, headToken: string): ListSca
  * `ref` is an inert placeholder for the same reason — the shape of this record
  * is "something is here and it was NOT checked", not a reference.
  *
+ * `count` is how many provisions the fragment covers. One unread line standing
+ * for seven has to say seven, or the reader downstream counts one and the
+ * summary is wrong about a text it did not read — the same failure in a
+ * smaller font.
+ *
  * The bracket label comes from `ErrorCodes` like every other label in this
  * server: a machine reader has to be able to tell which set it belongs to, and
  * this one is a parse failure on our side, never a statement about the law.
  */
-function unreadCitation(fragment: string, index: number): StatuteCitation {
+function unreadCitation(fragment: string, index: number, count = 1): StatuteCitation {
   const shown = fragment.replace(/\s+/g, " ").trim()
+  const said =
+    count > 1
+      ? `${count} provisions this scanner located but did not read, ` +
+        `so NONE of them was checked and nothing here says whether they are right`
+      : "a pinpoint this scanner located but could not read, " +
+        "so it was NOT checked and nothing here says whether it is right"
   return {
     raw: shown,
     ref: { kind: "section", number: "", subsections: [], plural: false, raw: shown },
-    pinpoint:
-      `[${ErrorCodes.PARSE_ERROR}] "${shown}" — a pinpoint this scanner located but could not read, ` +
-      `so it was NOT checked and nothing here says whether it is right`,
+    pinpoint: `[${ErrorCodes.PARSE_ERROR}] "${shown}" — ${said}`,
     attachedBy: "unread",
     index,
   }
@@ -928,7 +1045,7 @@ export function extractStatuteCitations(text: string, maxCitations: number): Sta
   const seen = new Set<string>()
   /** Spans the reader accounted for: read, refused for a named reason, or reported unread. */
   const accounted: Span[] = []
-  const unread: Array<{ fragment: string; index: number }> = []
+  const unread: Array<{ fragment: string; index: number; count?: number }> = []
   let cappedEarly = false
 
   PINPOINT.lastIndex = 0
@@ -967,15 +1084,20 @@ export function extractStatuteCitations(text: string, maxCitations: number): Sta
     const headShape = numberShape(headNumber)
     const plural = PLURAL_SPELLINGS.has(spelling.toLowerCase())
     const bracketToken = match[5]
-    let scan: ListScan = { items: [], unread: [] }
+    let scan: ListScan = { items: [] }
     if (plural && numberText && headShape !== "other") scan = scanProvisionList(text, end, headShape, headNumber)
     else if (plural && bracketToken) scan = scanBracketList(text, end, bracketToken)
     // An unread continuation is reported with the head of its pinpoint in
-    // front, so the report shows `ss 45 … 46A` rather than a bare "46A" that
-    // names no designation and cannot be found in the text again.
-    for (const span of scan.unread) {
-      unread.push({ fragment: `${raw} … ${text.slice(span.start, span.end)}`, index: span.start })
-      accounted.push(span)
+    // front, so the report shows `ss 51AC … 52 and 53` rather than a bare "52"
+    // that names no designation and cannot be found in the text again. The span
+    // covers every member the reader left behind, and the count says how many.
+    if (scan.unread) {
+      unread.push({
+        fragment: `${raw} … ${text.slice(scan.unread.start, scan.unread.end)}`,
+        index: scan.unread.start,
+        ...(scan.unreadCount ? { count: scan.unreadCount } : {}),
+      })
+      accounted.push(scan.unread)
     }
 
     const singular = kindForSpelling(spelling)?.singular ?? spelling
@@ -983,7 +1105,10 @@ export function extractStatuteCitations(text: string, maxCitations: number): Sta
     for (const item of scan.items) {
       const last = located[located.length - 1]
       if (item.joinsAsRange) {
-        const merged = `${last.source} - ${item.number}${item.subsections}`
+        // `RANGE_JOIN`, never a hyphen: the writer wrote "to", and the merge
+        // has to carry that signal to the parser rather than re-creating the
+        // ambiguity the word settled.
+        const merged = `${last.source} ${RANGE_JOIN} ${item.number}${item.subsections}`
         const mergedRef = parseSectionRef(merged)
         if (mergedRef?.rangeEnd) {
           last.source = merged
@@ -991,6 +1116,16 @@ export function extractStatuteCitations(text: string, maxCitations: number): Sta
           last.end = item.end
           continue
         }
+        // A "to" the reader cannot fold into a range is not two citations.
+        // Splitting it reports both ends as provisions the writer cited singly
+        // — "ss 140 to 100" as `ss 140` and `s 100` — and says nothing at all
+        // about the span between them, which is the `[VERIFIED]`-over-unread
+        // failure this module exists to prevent. So the far end is located,
+        // counted and reported unread; the head keeps the words the document
+        // actually contains.
+        unread.push({ fragment: `${raw} … ${text.slice(last.end, item.end)}`, index: item.start })
+        accounted.push({ start: last.end, end: item.end })
+        continue
       }
       const source = item.bracketed
         ? `${singular} (${item.number})`
@@ -1070,9 +1205,10 @@ export function extractStatuteCitations(text: string, maxCitations: number): Sta
         ...unreadShapes(text, accounted).map((span) => ({
           fragment: text.slice(span.start, span.end),
           index: span.start,
+          count: 1,
         })),
       ]
-  for (const item of missed) out.push(unreadCitation(item.fragment, item.index))
+  for (const item of missed) out.push(unreadCitation(item.fragment, item.index, item.count ?? 1))
   out.sort((left, right) => left.index - right.index)
   return out.slice(0, maxCitations)
 }

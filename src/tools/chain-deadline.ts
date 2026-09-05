@@ -15,6 +15,10 @@
  * two copies of a bounds check means one of them eventually regains
  * `parseInt("20x") → 20` leniency. The constants belong to this domain, so they
  * live here.
+ *
+ * Arming the timer goes through the `DeadlineTimer` seam below, so a test can
+ * decide when the limit passes instead of waiting for it. See that type for why
+ * a test that waits is a test that measures the machine.
  */
 
 import { parseIntegerLimit } from "../lib/execution-limits.js"
@@ -50,19 +54,100 @@ export interface ChainDeadline {
   dispose(): void
 }
 
+/**
+ * How a deadline learns that its time is up: arm `fire` to run in `ms`, and
+ * return the function that disarms it again.
+ *
+ * Expiry is the one thing about a chain that is a **wall-clock** event, and
+ * that makes it the one thing a test must not measure with a wall clock. A test
+ * that shortens the limit and then waits for it prices its assertions in
+ * machine speed: under parallel test load the worker loses its core for longer
+ * than the window, the chain's own work never lands inside it, and a different
+ * case fails on every run — which is exactly what `chains.deadline.test.ts` did
+ * before this seam existed.
+ *
+ * So arming the timer goes through here. Production installs nothing and gets
+ * `setTimeout` below; a test installs `createManualChainClock()` and fires
+ * expiry itself, at the precise point in the chain it means to test.
+ */
+export type DeadlineTimer = (fire: () => void, ms: number) => () => void
+
+const realTimer: DeadlineTimer = (fire, ms) => {
+  const timer = setTimeout(fire, ms)
+  // This timer must never be what keeps the process alive
+  timer.unref?.()
+  return () => clearTimeout(timer)
+}
+
+let armDeadline: DeadlineTimer = realTimer
+
+/**
+ * Install the timer that every deadline started from now on will arm. Returns
+ * the restore function — call it from an `afterEach`, so one file's manual
+ * clock can never leak into another file's real one. Production never calls it.
+ */
+export function setChainDeadlineTimer(timer: DeadlineTimer | null): () => void {
+  const previous = armDeadline
+  armDeadline = timer ?? realTimer
+  return () => {
+    armDeadline = previous
+  }
+}
+
+/** A deadline clock a test drives by hand — the companion to `setChainDeadlineTimer`. */
+export interface ManualChainClock {
+  /** Deadlines armed and neither fired nor disposed. `0` means nothing is waiting on time. */
+  readonly armed: number
+  /** Let the time limit pass, now, for every armed deadline. */
+  expire(): void
+  /** Put the real timer back. Call from `afterEach`. */
+  restore(): void
+}
+
+/**
+ * Replace the wall clock for the duration of a test.
+ *
+ * The point is not speed, it is that "the branch answered" and "the limit
+ * passed" stop being a race the machine adjudicates: the test settles every
+ * branch that *can* answer, then calls `expire()`, so the partial result it
+ * asserts on is the same on an idle laptop and on a loaded CI box.
+ */
+export function createManualChainClock(): ManualChainClock {
+  const armedTimers = new Set<() => void>()
+  const restore = setChainDeadlineTimer((fire) => {
+    armedTimers.add(fire)
+    return () => armedTimers.delete(fire)
+  })
+  return {
+    get armed() {
+      return armedTimers.size
+    },
+    expire() {
+      // Snapshot first: firing aborts the chain, which disposes the deadline
+      // and mutates the set we would otherwise be iterating.
+      for (const fire of [...armedTimers]) {
+        armedTimers.delete(fire)
+        fire()
+      }
+    },
+    restore() {
+      armedTimers.clear()
+      restore()
+    },
+  }
+}
+
 export function startChainDeadline(ms: number = resolveChainDeadlineMs()): ChainDeadline {
   const controller = new AbortController()
   let fired = false
-  const timer = setTimeout(() => {
+  const disarm = armDeadline(() => {
     fired = true
     controller.abort(new Error(`Chain time limit (${ms}ms) exceeded`))
   }, ms)
-  // This timer must never be what keeps the process alive
-  timer.unref?.()
   return {
     signal: controller.signal,
     expired: () => fired,
-    dispose: () => clearTimeout(timer),
+    dispose: () => disarm(),
   }
 }
 

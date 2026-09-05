@@ -21,7 +21,7 @@ import { z } from "zod"
 import type { AuApiClient } from "../lib/api-client.js"
 import { formatToolError } from "../lib/errors.js"
 import { truncateResponse } from "../lib/schemas.js"
-import { formatRef, parseSectionRef } from "../lib/section-ref.js"
+import { formatRef, parseSectionRef, type SectionRef } from "../lib/section-ref.js"
 import type { FrlTitle, FrlVersion, ToolResponse } from "../lib/types.js"
 import { isoDay, reasonLine, titleAnnotations } from "./statute-helpers/format.js"
 import { enablingActs, enablingProvisionFor, expandAuthorisedBy } from "./statute-helpers/instruments.js"
@@ -61,9 +61,23 @@ export type InstrumentRadarInput = z.infer<typeof InstrumentRadarSchema>
  * accepts** — the suggestion is built from `formatRef`, never from the raw
  * value — and when a list has to be narrowed to its first member, or nothing
  * can be normalised, the output says so instead of pretending.
+ *
+ * "Accepts" means the whole round trip, not the first half of it. Parsing the
+ * Register's string proves only that *this module* understood it; the caller
+ * runs `requireRef` on the string that gets **printed**, which is `formatRef`'s
+ * output, and the two are not the same string. Measured live, the Register's
+ * paragraph forms are where they come apart: `para 1020F(1)(c)` parses and
+ * formats to `para (1020F)`, which `parseSectionRef` then rejects outright, and
+ * `para 184(a)` formats to `para (184)` — a reference that parses and means
+ * something else. Both were printed as the canonical form of a power the
+ * Register had recorded correctly.
  */
 export interface EnablingProvisionCall {
-  /** Canonical, `parseSectionRef`-accepted reference; absent when none could be derived. */
+  /**
+   * Canonical reference that survives `formatRef` → `parseSectionRef` unchanged;
+   * absent when none could be derived. Absent is a real answer — the caller
+   * prints why instead of a call that fails or asks about something else.
+   */
   provision?: string
   /** The Register's own string, whenever it differs from `provision`. */
   raw?: string
@@ -78,24 +92,56 @@ const SCHEDULE_BRACKETED = /^(sch(?:edule)?\s+[A-Za-z0-9]+)\s*\((.+)\)$/i
 /** `s 202(5), 205(3), 737(1)` / `s 95X(1) and (2)` — several provisions in one field. */
 const LIST_SEPARATOR = /\s*,\s*|\s+and\s+/i
 
+/**
+ * Do these two references name the same provision?
+ *
+ * Everything that carries meaning, and nothing that does not: `raw` is whatever
+ * text produced the ref, and `plural` is a property of the writer's spelling
+ * that `formatRef` normalises on purpose (`ss 5–6` for a range). Comparing
+ * either would reject references that are in fact identical.
+ */
+function sameProvision(left: SectionRef, right: SectionRef): boolean {
+  return (
+    left.kind === right.kind &&
+    left.number === right.number &&
+    (left.letterSuffix ?? "") === (right.letterSuffix ?? "") &&
+    (left.schedule ?? "") === (right.schedule ?? "") &&
+    (left.item ?? "") === (right.item ?? "") &&
+    (left.rangeEnd ?? "") === (right.rangeEnd ?? "") &&
+    left.subsections.join("|") === right.subsections.join("|")
+  )
+}
+
+/**
+ * The printable form of a candidate — or nothing, when printing it would change
+ * what it says.
+ *
+ * The check is the **round trip**, because the round trip is what the caller
+ * performs: this module parses the Register's string, prints `formatRef`'s
+ * output into a `get_provision_history` call, and the caller's `requireRef`
+ * parses that output again. A candidate is only usable when the third step
+ * yields the second step's input — the same reference, not merely *a* reference.
+ *
+ * Nothing here knows or asserts what `formatRef` emits for any kind; that
+ * grammar belongs to `section-ref.ts`. The day a kind that cannot survive the
+ * trip today survives it, this starts suggesting it, with no edit here.
+ */
 function canonical(value: string): string | undefined {
   const ref = parseSectionRef(value.trim())
   if (!ref) return undefined
-  const formatted = formatRef(ref)
-  // The promise this file makes is about the OUTPUT: `requireRef` on the
-  // other side parses what is suggested here, so a formatted form that does
-  // not itself round-trip must never be suggested. Checking only the input
-  // let `para 1020F(1)(c)` through as `para (1020F)` — a suggestion the
-  // suggested tool rejected the moment the caller ran it.
-  return parseSectionRef(formatted) ? formatted : undefined
+  const printed = formatRef(ref)
+  const reread = parseSectionRef(printed)
+  if (!reread || !sameProvision(ref, reread)) return undefined
+  return printed
 }
 
 /**
  * Turn the Register's enabling-provision string into something callable.
  *
- * Every candidate is verified through `parseSectionRef` before it is returned,
- * so a suggestion this builds cannot be rejected by `requireRef` on the other
- * side — the two use the same parser.
+ * Every candidate is put through `parseSectionRef` → `formatRef` →
+ * `parseSectionRef` before it is returned, so a suggestion this builds cannot
+ * be rejected by `requireRef` on the other side, and cannot arrive there
+ * meaning a different provision from the one the Register recorded.
  */
 export function enablingProvisionCall(raw: string | undefined): EnablingProvisionCall {
   if (!raw) return {}

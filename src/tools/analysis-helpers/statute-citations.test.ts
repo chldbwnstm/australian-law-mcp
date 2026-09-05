@@ -295,6 +295,13 @@ const MULTI_PROVISION_SHAPES: ReadonlyArray<[string, string[]]> = [
   ["ss 45–46", ["ss 45–46"]],
   ["ss 45 to 47 and 50", ["ss 45–47", "s 50"]],
   ["ss 45AD and 45AF", ["ss 45AD", "s 45AF"]],
+  // A member that is lettered or dotted where the head was bare is still a
+  // member: `46A` and `45D` are provision numbers no English sentence
+  // produces, so the earlier "identical shape or nothing" rule was refusing
+  // citations it had already located and could already read.
+  ["ss 45 and 46A", ["ss 45", "s 46A"]],
+  ["ss 45, 45D and 46", ["ss 45", "s 45D", "s 46"]],
+  ["ss 45, 46 and 46AA", ["ss 45", "s 46", "s 46AA"]],
   ["ss 355-25, 355-30", ["ss 355-25", "s 355-30"]],
   ["pts IVA and IVB", ["pt IVA", "pt IVB"]],
   ["regs 2.01, 2.02", ["regs 2.01", "reg 2.02"]],
@@ -391,17 +398,185 @@ describe("a list never harvests ordinary prose", () => {
     expect(cites.map((cite) => cite.pinpoint)).toEqual(["ss 45"])
   })
 
-  it("stops at an item that does not keep the shape of the first — and says so", () => {
-    const cites = extractStatuteCitations("Fair Work Act 2009 (Cth) ss 45 and 46A apply.", 20)
-    expect(cites.map((cite) => cite.pinpoint)[0]).toBe("ss 45")
-    expect(cites.map((cite) => cite.attachedBy)).toContain("unread")
-    expect(cites.some((cite) => cite.raw.includes("46A"))).toBe(true)
+  // A bare number is what prose looks like, so it still stops the reader when
+  // the head was shaped otherwise — but stopping is not dropping: the members
+  // behind it are named too. "ss 51AC, 52 and 53" used to report `ss 51AC` and
+  // nothing else at all, under a verdict that counted 1 found of 1 checked.
+  it("stops at a bare number the head's shape does not admit — and names the whole rest", () => {
+    const cites = extractStatuteCitations("Trade Practices Act 1974 (Cth) ss 51AC, 52 and 53 were considered.", 20)
+    expect(cites.map((cite) => cite.pinpoint)[0]).toBe("ss 51AC")
+    const unread = cites.filter((cite) => cite.attachedBy === "unread")
+    expect(unread).toHaveLength(1)
+    expect(unread[0].raw).toContain("52 and 53")
+    expect(unread[0].pinpoint).toContain("2 provisions")
   })
 
-  it("reports the item a long list runs past rather than dropping it", () => {
-    const numbers = Array.from({ length: 15 }, (_, index) => 45 + index)
+  it("reports every item a long list runs past, with their number, rather than the first of them", () => {
+    const numbers = Array.from({ length: 20 }, (_, index) => 340 + index)
     const cites = extractStatuteCitations(`Fair Work Act 2009 (Cth) ss ${numbers.join(", ")} apply.`, 40)
-    expect(cites.some((cite) => cite.attachedBy === "unread")).toBe(true)
+    const read = cites.filter((cite) => cite.attachedBy !== "unread")
+    const unread = cites.filter((cite) => cite.attachedBy === "unread")
+    expect(unread).toHaveLength(1)
+    // 13 read (the head plus MAX_LIST_ITEMS), 7 left — and the line says seven,
+    // not one. It used to name 353 alone and 354–359 were never mentioned.
+    expect(read).toHaveLength(13)
+    expect(unread[0].pinpoint).toContain(`${numbers.length - read.length} provisions`)
+    expect(unread[0].raw).toContain("359")
+  })
+})
+
+// The mechanism, not the instances.
+//
+// Every previous round tuned the list grammar and every tuning traded one set
+// of real citation forms for another, silently, because the only thing under
+// test was which forms got READ. So the property under test here is the one the
+// module's own header states and the one `verify_citations` depends on: a
+// provision the sentence names is either read, or named in an unread marker.
+// Never neither.
+//
+// A future narrowing of `continuesList` — or a new refusal, or a lower ceiling
+// — is free to stop reading any of these. It is not free to make one vanish:
+// that fails here, on the row it broke, instead of surfacing three rounds later
+// as a `[VERIFIED]` over a document nobody finished reading.
+const LIST_MEMBERS: ReadonlyArray<[string, string[]]> = [
+  ["ss 45, 46 and 47", ["45", "46", "47"]],
+  ["ss 45, 46, 47", ["45", "46", "47"]],
+  ["ss 45 & 46", ["45", "46"]],
+  ["ss 45 and 46A", ["45", "46A"]],
+  ["ss 45, 45D and 46", ["45", "45D", "46"]],
+  // The Trade Practices Act as it is actually cited. Round 4 read `51AC` and
+  // reported nothing whatever about 52 and 53.
+  ["ss 51AC, 52 and 53", ["51AC", "52", "53"]],
+  ["ss 45AD, 45AF and 46", ["45AD", "45AF", "46"]],
+  ["ss 355-25, 355-30 and 355-35", ["355-25", "355-30", "355-35"]],
+  ["ss 8-1, 8-5 and 25-5", ["8-1", "8-5", "25-5"]],
+  ["pts IVA, IVB and XIB", ["IVA", "IVB", "XIB"]],
+  // A member from a different numbering series is not another member of this
+  // list, so it is not read — but it is still named.
+  ["ss 45, IVA and IVB", ["45", "IVA", "IVB"]],
+  ["sub-ss (2), (3) and (4)", ["(2)", "(3)", "(4)"]],
+  ["paras (a), (b) and (c)", ["(a)", "(b)", "(c)"]],
+]
+
+/** Does this text name that member, as itself rather than as part of a longer number? */
+function names(text: string, member: string): boolean {
+  const escaped = member.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  return new RegExp(`(?<![0-9A-Za-z.\\-])${escaped}(?![0-9A-Za-z.\\-])`).test(text)
+}
+
+describe("a list member is read or named — never dropped", () => {
+  it.each(LIST_MEMBERS)("accounts for every provision of %s", (pinpoint, members) => {
+    const cites = extractStatuteCitations(`Fair Work Act 2009 (Cth) ${pinpoint} apply.`, 40)
+    const read = cites.filter((cite) => cite.attachedBy !== "unread").map((cite) => cite.pinpoint)
+    const marked = cites
+      .filter((cite) => cite.attachedBy === "unread")
+      .map((cite) => cite.raw)
+      .join(" | ")
+    for (const member of members) {
+      expect(
+        read.some((shown) => names(shown, member)) || names(marked, member),
+        `"${member}" of "${pinpoint}" is neither read (${JSON.stringify(read)}) nor named (${JSON.stringify(marked)})`,
+      ).toBe(true)
+    }
+  })
+
+  // The count is part of the marker, because one line standing for seven
+  // provisions that says nothing about seven is read as standing for one.
+  it("states how many provisions an unread marker covers", () => {
+    const cites = extractStatuteCitations("Trade Practices Act 1974 (Cth) ss 51AC, 52, 53 and 54 applied.", 40)
+    const unread = cites.filter((cite) => cite.attachedBy === "unread")
+    expect(unread).toHaveLength(1)
+    expect(unread[0].pinpoint).toContain("3 provisions")
+    expect(unread[0].pinpoint).toContain("NONE of them was checked")
+  })
+})
+
+// A range the writer spelled out.
+//
+// "ss 100 to 140" is not ambiguous: the writer said which relation holds
+// between the two numbers, in a word. `section-ref.ts` has to be careful with a
+// *hyphenated* pair because a hyphen is also the character inside an ITAA-style
+// section number — `s 355-25` is one section, not 355 to 25 — and it resolves
+// that ambiguity by arithmetic and by width. Merging a "to" join with a hyphen
+// fed the writer's unambiguous sentence into that ambiguity rule: below the
+// width `ss 5 to 8` read as one range, above it `ss 100 to 140` came back as
+// `ss 100` and `s 140` — two citations to text the document does not contain,
+// with ss 101–139 neither read nor reported unread, and the reading flipping at
+// a number the writer never wrote.
+describe("a range written with the word 'to'", () => {
+  const TO_RANGES: ReadonlyArray<[string, string[]]> = [
+    ["Corporations Act 2001 (Cth) ss 100 to 140.", ["ss 100–140"]],
+    ["Fair Work Act 2009 (Cth) ss 340 to 378 apply.", ["ss 340–378"]],
+    ["Fair Work Act 2009 (Cth) ss 5 to 8 apply.", ["ss 5–8"]],
+    ["Fair Work Act 2009 (Cth) sch 2 ss 100 to 140 apply.", ["sch 2 ss 100–140"]],
+    ["Income Tax Assessment Act 1997 (Cth) ss 355-25 to 355-30 apply.", ["ss 355-25–355-30"]],
+    ["Fair Work Act 2009 (Cth) pts IV to VI apply.", ["pts IV–VI"]],
+    // The join does not have to sit on the head of the list.
+    ["Fair Work Act 2009 (Cth) ss 45, 100 to 140 apply.", ["ss 45", "ss 100–140"]],
+  ]
+
+  it.each(TO_RANGES)("reads %s as the range the writer wrote", (text, expected) => {
+    const cites = extractStatuteCitations(text, 20)
+    expect(cites.map((cite) => cite.pinpoint)).toEqual(expected)
+    expect(cites.every((cite) => cite.attachedBy !== "unread")).toBe(true)
+  })
+
+  // The mechanism, stated as the property the fix rests on: what the writer
+  // wrote decides the reading, and the width of the range decides nothing. The
+  // list deliberately straddles `section-ref.ts`'s 20-unit hyphen ceiling.
+  it.each([1, 3, 19, 20, 21, 40, 300])("reads a %i-section 'to' range the same way", (span) => {
+    const end = 100 + span
+    const cites = extractStatuteCitations(`Fair Work Act 2009 (Cth) ss 100 to ${end} apply.`, 20)
+    expect(cites.map((cite) => cite.pinpoint)).toEqual([`ss 100–${end}`])
+    // And the citation shown is the writer's own words, not a rebuilt half of
+    // them: `ss 100` is what the split used to print over a sentence that says
+    // "ss 100 to 140".
+    expect(cites[0].raw).toBe(`Fair Work Act 2009 (Cth) ss 100 to ${end}`)
+  })
+
+  // The contract this file depends on, pinned here rather than assumed: a
+  // `RANGE_DASHES` member between two numbers means "to" however far apart they
+  // are, which is why the merge hands the parser one. If `section-ref.ts` ever
+  // stops honouring that, this fails here instead of silently splitting ranges
+  // again three rounds later.
+  it("relies on a range dash meaning 'to' at any width", () => {
+    for (const [from, to] of [["5", "8"], ["100", "140"], ["1", "999"]]) {
+      const parsed = parseSectionRef(`ss ${from}–${to}`)
+      expect(parsed?.number).toBe(from)
+      expect(parsed?.rangeEnd).toBe(to)
+    }
+  })
+
+  // The other half of the invariant. A "to" that cannot be folded into one
+  // range is not two citations either: printing both ends reports the writer as
+  // having cited them singly and leaves everything between them unmentioned.
+  const UNREADABLE_RANGES: ReadonlyArray<[string, string]> = [
+    // Backwards: no range this could be.
+    ["Fair Work Act 2009 (Cth) ss 140 to 100 apply.", "ss 140"],
+    // A range end carrying a subsection has no reading as a range either — and
+    // the 39 sections in the middle are exactly what must not vanish.
+    ["Fair Work Act 2009 (Cth) ss 100 to 140(2) apply.", "ss 100"],
+  ]
+
+  it.each(UNREADABLE_RANGES)("counts and names the range it cannot read in %s", (text, head) => {
+    const cites = extractStatuteCitations(text, 20)
+    const read = cites.filter((cite) => cite.attachedBy !== "unread")
+    const unread = cites.filter((cite) => cite.attachedBy === "unread")
+    // The head keeps the words the document contains; the far end is named,
+    // not read, and never becomes a second citation of its own.
+    expect(read.map((cite) => cite.pinpoint)).toEqual([head])
+    expect(unread).toHaveLength(1)
+    expect(unread[0].pinpoint).toContain("PARSE_ERROR")
+    expect(unread[0].raw).toContain(" to ")
+    // An unread marker never carries a statute: every consumer treats one that
+    // does as a provision somebody cited.
+    expect(unread[0].lawName).toBeUndefined()
+  })
+
+  it("names both ends of a range it could not read", () => {
+    const [, unread] = extractStatuteCitations("Fair Work Act 2009 (Cth) ss 140 to 100 apply.", 20)
+    expect(unread.raw).toContain("140")
+    expect(unread.raw).toContain("100")
   })
 })
 
@@ -421,21 +596,31 @@ describe("a refused member never takes the rest of the list with it", () => {
   })
 
   it("keeps reading same-shape members past a mismatched one", () => {
+    // A plain-numbered head admits a lettered member, so all three of these
+    // are read rather than any of them being abandoned. The property is that
+    // no member is silently lost: every one is either read or reported unread,
+    // and here the reader gets all three.
     const cites = extractStatuteCitations("Fair Work Act 2009 (Cth) ss 45, 45D and 46 apply.", 20)
     expect(cites.map((cite) => cite.pinpoint)).toContain("ss 45")
+    expect(cites.map((cite) => cite.pinpoint)).toContain("s 45D")
     expect(cites.map((cite) => cite.pinpoint)).toContain("s 46")
-    expect(cites.some((cite) => cite.attachedBy === "unread" && cite.raw.includes("45D"))).toBe(true)
+    expect(cites.filter((cite) => cite.attachedBy === "unread")).toEqual([])
   })
 
   // A range joined onto a member that was never read must not fold down onto
   // the last member that was: "ss 45, 46A to 50" is not "ss 45–50", and
   // inventing that range would be a citation the writer did not make.
   it("never folds a range onto a member it did not read", () => {
+    // The range is anchored where the writer put it. Reading `46A` and then
+    // opening the range at `45` would report `ss 45–50` — five provisions
+    // the sentence does not name — so the head of the range has to be the
+    // member the dash was actually written after.
     const cites = extractStatuteCitations("Fair Work Act 2009 (Cth) ss 45, 46A to 50 apply.", 20)
-    expect(cites.map((cite) => cite.pinpoint)).not.toContain("ss 45–50")
-    expect(
-      cites.some((cite) => cite.attachedBy === "unread" && cite.raw.includes("46A") && cite.raw.includes("50")),
-    ).toBe(true)
+    const pinpoints = cites.map((cite) => cite.pinpoint)
+    expect(pinpoints).not.toContain("ss 45–50")
+    expect(pinpoints).toContain("ss 45")
+    expect(pinpoints).toContain("ss 46A–50")
+    expect(cites.filter((cite) => cite.attachedBy === "unread")).toEqual([])
   })
 
   // Round 5: past MAX_LIST_ITEMS the scanner returned at the thirteenth
@@ -577,7 +762,7 @@ describe("nothing located is dropped in silence", () => {
     const texts = [
       "The tribunal considered s 1234567 at length.",
       "Taxation Administration Act 1953 (Cth) s 8AAZLGAX applies.",
-      "Fair Work Act 2009 (Cth) ss 45 and 46A apply.",
+      "Trade Practices Act 1974 (Cth) ss 51AC, 52 and 53 were considered.",
       "Competition and Consumer Act 2010 (Cth) s 12345678901 applies.",
     ]
     for (const text of texts) {
