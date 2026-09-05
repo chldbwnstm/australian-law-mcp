@@ -94,7 +94,7 @@ will produce two plausible answers.
 npm run build          # clean + tsc
 npm run watch          # tsc --watch
 npm run typecheck      # tsc --noEmit
-npm test               # vitest run   — 95 files / 1,708 tests, no network (2026-09 measured)
+npm test               # vitest run   — 104 files / 2,360 tests, no network (2026-09 measured)
 npm run test:watch     # vitest
 npm start              # stdio server
 npm run start:http     # HTTP server
