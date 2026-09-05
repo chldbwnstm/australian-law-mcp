@@ -447,8 +447,10 @@ export async function chainActionBasis(
       detailLeg(parts, "Case in full", cases.detailO, "get_decision_text")
       detailLeg(parts, "Tribunal decision in full", appeals.detailO, "get_decision_text")
 
-      // A branch that was never requested gets no marker: after expiry every
-      // race resolves `{ok:false}`, including `Promise.resolve(null)`.
+      // A branch that was never requested gets no marker: a race *started*
+      // after expiry resolves `{ok:false}`, including `Promise.resolve(null)`
+      // — while one started before expiry settles `{ok:true, value:null}`,
+      // which the `else if (schedules.value)` below drops the same way.
       if (!schedules.ok) {
         if (needSchedules) parts.push(timedOutSection("Schedules (penalties, fees)", "get_schedules"))
       } else if (schedules.value) {
