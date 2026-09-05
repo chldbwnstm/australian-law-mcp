@@ -343,7 +343,6 @@ User: "what tools do you have for point-in-time law"
 - [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) — build, test, fixture-recording conventions, how to add a tool or a domain.
 - [`docs/TOOL-MAPPING.md`](docs/TOOL-MAPPING.md) — how each tool maps onto an Australian source.
 - [`docs/VERIFICATION.md`](docs/VERIFICATION.md) — the live verification log this README's grades come from.
-- [`CLAUDE.md`](CLAUDE.md) — repo guide for coding agents.
 - [`CHANGELOG.md`](CHANGELOG.md) — release history.
 
 ---

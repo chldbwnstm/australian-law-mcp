@@ -450,7 +450,7 @@ Legend: **primary** is the tool that should fire first.
 | N15 | Art 9 ICCPR | `get_law_text` | `search_treaties` / `get_treaty_text` | Treaty article, not a Cth section |
 | N16 | GSTR 2001/1 as at 30 June 2002 | `applicable_law` on FRL | ATO `PiT=` on the ruling docid | ATO PIT, not FRL compilations |
 | N17 | s 18 *meetings of the Commission* | ACL | CCA body s 18 | User already named the *wrong-heading* section |
-| N18 | “the Act” s 18 in a pasted letter that never named the Act | `get_law_text` | `verify_citations` → `⚠ law name unclear` | Korean 같은-법 rule |
+| N18 | “the Act” s 18 in a pasted letter that never named the Act | `get_law_text` | `verify_citations` → `⚠ law name unclear` | Korean “the same Act” rule |
 
 ---
 

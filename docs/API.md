@@ -5,7 +5,7 @@
 Tool structure and the honest-limitations tables are in [README.md](../README.md).
 Exhaustive parameter definitions are the Zod schemas in `src/tools/*.ts` — this
 document covers **shape, identifiers and the traps**, not every field.
-The rules in [CLAUDE.md](../CLAUDE.md) are the source of truth for behaviour.
+The rules in [DEVELOPMENT.md](DEVELOPMENT.md) are the source of truth for behaviour.
 
 ---
 
@@ -578,6 +578,5 @@ text, wrong provision, no error.
 
 - [README.md](../README.md) — tool structure, the 18-domain table, honest limitations
 - [ARCHITECTURE.md](ARCHITECTURE.md) — sources, layering, the client contract
-- [DEVELOPMENT.md](DEVELOPMENT.md) — build, test and fixture conventions
+- [DEVELOPMENT.md](DEVELOPMENT.md) — the canonical rules, plus build, test and fixture conventions
 - [VERIFICATION.md](VERIFICATION.md) — the live verification log
-- [CLAUDE.md](../CLAUDE.md) — the behavioural rules, canonical

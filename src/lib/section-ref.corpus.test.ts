@@ -52,7 +52,7 @@
  * values and label text are the bytes the register served, and no navPoint was
  * dropped. The two big ones are stored `gzip -n -9` (deterministic, no
  * timestamp) and inflated here with `node:zlib` — compression is not a trim, so
- * `CLAUDE.md`'s "save the body verbatim" holds with nothing given up.
+ * `docs/DEVELOPMENT.md`'s "save the body verbatim" holds with nothing given up.
  *
  *  - `corporations-document.ncx.gz` — C2004A00818, *Corporations Act 2001*.
  *    5,569 labels, 1,786,308 bytes inflated (281 KB stored). Holds every Part
@@ -118,8 +118,8 @@ interface NcxDocument {
  * A capture is read verbatim whether it is stored as bytes or gzipped. The two
  * full tables of contents are 1.7 MB and 2.1 MB of XML; `gzip -n -9` puts them
  * in the repository at a sixth of that without touching a byte of the markup,
- * which is how `CLAUDE.md`'s "save the body verbatim" and a corpus that has to
- * be complete can both hold at once.
+ * which is how `docs/DEVELOPMENT.md`'s "save the body verbatim" and a corpus that
+ * has to be complete can both hold at once.
  */
 function readNcx(path: string): string {
   return path.endsWith(".gz") ? gunzipSync(readFileSync(path)).toString("utf8") : readFileSync(path, "utf8")

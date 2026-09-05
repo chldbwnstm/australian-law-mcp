@@ -1224,7 +1224,7 @@ const QUERY_SWEEP: Record<string, QuerySweepContract> = {
 
   // ── no recorded fixture for the source they read ─────────────────────────
   // Each of these is a decision or state-legislation corpus this repository has
-  // no capture of, and inventing one is banned for the reason `CLAUDE.md` gives:
+  // no capture of, and inventing one is banned for the reason `docs/DEVELOPMENT.md` gives:
   // it would test the tool against an idea of the page. The reason is what a
   // reviewer needs to decide whether the row should still be here.
   search_cases: {

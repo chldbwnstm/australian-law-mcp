@@ -2,8 +2,145 @@
 
 > **v1.0.0** | Build, test and extension conventions for contributors and coding agents
 
-The behavioural rules in [CLAUDE.md](../CLAUDE.md) are canonical. This document is how
-you build, test and extend the thing without breaking them.
+This document is the canonical statement of both the behavioural rules of this project
+and the conventions for building, testing and extending it.
+
+---
+
+## Rules
+
+> ### ⚠️ The rule the whole project exists to keep
+>
+> **Never report an absence you did not establish.**
+>
+> Several of the sources an Australian researcher reaches for first — AustLII, LawCite,
+> the Federal Court, the NSW and SA registers, the ACCC, the Ombudsman — refuse automated
+> clients. A tool that answers a refusal with "no such case" advises a real authority out
+> of existence, and the caller has no way to tell. So the three "we do not have it" cases
+> are **three different labels** and are never collapsed:
+>
+> - `[NOT_FOUND]` — a source that authoritatively covers this record says it is not there. **The only label that permits reporting absence.**
+> - `[UPSTREAM_NO_DATA]` — the source was asked and did not hand it over. Not absence; may be retryable.
+> - `[UPSTREAM_BLOCKED]` — the source exists, is known, and this server refuses to fetch it. Not absence, not retryable. Always travels with a deep link.
+>
+> If you are about to write a message that says a record does not exist, check which of
+> the three you are actually in.
+
+### Australian domain knowledge you will get wrong
+
+These three are the ones that produce a confident wrong answer rather than an error.
+
+1. **The Australian Consumer Law is schedule 2 of an Act, not an Act.**
+   ACL s 18 = `{registerId:"C2004A00109", provision:"sch 2 s 18"}` = *Misleading or
+   deceptive conduct*. The same Act's body has its **own** s 18 — *Meetings of Commission*.
+   Both return text. Only one is ever what someone means. Call `get_schedules` first
+   whenever the user names a **body of law** (the ACL, a Criminal Code, a model law)
+   rather than an Act.
+
+2. **Renamed is not repealed.** The *Trade Practices Act 1974* and the *Competition and
+   Consumer Act 2010* are the same Act, same register id `C2004A00109`, "No 51 of 1974".
+   Treating the rename as a repeal loses forty years of authority. `law-alias.ts` handles
+   this and every response annotates it.
+
+3. **Most law that touches a person is State law.** Tenancy, crime, land, licensing,
+   traffic. An answer sourced only from the Federal Register is usually the wrong answer
+   to the question actually asked. `search_all` and `get_state_equivalents` exist for
+   this; NSW and SA registers are blocked, which is **not** evidence they have no such Act.
+
+Two more worth knowing: schedules carry substantive law (fees, forms, penalty tables), and
+explanatory memoranda are extrinsic material a court may use under s 15AB of the *Acts
+Interpretation Act 1901* — evidence, not commentary.
+
+### Critical rules
+
+1. **Never claim absence you did not establish.** See the banner. This governs every
+   message any tool emits.
+
+2. **Bracket labels come from `ErrorCodes` in `src/lib/errors.ts`.** A label built ad hoc
+   leaves machine readers unable to tell which set it belongs to. `[NOT_FOUND]` /
+   `[UPSTREAM_NO_DATA]` / `[UPSTREAM_BLOCKED]` are never interchanged.
+
+3. **Single-source vocabulary.** Section references, case citations, court codes, report
+   series, law aliases, host config, error labels, the tool taxonomy — each has exactly
+   one owning module, marked SINGLE SOURCE in the project structure below. Re-deriving one locally is
+   the mistake that makes two tools disagree about the same fact, and no test will catch
+   it: both answers look plausible.
+
+4. **One taxonomy.** `TOOL_CATEGORIES` in `tool-profiles.ts` is what `discover_tools`
+   searches *and* what the CLI's `list --category` filters on *and* what the CLI prints as
+   a heading. `cli-format.ts` has a default categoriser that reads a `[Prefix]` off the
+   description — that is the abandoned taxonomy, Australian descriptions have no prefix,
+   and using it files all 81 tools under "Other". Always pass `headingFor` from `cli.ts`.
+
+5. **No `console.log` on the stdio path.** A stray stdout write corrupts the JSON-RPC
+   framing and the client's error points nowhere near the cause. `index.ts` rebinds
+   `log`/`warn`/`info`/`debug` to stderr before connecting. The CLI binary (`cli.ts`,
+   `cli-executor.ts`, `cli-format.ts`) is exempt — it *is* the stdout consumer.
+
+6. **A tool never throws to the transport.** Wrap in `formatToolError(error, "tool_name")`.
+   The single exception is cancellation, re-thrown so the SDK suppresses a withdrawn
+   response — turning an abort into a normal result answers a request that was retracted.
+
+7. **Every upstream fetch goes through `AuApiClient`.** It holds the per-host politeness
+   clock (≥1 s for anything scraped) and charges the per-request budget. A bare `fetch`
+   bypasses both and makes this server a bad citizen of sites that asked for a crawl delay.
+
+8. **One budget per request, in AsyncLocalStorage.** A JSON-RPC batch and every chain step
+   share one allowance. Creating a fresh budget inside a tool defeats the whole mechanism.
+
+9. **Do not grow `V3_EXPOSED`.** Ten is the budget, and it is not "the best ten" — it is
+   the ones where the `discover_tools` → `execute_tool` round trip is not worth its
+   latency. Every advertised entry costs every client context on every request, forever,
+   and a model choosing between eighty near-synonyms chooses badly. Adding a tool to
+   `allTools` and `TOOL_CATEGORIES` is the normal path; adding it to `V3_EXPOSED` needs a
+   reason.
+
+10. **Never remove a tool from `allTools`.** A client that learned a name from
+    `discover_tools`, or from an earlier version, must keep working. The advertised list is
+    a projection, not the truth.
+
+11. **Counts are derived, never written down twice.** `TOOL_COUNTS` is exported from
+    `tool-registry.ts` and read by the HTTP root route and the tests. If you find a
+    hard-coded 81 or 10 in code, make it read `TOOL_COUNTS`.
+
+12. **Limits are sized against the upstream, not rounded.** `maxUpstreamBodyBytes` is
+    8 MiB because the Federal Register has no per-section endpoint and serves Act text as
+    whole epub volumes — the CCA's are 2.0 MiB and 4.1 MiB. A 2 MiB default made
+    `get_law_text` fail on the flagship documented example against a perfectly healthy
+    source. If you tune one of these, put the measurement in the comment.
+
+### Code conventions
+
+- **Fetch a volume only after a provision inside it is named.** `get_law_text` without a
+  `provision` returns the table of contents, deliberately — Act volumes are megabytes.
+- **Australian English and Australian legal vocabulary** in every user-facing string —
+  "medium-neutral citation", "penalty units", "catchwords", "AGLC", "commencement". The
+  descriptions are what a model reads to decide which tool to call.
+- **~200 lines per file.** Split by concern (`analysis-helpers/`, `statute-helpers/`,
+  `lib/sources/`) rather than by size.
+- **TypeScript strict.** No `any` reaching an exported signature.
+
+### Key files
+
+| File | Owns |
+|------|------|
+| `tool-registry.ts` | `allTools` (81), `V3_EXPOSED` filter, `TOOL_COUNTS` (derived), the CallTool boundary: budget, truncation, error formatting, cancellation |
+| `lib/tool-profiles.ts` | `V3_EXPOSED`, `TOOL_CATEGORIES`, `TOOL_ALIASES` — the **one** taxonomy |
+| `lib/upstream-hosts.ts` | Every host, fetched and blocked, with per-host timeout and interval |
+| `lib/api-client.ts` | `AuApiClient` — the frozen multi-host facade |
+| `lib/frl-criteria.ts` | The Federal Register criteria DSL. `authorises()` / `authorisedby()` are the Act⇄instrument relation; `enabledby`/`madeunder`/`enables` all 400 |
+| `lib/section-ref.ts` | Provision grammar, **single source**. `sch 2 s 18` is one reference |
+| `lib/case-citation.ts` | MNC + report series, **single source**. An unknown court token is *unclear*, never *not found* |
+| `lib/law-alias.ts` + `law-alias-data.ts` | Alias resolution and rename/repeal annotation |
+| `lib/errors.ts` | The bracket-label taxonomy, **single source** |
+| `lib/execution-limits.ts` | `DEFAULT_EXECUTION_LIMITS`, `RequestExecutionBudget` |
+| `lib/session-state.ts` | Per-request isolation: budget, cancel signal, optional api key |
+| `lib/citation-content-matcher.ts` | The two-layer content match. Score ranks candidates — containment scores *coverage*, not a flat 1 |
+| `tools/analysis-helpers/content-claims.ts` | What the prose claims a provision says. Only recognised shapes; a manufactured claim is a confident wrong answer |
+| `tools/analysis-helpers/heading-index.ts` | `bestHeadingMatch` — turns a mismatch into "you mean sch 2 s 18" |
+| `tools/unified-decisions.ts` | `DECISION_DOMAINS`, `DOMAIN_LABELS`, the two handler maps, `SELF_COMPACTING` |
+| `lib/query-router.ts` + `route-patterns.ts` | The CLI's natural-language routing |
+| `server/http-config.ts` | Env validation. An invalid value **fails the boot** rather than silently disabling a gate |
 
 ---
 
@@ -290,39 +427,6 @@ fails there rather than in production.
 
 ---
 
-## Code rules
-
-The consequences, not just the rules:
-
-- **No `console.log` on the stdio path.** A stray write corrupts the JSON-RPC framing and
-  the client reports a protocol error that points nowhere near its cause. `index.ts`
-  rebinds `log`/`warn`/`info`/`debug` to stderr before connecting the transport. The CLI
-  (`cli.ts`, `cli-executor.ts`, `cli-format.ts`) is a separate binary and is exempt.
-- **Never claim absence you did not establish.** `[NOT_FOUND]` means a source that
-  authoritatively covers the record says it is not there. Everything else is
-  `[UPSTREAM_NO_DATA]` or `[UPSTREAM_BLOCKED]`. This is the rule the whole project exists
-  to keep: reporting a Cloudflare block as "no such case" advises a real authority out of
-  existence.
-- **Bracket labels come from `ErrorCodes`.** A label built ad hoc leaves machine readers
-  unable to tell which set it belongs to.
-- **A tool never throws to the transport.** Wrap in `formatToolError`. The one exception
-  is cancellation, which is re-thrown so the SDK can suppress a withdrawn response.
-- **Every upstream fetch goes through the client.** It holds the per-host politeness
-  clock and charges the request budget. A bare `fetch` bypasses both.
-- **Fetch a volume only after a provision inside it is named.** `get_law_text` without a
-  `provision` returns the table of contents, deliberately — Act volumes are megabytes.
-- **Single-source vocabulary.** Section references, case citations, court codes, report
-  series, law aliases, host config and error labels each have exactly one owning module.
-  Do not re-derive them locally.
-- **Australian English and Australian legal vocabulary** in every user-facing string —
-  "medium-neutral citation", "penalty units", "catchwords", "AGLC", "commencement". The
-  descriptions are what a model reads to decide which tool to call.
-- **~200 lines per file.** Split by concern (`analysis-helpers/`, `statute-helpers/`,
-  `lib/sources/`) rather than by size.
-- **TypeScript strict.** No `any` reaching an exported signature.
-
----
-
 ## Release
 
 ```bash
@@ -356,4 +460,3 @@ file would silently be missing until someone installs the package.
 - [ARCHITECTURE.md](ARCHITECTURE.md) — sources, layering, the `AuApiClient` contract
 - [TOOL-MAPPING.md](TOOL-MAPPING.md) — the registry by category, and the mapping onto sources
 - [VERIFICATION.md](VERIFICATION.md) — the live verification log
-- [CLAUDE.md](../CLAUDE.md) — canonical behavioural rules

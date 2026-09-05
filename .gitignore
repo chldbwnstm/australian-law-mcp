@@ -9,10 +9,11 @@ test-*.js
 test-*.mjs
 test-results-*.txt
 .mcp.json
-.claude/settings.local.json
-.claude/memory/
-.claude/plans/
 *.tgz
+
+# Agent instructions and local agent state are not part of the repository
+CLAUDE.md
+.claude/
 
 # Local state written by MCP tools run inside this checkout, not part of the server
 .debate-war/

@@ -6,13 +6,13 @@ Updated 2026-09-05, after the two round-6 branches were reconciled into one `mai
 
 | | |
 |---|---|
-| Last commit | `a0048ba` Close the three round-6 soft spots |
+| Last commit | *README test count at 2,477; VERIFICATION.md notes the rename* |
 | Tests | 2,477 passing, 18 live-gated (skipped offline), 105 files, suite runs in ~5 s |
 | Typecheck | clean (`tsc --noEmit`) |
 | Build | clean (`npm run build`) |
 | Tools | 81 registered, 10 advertised — `TOOL_COUNTS`, derived, never written down twice |
 | Package | `au-law-mcp` v1.0.0 (bins: `au-law-mcp`, `australian-law`) |
-| Remote | `github.com/chldbwnstm/australian-law-mcp` — **still private, not yet tagged** |
+| Remote | `github.com/chldbwnstm/australian-law-mcp` — the repo keeps that name, only the npm package was renamed — **still private, not yet tagged** |
 | Live matrix | `docs/VERIFICATION.md` — MCP stdio, all 18 decision domains, CLI, HTTP, packaging |
 
 Six adversarial review rounds and two live-verification passes fixed **97 confirmed
@@ -32,7 +32,8 @@ not repeated here.
 
 Round 6 was done **twice, independently, on two machines**, and both sides fixed the same
 twelve round-5 defects and built the same three hardening items. Neither was a superset of
-the other, so `9cd5b13` is a real merge with both parents, resolved on one policy:
+the other, so the reconciliation commit is a real merge with both parents, resolved on
+one policy:
 
 - **Origin's grammar code** wherever both sides fixed the same defect — `section-ref.ts`,
   `section-ref-vocab.ts` (whose two letter constants are measured over all 1,177 in-force
@@ -106,8 +107,13 @@ driven against live upstreams.
 
 ## Before flipping the repo public
 
-`CONTRIBUTING.md`, `.github/workflows/ci.yml` and the `.gitignore` entry for local MCP
-state are in place, and the docs carry no absolute paths from a contributor's machine. Two
-things are left for a human: the repository is **private and untagged** — `v1.0.0` has to
-be tagged — and the commit history carries two personal email addresses across 37 commits,
-which becomes permanently public along with it.
+`CONTRIBUTING.md`, `.github/workflows/ci.yml` and a `.gitignore` that excludes `CLAUDE.md`,
+`.claude/` and `.debate-war/` are all in place. The tree carries no Korean text, no absolute
+paths from a contributor's machine and no personal information. The history has been
+rewritten so that every commit is authored and committed by
+`chldbwnstm <chldbwnstm@users.noreply.github.com>`, with `CLAUDE.md` removed from every
+commit and the session trailers dropped — `Co-Authored-By` lines stay — so nothing personal
+ships with the flip.
+
+Four steps are left for a human: force-push the rewritten `main` to `origin`, tag `v1.0.0`,
+flip the repository to public, and — optionally — `npm publish`.

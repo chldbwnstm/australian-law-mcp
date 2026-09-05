@@ -19,7 +19,7 @@ The Korean server compresses **42 upstream APIs → 10 advertised tools**. Inter
 | `legal_analysis` `cite_check` | “Is this still good law?” (Korean Shepard’s) | **LawCite** (free, automated) + **JADE** (free-ish) + paid **CaseBase / FirstPoint**. No official free treatment-flag citator. |
 | `legal_analysis` `applicable_law` | Point-in-time version + transitional notes | **FRL `Versions/Find(titleId, asAt)`** + compilation endnotes. |
 | `legal_analysis` `impact_map` | Reverse citations of an article | AustLII **Noteup** + LawCite “legislation considered” + JADE. |
-| Alias dictionary | `화관법` → official title | §5 below (`CCA`, `FW Act`, `Corps Act`, …). |
+| Alias dictionary | the *Chemicals Control Act* (a Korean short-title alias) → official title | §5 below (`CCA`, `FW Act`, `Corps Act`, …). |
 | Repealed-statute successor | v4.10.0 | FRL `nameHistory` + `statusHistory.reasons[].affectedByTitle`. |
 
 The 18 Korean `search_decisions` domains, taken from `src/tools/unified-decisions.ts`, are:
@@ -32,7 +32,7 @@ school, public_corp, public_inst,
 treaty, english_law
 ```
 
-Australia has **no 법제처-style single Open API**. The implementable architecture is a **federation**: FRL (statutes, first-class API) + AustLII/SINO (cases, HTML CGI) + court/tribunal sites + one state JSON-ish search (NSW Caselaw).
+Australia has **no single Open API in the style of MOLEG (the Korean Ministry of Government Legislation)**. The implementable architecture is a **federation**: FRL (statutes, first-class API) + AustLII/SINO (cases, HTML CGI) + court/tribunal sites + one state JSON-ish search (NSW Caselaw).
 
 ---
 
@@ -275,7 +275,7 @@ CCA compilation 165 is **four PDF volumes** (`volumeNumber` 1–4, `uniqueTypeNu
 
 `$select` works. `bytes` is omitted unless requested (and is large). Metadata includes `sizeInBytes`, `extension`, `isAuthorised`, `rectificationReason`.
 
-EPUB exists (`format=Epub`) and is the closest thing to structured article-level HTML. The public website HTML text view is **not** a documented article-level API — FRL FAQ says old `#_Toc` deep links 404. For `jo`-style article fetch (Korean `get_law_text(mst, jo="제38조")`) the MCP will need to:
+EPUB exists (`format=Epub`) and is the closest thing to structured article-level HTML. The public website HTML text view is **not** a documented article-level API — FRL FAQ says old `#_Toc` deep links 404. For `jo`-style article fetch (Korean `get_law_text(mst, jo="Article 38")`) the MCP will need to:
 
 - parse EPUB/HTML of the compilation, or
 - fall back to AustLII section URLs (`…/s18.html`) which *do* have per-section pages, with the usual AustLII lag.
@@ -585,32 +585,32 @@ Release: generally within 24 hours. NCAT/District/Local are **selective**. Restr
 
 ## 3. Eighteen Korean decision domains → Australian equivalents
 
-Korea’s `search_decisions(domain)` is one tool because 법제처 + agency portals share a similar XML shape. Australia is **one court/tribunal website each**. Recommended MCP shape: keep `search_decisions(domain)` as the advertised API, dispatch to the URLs below.
+Korea’s `search_decisions(domain)` is one tool because MOLEG (the Korean Ministry of Government Legislation) + agency portals share a similar XML shape. Australia is **one court/tribunal website each**. Recommended MCP shape: keep `search_decisions(domain)` as the advertised API, dispatch to the URLs below.
 
 | # | Korean `domain` | Korean body | Australian primary equivalent | Access (best → fallback) | MNC / cite code | Notes |
 |---|---|---|---|---|---|---|
 | 1 | `precedent` | Supreme Court / ordinary courts | **HCA + FCA/FCAFC + FCFCOA + state supreme/district/county/magistrates** | AustLII SINO (`mask_path=au/cases`) → JADE → court sites | `HCA`, `FCA`, `FCAFC`, `NSWCA`, `VSCA`, … | This is the default case-law domain. |
 | 2 | `constitutional` | Constitutional Court of Korea | **High Court constitutional matters** (Australia has **no** separate constitutional court). Also state Supreme Courts on *Kable* / state constitutions; FCA ACLHR NPA. | HCA eresources catchwords `Constitutional law (Cth)` + AustLII HCA + CLR | `HCA` + authorised **CLR** | Route “constitution / Chapter III / implied freedom / s 109” here. |
-| 3 | `tax_tribunal` | 조세심판원 | **ART** Taxation (and former **AAT** Taxation) **+** **AAT/ART** reported as `ATD`/`AA` unofficially; first-instance objections inside ATO | AustLII `ARTA` / `AATA`; ART site | `[YYYY] ARTA n`, historically `[YYYY] AATA n` | ART commenced **14 Oct 2024** (*Administrative Review Tribunal Act 2024* (Cth)). AAT abolished same day. |
-| 4 | `nts` | 국세청 법령해석 | **ATO** public rulings and interpretative decisions | https://www.ato.gov.au/law (Legal database): TR, TD, MT, CR, GSTR, SGR, SMSFR, PS LA, ATOID | `ATO TR 2024/1`, `ATO ID 2010/1` | Not “cases”. This is the interpretation layer. |
-| 5 | `customs` | 관세청 법령해석 | **ABF** / Comptroller-General of Customs + **ATO** (GST/excise) + **ART** customs/tariff + **Anti-Dumping Review Panel** | ABF notices; AustLII ART/AATA customs; https://www.adreviewpanel.gov.au | ART; ADN series | Korean “customs interpretation” ≠ ABF media releases — prefer formal advices/rulings and tribunal decisions. |
-| 6 | `interpretation` | 법제처 법령해석례 | **No public AGD/OLSC interpretation database** comparable to 법령해석례. Closest: **OPC** drafting notes (not law); **AGS** advices (generally not public); **Explanatory Memoranda** (APH); **ALRC** reports; agency FOI Guidelines (OAIC). | APH EMs; ALRC https://www.alrc.gov.au; OAIC FOI Guidelines | EM / ALRC report citations (AGLC ch 7) | Do not fake a 법령해석례. Expose EMs + selected agency guidelines. |
-| 7 | `admin_appeal` | 행정심판례 | **ART** (Cth merits review) **+ state super-tribunals**: NCAT, VCAT, QCAT, SACAT, SAT (WA), TASCAT, ACAT, NTCAT | AustLII `ARTA`/`AATA`/`NCAT`/`VCAT`/`QCAT`/… + NSW Caselaw NCAT | `[YYYY] ARTA n`, `[YYYY] NSWCATAD n`, `[YYYY] VCAT n` | This is the workhorse domain after `precedent`. |
-| 8 | `ftc` | 공정위 | **ACCC** (investigations, s 87B undertakings, infringement notices, merger determinations under the 2025 mandatory regime) **+ Australian Competition Tribunal** | ACCC https://www.accc.gov.au ; AustLII `ACompT`; FCA competition list | `[YYYY] ACompT n`; FCA; ACCC determinations are **not** MNCs | Authorisation determinations and s 51ABZE merger decisions are administrative, then reviewable in ACompT/FCA. |
-| 9 | `pipc` | 개인정보위 | **OAIC** — Privacy Commissioner determinations + Information Commissioner FOI reviews | AustLII `AICmr` https://www.austlii.edu.au/au/cases/cth/AICmr/ ; OAIC site | **`[YYYY] AICmr n`** | Database: FOI + Privacy from 1 Nov 2010. Pre-2010: closed Federal Privacy Commissioner determinations. Case notes: `AICmrCN`. |
-| 10 | `nlrc` | 노동위 | **Fair Work Commission** (unfair dismissal, EAs, industrial action, general protections conferences) **+** Federal Court / FCFCOA for civil penalty/unlawful termination **+ Fair Work Ombudsman** (compliance, not a tribunal) | https://www.fwc.gov.au/hearings-decisions/find-decisions-and-orders ; AustLII `FWC` (~31k decisions) | **`[YYYY] FWC n`**, Full Bench **`[YYYY] FWCFB n`**, pred. `FWA`/`AIRC` | FWC site publishes as issued (incl. after hours). Appeals: permission, 21 days. |
-| 11 | `acr` | 권익위 (anti-corruption / rights) | **NACC** (from 1 Jul 2023, replacing ACLEI for Cth) **+** state ICAC/IBAC/CCC/CIC/IBAC-equivalents **+ Commonwealth Ombudsman** **+ ANAO** | NACC https://www.nacc.gov.au (many investigations **not** public); state ICAC reports | Reports, not MNCs; some state ICAC have “operation” names | Korean ACR decisions are more routinely published than NACC. Pair with Ombudsman investigation reports. |
-| 12 | `appeal_review` | 소청심사 (civil-service appeals) | **Merit Protection Commissioner** (APS) https://www.mpc.gov.au **+** Defence Force tribunal / Veterans’ ART lists **+** FWC for some APS enterprise matters | MPC reports; ART veterans/defence | mostly non-MNC | Thin public corpus. |
-| 13 | `acr_special` | 권익위 특별행정심판 | **Inspector-General of Taxation and Taxation Ombudsman**; **IGIS**; **NDIS Quality and Safeguards**; specialised inspectors-general | IGT https://www.igt.gov.au | reports | No single “special administrative appeal” court. |
-| 14 | `school` | 학칙 | University statutes/rules + TEQSA + state education Acts. **Not centralised.** | Individual university legal offices; state consolidated Acts (e.g. *Education Act 1990* (NSW)) | — | Low priority unless a partner university is in scope. |
-| 15 | `public_corp` | 공사공단 규정 | Cth **corporate Commonwealth entities** rules: often **notifiable/legislative instruments on FRL** + entity websites (Australia Post, NBN, CSIRO, ABA) | FRL `NotifiableInstrument` / `LegislativeInstrument` filtered by administering department | FRL title IDs | Prefer FRL over scraping entity sites. |
-| 16 | `public_inst` | 공공기관 규정 | APS agency policies, Accountable Authority Instructions under *PGPA Act 2013* (Cth), Procurement Rules | FRL (`C2013A00123` PGPA Act); Department of Finance RMG series | — | Finance RMGs are guidance, not law — label them as such (Korean MCP’s “don’t claim absence” ethic). |
-| 17 | `treaty` | 조약 | **Australian Treaties Library** (DFAT on AustLII) + DFAT FTA pages | https://www.austlii.edu.au/au/other/dfat/ ; https://www.dfat.gov.au/trade/agreements/trade-agreements ; ATS series | `[YYYY] ATS n` / [YYYY] ATNIF n | Authentic texts also in [United Nations Treaty Series] but ATS is the Australian citation. |
-| 18 | `english_law` | 영문법령 | **Not applicable.** Australian statutes are made in English. Optional extras: official compilations on FRL; **Easy Read** / translations on some agency sites; UK/NZ persuasive authorities via AustLII/BailII/NZLII. | FRL | — | Do not invent a translation corpus. If the tool is kept for API symmetry, map it to “official English compilation (FRL latest)”. |
+| 3 | `tax_tribunal` | Tax Tribunal | **ART** Taxation (and former **AAT** Taxation) **+** **AAT/ART** reported as `ATD`/`AA` unofficially; first-instance objections inside ATO | AustLII `ARTA` / `AATA`; ART site | `[YYYY] ARTA n`, historically `[YYYY] AATA n` | ART commenced **14 Oct 2024** (*Administrative Review Tribunal Act 2024* (Cth)). AAT abolished same day. |
+| 4 | `nts` | National Tax Service statutory interpretations | **ATO** public rulings and interpretative decisions | https://www.ato.gov.au/law (Legal database): TR, TD, MT, CR, GSTR, SGR, SMSFR, PS LA, ATOID | `ATO TR 2024/1`, `ATO ID 2010/1` | Not “cases”. This is the interpretation layer. |
+| 5 | `customs` | Korea Customs Service statutory interpretations | **ABF** / Comptroller-General of Customs + **ATO** (GST/excise) + **ART** customs/tariff + **Anti-Dumping Review Panel** | ABF notices; AustLII ART/AATA customs; https://www.adreviewpanel.gov.au | ART; ADN series | Korean “customs interpretation” ≠ ABF media releases — prefer formal advices/rulings and tribunal decisions. |
+| 6 | `interpretation` | MOLEG statutory interpretation rulings | **No public AGD/OLSC interpretation database** comparable to Korean statutory interpretation rulings. Closest: **OPC** drafting notes (not law); **AGS** advices (generally not public); **Explanatory Memoranda** (APH); **ALRC** reports; agency FOI Guidelines (OAIC). | APH EMs; ALRC https://www.alrc.gov.au; OAIC FOI Guidelines | EM / ALRC report citations (AGLC ch 7) | Do not fake a statutory interpretation ruling. Expose EMs + selected agency guidelines. |
+| 7 | `admin_appeal` | administrative appeal rulings | **ART** (Cth merits review) **+ state super-tribunals**: NCAT, VCAT, QCAT, SACAT, SAT (WA), TASCAT, ACAT, NTCAT | AustLII `ARTA`/`AATA`/`NCAT`/`VCAT`/`QCAT`/… + NSW Caselaw NCAT | `[YYYY] ARTA n`, `[YYYY] NSWCATAD n`, `[YYYY] VCAT n` | This is the workhorse domain after `precedent`. |
+| 8 | `ftc` | Fair Trade Commission | **ACCC** (investigations, s 87B undertakings, infringement notices, merger determinations under the 2025 mandatory regime) **+ Australian Competition Tribunal** | ACCC https://www.accc.gov.au ; AustLII `ACompT`; FCA competition list | `[YYYY] ACompT n`; FCA; ACCC determinations are **not** MNCs | Authorisation determinations and s 51ABZE merger decisions are administrative, then reviewable in ACompT/FCA. |
+| 9 | `pipc` | Personal Information Protection Commission | **OAIC** — Privacy Commissioner determinations + Information Commissioner FOI reviews | AustLII `AICmr` https://www.austlii.edu.au/au/cases/cth/AICmr/ ; OAIC site | **`[YYYY] AICmr n`** | Database: FOI + Privacy from 1 Nov 2010. Pre-2010: closed Federal Privacy Commissioner determinations. Case notes: `AICmrCN`. |
+| 10 | `nlrc` | Labor Relations Commission | **Fair Work Commission** (unfair dismissal, EAs, industrial action, general protections conferences) **+** Federal Court / FCFCOA for civil penalty/unlawful termination **+ Fair Work Ombudsman** (compliance, not a tribunal) | https://www.fwc.gov.au/hearings-decisions/find-decisions-and-orders ; AustLII `FWC` (~31k decisions) | **`[YYYY] FWC n`**, Full Bench **`[YYYY] FWCFB n`**, pred. `FWA`/`AIRC` | FWC site publishes as issued (incl. after hours). Appeals: permission, 21 days. |
+| 11 | `acr` | Anti-Corruption and Civil Rights Commission (anti-corruption / rights) | **NACC** (from 1 Jul 2023, replacing ACLEI for Cth) **+** state ICAC/IBAC/CCC/CIC/IBAC-equivalents **+ Commonwealth Ombudsman** **+ ANAO** | NACC https://www.nacc.gov.au (many investigations **not** public); state ICAC reports | Reports, not MNCs; some state ICAC have “operation” names | Korean ACR decisions are more routinely published than NACC. Pair with Ombudsman investigation reports. |
+| 12 | `appeal_review` | Appeals Review Committee (civil-service appeals) | **Merit Protection Commissioner** (APS) https://www.mpc.gov.au **+** Defence Force tribunal / Veterans’ ART lists **+** FWC for some APS enterprise matters | MPC reports; ART veterans/defence | mostly non-MNC | Thin public corpus. |
+| 13 | `acr_special` | Anti-Corruption and Civil Rights Commission special administrative appeals | **Inspector-General of Taxation and Taxation Ombudsman**; **IGIS**; **NDIS Quality and Safeguards**; specialised inspectors-general | IGT https://www.igt.gov.au | reports | No single “special administrative appeal” court. |
+| 14 | `school` | university rules | University statutes/rules + TEQSA + state education Acts. **Not centralised.** | Individual university legal offices; state consolidated Acts (e.g. *Education Act 1990* (NSW)) | — | Low priority unless a partner university is in scope. |
+| 15 | `public_corp` | public-corporation and agency regulations | Cth **corporate Commonwealth entities** rules: often **notifiable/legislative instruments on FRL** + entity websites (Australia Post, NBN, CSIRO, ABA) | FRL `NotifiableInstrument` / `LegislativeInstrument` filtered by administering department | FRL title IDs | Prefer FRL over scraping entity sites. |
+| 16 | `public_inst` | public-institution regulations | APS agency policies, Accountable Authority Instructions under *PGPA Act 2013* (Cth), Procurement Rules | FRL (`C2013A00123` PGPA Act); Department of Finance RMG series | — | Finance RMGs are guidance, not law — label them as such (Korean MCP’s “don’t claim absence” ethic). |
+| 17 | `treaty` | treaties | **Australian Treaties Library** (DFAT on AustLII) + DFAT FTA pages | https://www.austlii.edu.au/au/other/dfat/ ; https://www.dfat.gov.au/trade/agreements/trade-agreements ; ATS series | `[YYYY] ATS n` / [YYYY] ATNIF n | Authentic texts also in [United Nations Treaty Series] but ATS is the Australian citation. |
+| 18 | `english_law` | English-language statutes | **Not applicable.** Australian statutes are made in English. Optional extras: official compilations on FRL; **Easy Read** / translations on some agency sites; UK/NZ persuasive authorities via AustLII/BailII/NZLII. | FRL | — | Do not invent a translation corpus. If the tool is kept for API symmetry, map it to “official English compilation (FRL latest)”. |
 
 ### 3.1 “Ordinances” → Australian state and territory legislation
 
-Korea’s 자치법규 (local ordinances) are the **closest analogue to state/territory Acts and regulations**, plus genuine local-government ordinances/by-laws. Australia is a federation: **state legislation is not subordinate to Cth in the Korean 위임 조례 sense**; inconsistency is *Constitution* s 109.
+Korea’s local-government ordinances are the **closest analogue to state/territory Acts and regulations**, plus genuine local-government ordinances/by-laws. Australia is a federation: **state legislation is not subordinate to Cth in the Korean delegated-ordinance sense**; inconsistency is *Constitution* s 109.
 
 | Jurisdiction | Official register | Point-in-time? | AustLII | Notes |
 |---|---|---|---|---|
@@ -635,7 +635,7 @@ Local government **by-laws / local laws / LEPs**:
 
 Treat these as a third tier, not as the state-Act analogue.
 
-### 3.2 Administrative-review map (replaces Korean 행심 + 조세심판 + 노동위 overlap)
+### 3.2 Administrative-review map (replaces the Korean administrative-appeal + tax-tribunal + labor-commission overlap)
 
 ```
 Cth merits review ── ART (14 Oct 2024–) ── AustLII ARTA
@@ -743,9 +743,9 @@ Commonwealth of Australia Constitution Act 1900 (Imp) s 9
 
 | Korean | Australian lawyer-speak | Verifier rule |
 |---|---|---|
-| `같은 법` / `동법` | “the Act”, “that Act”, “the *FW Act*” after a short-title definition | Inherit last full statute cite **within the same paragraph**. Do not inherit across a blank line (Korean v4.9.0 rule — copy it). |
-| `「법령명」` | italics or *Title Year* (Cth) | Strip italics/`_`/`*` markdown. |
-| 가지번호 `제10조의2` | `s 10AA`, `s 10AB`, `s 41A` lettered sections | Regex: `s\s*\d+[A-Z]{0,3}` plus `(subdiv)` |
+| `the same Act` / `that Act` (Korean statutory back-references) | “the Act”, “that Act”, “the *FW Act*” after a short-title definition | Inherit last full statute cite **within the same paragraph**. Do not inherit across a blank line (Korean v4.9.0 rule — copy it). |
+| `「statute title」` (Korean corner-bracket title marks) | italics or *Title Year* (Cth) | Strip italics/`_`/`*` markdown. |
+| branch-number articles (`Article 10-2`) | `s 10AA`, `s 10AB`, `s 41A` lettered sections | Regex: `s\s*\d+[A-Z]{0,3}` plus `(subdiv)` |
 
 **Jurisdiction abbreviations (always these, never `Cwlth` / `Commonwealth` / `NSW.`):**
 
@@ -1053,7 +1053,7 @@ Order of operations in a firm:
 4. Check **legislation** — a case can be good law and still **dead in practice** because the section was amended (FRL point-in-time + amending Act). This is the Korean `applicable_law` ∩ `cite_check` intersection.
 5. Only then, if no subscription, use **free** tools (below).
 
-There is **no** Australian equivalent of Korea’s en banc “변경하기로 한다” formula that you can grep with high precision. Overruling is discursive (“we decline to follow”, “should not be regarded as authority for”, “*X* is overruled”). HCA occasionally says “overruled” in terms; more often it “explains” or “does not follow”.
+There is **no** Australian equivalent of Korea’s en banc “we hereby depart from the earlier holding” formula that you can grep with high precision. Overruling is discursive (“we decline to follow”, “should not be regarded as authority for”, “*X* is overruled”). HCA occasionally says “overruled” in terms; more often it “explains” or “does not follow”.
 
 ### 6.2 Free sources that allow a *partial* citator
 
@@ -1106,7 +1106,7 @@ Scraping these is a licence violation. The MCP should **cite them as the profess
 | `ordinance_radar` | State register compilation date vs FRL parent `isCurrent.start`. |
 | `search_decisions` | Domain table §3; SINO `mask_path` per domain. |
 | Annexes | FRL schedules are in-compilation (sch, not HWP). ACL = sch 2. Forms often in rules/regulations as sch. |
-| Terms KB | No 법령용어 API. Seed from *Acts Interpretation Act 1901* (Cth) s 2B, *Legislation Act 2003*, UEA Dictionary, Corps Act s 9. |
+| Terms KB | No legal-terminology API. Seed from *Acts Interpretation Act 1901* (Cth) s 2B, *Legislation Act 2003*, UEA Dictionary, Corps Act s 9. |
 
 ### 7.1 Hard constraints the Korean server already learned (apply here)
 
@@ -1208,7 +1208,7 @@ Australia can support a korean-law-mcp-shaped product, but **the centre of gravi
 - **Statutes (States):** eight separate registers + AustLII. This is the ordinance problem, except the “ordinances” are sovereign Parliaments.
 - **Cases:** HTML federation. AustLII SINO + LawCite are the search/citator backbone; HCA/FCA/NSW Caselaw are official-text backends. Expect anti-bot.
 - **18 Korean domains:** all have an Australian institution, **none** share an API. ART (2024) and FWC/OAIC/ACCC/ACompT/NACC are the non-court mappings.
-- **Citation verifier:** AGLC4 is strict and regular enough to parse; the ACL-as-sch-2 and TPA=CCA traps are the Korean `같은 법` moment.
+- **Citation verifier:** AGLC4 is strict and regular enough to parse; the ACL-as-sch-2 and TPA=CCA traps are the Korean “the same Act” moment.
 - **Good law:** free tools give **citation graphs**, not Shepard’s signals. Product copy must say so.
 
 If only one upstream is wired in v1, wire **FRL**. If only one case upstream, wire **AustLII SINO + LawCite** with a JADE/HCA/NSW fallback and the v4.12 “unreachable ≠ absent” rule turned on from day one.

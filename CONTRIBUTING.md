@@ -15,8 +15,8 @@ and `npm pack --dry-run` on Node 20.19 and 22.
 
 ## Two rules that are not negotiable
 
-Both are stated in full in [`CLAUDE.md`](CLAUDE.md), which is the repo guide for humans
-and coding agents alike.
+Both are stated in full in [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md), which is the
+canonical statement of the project's rules and conventions.
 
 1. **Never report an absence you did not establish.** Several Australian sources refuse
    automated clients, so "not found", "the source did not answer" and "this server does

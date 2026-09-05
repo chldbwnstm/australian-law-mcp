@@ -13,11 +13,11 @@ Reference clone: `/tmp/korean-law-mcp` (structure, budgets, error taxonomy, and 
 
 | # | Korean concept | Australian counterpart | Rationale |
 |---|----------------|------------------------|-----------|
-| 1 | 법령 (statute, MST id) + 시행령/시행규칙 3-tier | **Cth Acts + Legislative Instruments** on the Federal Register of Legislation (FRL). 3-tier = Act → Regulations → Rules/other instruments ("enabled by" metadata) | FRL is the single authoritative federal register with an OData API |
-| 2 | 시점법령/연혁법령 (point-in-time, applicable_law) | **FRL compilations** — every compilation has a register id + start/end dates | Native point-in-time support; better than Korea's |
-| 3 | 자치법규 (local ordinances) | **State/Territory legislation** (8 jurisdictions: NSW, Vic, Qld, WA, SA, Tas, ACT, NT) | The federal/state split is the natural "second layer" of Australian law; local council by-laws are not systematically published |
-| 4 | 판례 + 18 decision domains | **Multi-source fan-out** — AustLII is Cloudflare-blocked to non-browser clients (verified 2026-09-03), so live sources are NSW Caselaw (best), Queensland Judgments (citation-addressable), hcourt.gov.au (HCA), + per-domain first-party sites; AustLII/LawCite kept as user-facing deep links only | See docs/research/case-law-access.md; citator = full-text citation back-trace (same technique as Korean cite_check) |
-| 5 | 조문번호 JO code (`제38조` ↔ `003800`) | **Section reference grammar** (`s 18`, `s 355-25`, `sub-s (2)(a)`, Sch 2 item 1) with a normalizer `parse_section_ref` | AU has no numeric codes; the normalizer is the single source of section-reference truth |
+| 1 | statute (Act, MST id) + enforcement decree / enforcement rules 3-tier | **Cth Acts + Legislative Instruments** on the Federal Register of Legislation (FRL). 3-tier = Act → Regulations → Rules/other instruments ("enabled by" metadata) | FRL is the single authoritative federal register with an OData API |
+| 2 | point-in-time and historical statute versions (applicable_law) | **FRL compilations** — every compilation has a register id + start/end dates | Native point-in-time support; better than Korea's |
+| 3 | local-government ordinances | **State/Territory legislation** (8 jurisdictions: NSW, Vic, Qld, WA, SA, Tas, ACT, NT) | The federal/state split is the natural "second layer" of Australian law; local council by-laws are not systematically published |
+| 4 | case law + 18 decision domains | **Multi-source fan-out** — AustLII is Cloudflare-blocked to non-browser clients (verified 2026-09-03), so live sources are NSW Caselaw (best), Queensland Judgments (citation-addressable), hcourt.gov.au (HCA), + per-domain first-party sites; AustLII/LawCite kept as user-facing deep links only | See docs/research/case-law-access.md; citator = full-text citation back-trace (same technique as Korean cite_check) |
+| 5 | article-number JO code (Article 38 ↔ `003800`) | **Section reference grammar** (`s 18`, `s 355-25`, `sub-s (2)(a)`, Sch 2 item 1) with a normalizer `parse_section_ref` | AU has no numeric codes; the normalizer is the single source of section-reference truth |
 
 ## Exposed tools (10 — the same surface shape as the reference's v4.4.0+ consolidation)
 
@@ -38,24 +38,24 @@ Reference clone: `/tmp/korean-law-mcp` (structure, budgets, error taxonomy, and 
 
 | # | Korean domain | Australian domain (`domain` value) | Source | Grade |
 |---|--------------|-------------------------------------|--------|-------|
-| 1 | 판례 (courts) | `cases` | fan-out: NSW Caselaw + hcourt.gov.au + QLD Judgments | live |
-| 2 | 헌재 | `constitutional` | HCA `keywords=constitutional` (catchwords) | live |
-| 3 | 행정심판 | `admin_appeals` | NCAT (NSW Caselaw) + QCAT (QLD Judgments) + ART deep links | live (states) |
-| 4 | 조세심판원 | `tax_tribunal` | ATO legal DB (decision impact statements) + ARTA deep links | partial |
-| 5 | 국세청 해석 | `tax_rulings` | ATO Legal Database TR/TD/GSTR/… | live |
-| 6 | 법령해석례 | `interpretations` | ATO interpretative decisions (AID) + practice statements (PS LA) | live |
-| 7 | 관세 해석 | `customs` | ATO customs/excise docs + Anti-Dumping Review Panel indexes (`adrp` is a fetched host, not a deep link) | live |
-| 8 | 공정위 | `competition` | ACCC/ACompT attempt (→ [UPSTREAM_BLOCKED] + links) + case fan-out fallback | degraded |
-| 9 | 노동위 | `workplace` | FWC document-search + PDFs | live |
-| 10 | 개보위 | `privacy` | OAIC determinations index + AICmr deep links | live (index) |
-| 11 | 권익위 | `integrity` | NACC investigation reports (live index); Cth Ombudsman is Cloudflare-gated → `[UPSTREAM_BLOCKED]` + link | partial |
-| 12 | 소청심사 | `public_service` | Merit Protection Commissioner case-studies index (live, faceted) | live |
-| 13 | 학칙 | `university_rules` | university acts via state legislation clients | live |
-| 14 | 공단 규정 | `agency_rules` | FRL NotifiableInstrument collection | live |
-| 15 | 공공기관 규정 | `gazettes` | FRL Gazette collection (18,593 notices) | live |
-| 16 | 조약 | `treaties` | DFAT Australian Treaties Database JSON API | live |
-| 17 | 영문법령 | `explanatory` | FRL Explanatory Statements (type=ES) + APH EM links — "the version written for humans" | live |
-| 18 | 자치법규 (also own tools) | `state_law` | unified state/territory legislation search (QLD/TAS/WA/VIC/NT/ACT; NSW/SA link-only) | live |
+| 1 | case law (courts) | `cases` | fan-out: NSW Caselaw + hcourt.gov.au + QLD Judgments | live |
+| 2 | Constitutional Court | `constitutional` | HCA `keywords=constitutional` (catchwords) | live |
+| 3 | administrative appeals | `admin_appeals` | NCAT (NSW Caselaw) + QCAT (QLD Judgments) + ART deep links | live (states) |
+| 4 | Tax Tribunal | `tax_tribunal` | ATO legal DB (decision impact statements) + ARTA deep links | partial |
+| 5 | National Tax Service interpretations | `tax_rulings` | ATO Legal Database TR/TD/GSTR/… | live |
+| 6 | statutory interpretation rulings | `interpretations` | ATO interpretative decisions (AID) + practice statements (PS LA) | live |
+| 7 | customs interpretations | `customs` | ATO customs/excise docs + Anti-Dumping Review Panel indexes (`adrp` is a fetched host, not a deep link) | live |
+| 8 | Fair Trade Commission | `competition` | ACCC/ACompT attempt (→ [UPSTREAM_BLOCKED] + links) + case fan-out fallback | degraded |
+| 9 | Labor Relations Commission | `workplace` | FWC document-search + PDFs | live |
+| 10 | Personal Information Protection Commission | `privacy` | OAIC determinations index + AICmr deep links | live (index) |
+| 11 | Anti-Corruption and Civil Rights Commission | `integrity` | NACC investigation reports (live index); Cth Ombudsman is Cloudflare-gated → `[UPSTREAM_BLOCKED]` + link | partial |
+| 12 | Appeals Review Committee (civil-service appeals) | `public_service` | Merit Protection Commissioner case-studies index (live, faceted) | live |
+| 13 | university rules | `university_rules` | university acts via state legislation clients | live |
+| 14 | public-corporation regulations | `agency_rules` | FRL NotifiableInstrument collection | live |
+| 15 | public-institution regulations | `gazettes` | FRL Gazette collection (18,593 notices) | live |
+| 16 | treaties | `treaties` | DFAT Australian Treaties Database JSON API | live |
+| 17 | English-language statutes | `explanatory` | FRL Explanatory Statements (type=ES) + APH EM links — "the version written for humans" | live |
+| 18 | local-government ordinances (also own tools) | `state_law` | unified state/territory legislation search (QLD/TAS/WA/VIC/NT/ACT; NSW/SA link-only) | live |
 
 Live grades, re-measured end to end on 2026-09-04 (`docs/VERIFICATION.md`): **11 live,
 6 partial (`admin_appeals`, `tax_tribunal`, `privacy`, `integrity`, `treaties` and
