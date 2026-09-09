@@ -44,6 +44,33 @@ limits on what was checked.
 3. Follow any installation approval prompts. If Codex asks you to restart the app,
    do so, then open a new chat.
 
+### First task in Codex: check a draft before partner review
+
+1. Start a new local chat after installation. You can try this fictional draft
+   straight away; no document upload is needed.
+2. Copy and send:
+
+   ```text
+   Use the Australian Law MCP tools to check this draft paragraph before I send
+   it to the supervising partner:
+
+   "Under the Competition and Consumer Act 2010 (Cth) s 18, misleading conduct
+   is prohibited; see also Privacy Act 1988 (Cth) s 999."
+
+   Check each statutory citation against the official text. Give me a short
+   table: citation in the draft, what the source says, proposed correction,
+   and official source link. Mark anything you cannot verify as unverified.
+   Then suggest a corrected paragraph using only provisions you verified.
+   ```
+
+3. Review the table and open the source links. This example should flag the
+   distinction between the Act's own s 18 and **schedule 2, s 18 (the ACL)**,
+   and the nonexistent Privacy Act s 999. Review the proposed wording before
+   using it in a draft.
+
+For your next check, replace the fictional paragraph with the relevant excerpt
+from your draft, using material your firm permits in the AI app.
+
 ## Install in Claude Code desktop
 
 **Use the Code tab in Claude Desktop and ask Claude to install it for you.**
@@ -68,10 +95,34 @@ No hosted server or legal-data API key is needed. Your account must be able to
 access this repository, and your computer must permit the installation. Detailed
 instructions for the agent are in [INSTALL.md](INSTALL.md).
 
-**After installation, try this in a new chat:**
+### First task in Claude Code: prepare a redundancy research note
 
-> Use Australian Law to retrieve section 18 of the Australian Consumer Law. Show
-> the provision, identify its Act and schedule, and include the official source link.
+1. Start a new **Code → Local** session after installation. Choose a folder for
+   the trial if prompted. Use the fictional brief below; no client file is needed.
+2. Copy and send:
+
+   ```text
+   Use the Australian Law MCP tools to prepare a short research note for an
+   employment partner. This is a fictional research exercise: an employer has
+   abolished a role, and the employee disputes whether consultation occurred.
+
+   Retrieve Fair Work Act 2009 (Cth) s 389 and identify the compilation date.
+   Search Fair Work Commission decisions on genuine redundancy and consultation.
+   Select up to three relevant decisions from the results you can verify.
+
+   For each decision, give its name, citation, date, official source link, and
+   why it may help our research. Include a paragraph reference where the reasons
+   are available. If you only receive metadata, say that the reasons were not
+   reviewed. Finish with questions we need to investigate about consultation.
+   Show the note in this chat, with any search or source-access limitations.
+   ```
+
+3. Open the legislation and decision links, check the cited passages, and use the
+   questions to plan further research. If full reasons were unavailable, read
+   them at the linked source before relying on a decision's reasoning.
+
+You can then ask: “Turn the verified material into a one-page internal research
+note, keeping the source links and unresolved questions.”
 
 ## Install in Claude Desktop
 
