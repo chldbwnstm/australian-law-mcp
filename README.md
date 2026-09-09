@@ -9,7 +9,7 @@
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue)
 
-> Every source is a **keyless public endpoint** — the Federal Register of Legislation, NSW Caselaw, the High Court, Queensland Judgments, the State registers, the ATO, the Fair Work Commission, the OAIC, the NACC and DFAT. **There is no API key to configure.** Works with Claude Desktop, Claude Code, Cursor, Windsurf, VS Code, Zed, Gemini CLI, and any MCP client.
+> Every source is a **keyless public endpoint** — the Federal Register of Legislation, NSW Caselaw, the High Court, Queensland Judgments, the State registers, the ATO, the Fair Work Commission, the OAIC, the NACC and DFAT. **There is no API key to configure.** Works with Codex, Claude Desktop, Claude Code, Cursor, Windsurf, VS Code, Zed, Gemini CLI, and any MCP client.
 
 **Best used when you need to:**
 
@@ -21,9 +21,56 @@
 
 ---
 
+## Install in Codex desktop
+
+**Ask Codex to install it for you. You do not need to run terminal commands.**
+
+1. Open Codex desktop and start a **local** session on your computer.
+2. Copy and send this message:
+
+   ```text
+   Install https://github.com/chldbwnstm/australian-law-mcp as a local MCP server
+   in my Codex desktop app. Follow INSTALL.md in that repository. Handle the setup
+   for me, preserve my existing settings, and verify that the server works. Tell me
+   if I need to restart the app. I do not want to run terminal commands myself.
+   ```
+
+3. Follow any installation approval prompts. If Codex asks you to restart the app,
+   do so, then open a new chat.
+
+## Install in Claude Code desktop
+
+**Use the Code tab in Claude Desktop and ask Claude to install it for you.**
+
+1. Open Claude Desktop, select **Code**, and start a session with the environment
+   set to **Local**. Choose a folder if the app asks for one.
+2. Copy and send this message:
+
+   ```text
+   Install https://github.com/chldbwnstm/australian-law-mcp as a local MCP server
+   for Claude Code in this desktop app, available across my projects. Follow
+   INSTALL.md in that repository. Handle the setup for me, preserve my existing
+   settings, and verify that the server works. Tell me if I need to restart the app.
+   I do not want to run terminal commands myself.
+   ```
+
+3. Follow any installation approval prompts, then start a new Code session or
+   restart the app as instructed.
+
+For either app, the agent handles the required software and local configuration.
+No hosted server or legal-data API key is needed. Your account must be able to
+access this repository, and your computer must permit the installation. Detailed
+instructions for the agent are in [INSTALL.md](INSTALL.md).
+
+**After installation, try this in a new chat:**
+
+> Use Australian Law to retrieve section 18 of the Australian Consumer Law. Show
+> the provision, identify its Act and schedule, and include the official source link.
+
 ## Install in Claude Desktop
 
-No terminal, no Node.js. Claude Desktop ships its own runtime.
+**Using the ordinary Chat tab? Install the extension file instead.** No terminal,
+no separate Node.js installation. Claude Desktop ships its own runtime.
 
 1. **Download** `au-law-mcp-1.0.0.mcpb` from the [latest release](https://github.com/chldbwnstm/australian-law-mcp/releases/latest).
 2. **Open the file.** Claude Desktop shows an install dialog — or drag it onto Settings → Extensions. Click **Install**.
@@ -31,8 +78,7 @@ No terminal, no Node.js. Claude Desktop ships its own runtime.
 
 There is no API key: every source is a keyless public register. Everything runs on your own machine; nothing you ask goes through a third-party server.
 
-<details>
-<summary>Developer alternative (needs Node.js 20.19+)</summary>
+### Developer alternative (needs Node.js 20.19+)
 
 `npx -y --ignore-scripts au-law-mcp setup` writes the entry into Claude Desktop, Claude Code, Cursor, VS Code, Windsurf, Zed or Gemini CLI — whichever it finds, leaving other servers in the file untouched. To add it by hand instead:
 
@@ -44,8 +90,6 @@ There is no API key: every source is a keyless public register. Everything runs 
 |---|---|
 | Windows | `%APPDATA%\Claude\claude_desktop_config.json` |
 | Mac | `~/Library/Application Support/Claude/claude_desktop_config.json` |
-
-</details>
 
 ---
 
@@ -284,7 +328,7 @@ This software retrieves and formats public legal material. It does not give lega
 - **Chains that degrade rather than die** — on deadline a chain assembles what arrived and marks the rest, instead of losing everything to a client timeout.
 - **Per-host politeness** — every upstream has its own timeout and minimum interval, sized from measurement (Queensland content search takes up to 90s; the ATO form up to 60s), so one slow host does not stall every other tool.
 - **Natural-language CLI** — a query router with an `explain` mode that shows where a question would go without running it, plus a generated subcommand per tool.
-- **2,477 offline tests** against recorded fixtures, plus **18 live-gated tests** that only run with `LIVE=1` and check the real upstreams still answer the shapes the parsers expect.
+- **2,498 offline tests**, including recorded fixtures and process checks, plus **18 live-gated tests** that only run with `LIVE=1` and check the real upstreams still answer the shapes the parsers expect.
 
 ---
 

@@ -1,5 +1,47 @@
 # Live verification log
 
+## 2026-09-09 — repository verification, 1.0.0 working tree
+
+Environment: Windows, Node 22.14.0. This pass includes the unreleased fixes in
+`CHANGELOG.md`; it does not describe a published release.
+
+| Check | Result |
+|---|---|
+| Baseline typecheck, build, offline suite | Passed; 2,477 tests passed, 18 live-gated tests skipped |
+| Final `npm run typecheck` and `npm test` | Passed; 2,498 tests passed across 105 files, 18 live-gated tests skipped in one file |
+| Live decision/register suite after the fixes | 18/18 passed, 16.06 seconds |
+| `npm audit --json` | 0 reported vulnerabilities, including development dependencies |
+| `npm run build` and `npm run verify:stdio` | Passed; built server starts, reports 1.0.0, and returns the exact advertised schema payload |
+| Real CLI version, routing explanation and provision parser | Passed; ACL s 18 routes to `sch 2 s 18` |
+| Real CLI: `what does s 18 of the ACL say` | Returned the latest compilation's schedule 2 section 18, with the heading “Misleading or deceptive conduct” and its source link |
+| `npm pack --dry-run --json` | 261 entries; both binaries and compiled output included; no tests, fixtures, environment files or local agent state |
+| `npm run build:mcpb` | Built a 4.01 MiB bundle; manifest validation passed; unpacked into a separate temporary directory, started successfully and advertised the manifest's 10 tools |
+| `git diff --check` | Passed |
+
+The new tests reproduced three failure classes before the relevant fixes:
+
+- Malformed FRL collection envelopes such as `{}` were accepted as empty results
+  or converted to `LAW_NOT_FOUND`. The shared JSON boundary now returns `PARSE_ERROR`.
+  Valid empty collections still retain their original absence semantics.
+- Scraped-host retries bypassed the minimum interval, and cancellation left callers
+  waiting for their scheduled slot. Every attempt now reserves a cancellable slot.
+- The bundle verifier parsed each pipe chunk as complete JSON. A simulated server
+  splitting a UTF-8 character and a 100 KB response made the old verifier time out;
+  complete-line buffering now handles both. Early exit, timeout and stray logging
+  are also tested using actual child processes.
+
+The normal suite includes the existing HTTP transport integration tests with a real
+local listener. CI now includes Windows as well as Ubuntu and runs the built stdio
+check, but the updated GitHub workflow was not executed remotely during this pass.
+Docker was unavailable locally, so the container image was reviewed but not built
+or run. The bundle validator reported non-fatal icon-size and unsigned-bundle notices.
+Successful live probes establish availability at the time of this run, not future
+availability or complete legal coverage.
+
+---
+
+## Earlier verification — 0.1.0
+
 *Recorded against 0.1.0. The package was renamed `au-law-mcp` in 1.0.0; the packaging rows below name the 0.1.0 tarball and bin.*
 
 > **v0.1.0** | Re-run 2026-09-04 against `882b13d` + the fixes in §7, macOS 15

@@ -4,6 +4,7 @@ import { AuApiClient, normalizeFrlVersion } from "./api-client.js"
 import { lawCache } from "./cache.js"
 import { ErrorCodes, LawApiError, UpstreamBlockedError } from "./errors.js"
 import { authorises } from "./frl-criteria.js"
+import { requestContext } from "./session-state.js"
 
 const fixture = (name: string) => readFileSync(new URL(`./__fixtures__/${name}`, import.meta.url), "utf-8")
 
@@ -286,6 +287,52 @@ describe("getToc caching", () => {
 })
 
 describe("per-host politeness", () => {
+  it("also spaces retry attempts on scraped hosts", async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      requestedAt.push(Date.now())
+      return new Response("busy", { status: 503 })
+    }))
+    try {
+      const pending = client().fetchHtml("fwc", "decisions").catch((error) => error)
+      await vi.runAllTimersAsync()
+      expect(await pending).toMatchObject({ code: ErrorCodes.API_ERROR })
+      expect(requestedAt).toHaveLength(4)
+      for (let i = 1; i < requestedAt.length; i++) {
+        expect(requestedAt[i] - requestedAt[i - 1]).toBeGreaterThanOrEqual(1000)
+      }
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("releases a cancelled caller while it is waiting for a host slot", async () => {
+    vi.useFakeTimers()
+    route("/decisions", "missing", { status: 404 })
+    try {
+      const c = client()
+      await c.fetchHtml("fwc", "decisions").catch(() => {})
+      const controller = new AbortController()
+      let settled = false
+      const pending = requestContext.run({ signal: controller.signal }, () =>
+        c.fetchHtml("fwc", "decisions").catch((error) => {
+          settled = true
+          return error
+        }),
+      )
+      controller.abort()
+      await vi.advanceTimersByTimeAsync(0)
+      const settledBeforeSlot = settled
+      // Drain before asserting, including on the old implementation.
+      await vi.runAllTimersAsync()
+      expect(await pending).toMatchObject({ name: "AbortError" })
+      expect(settledBeforeSlot).toBe(true)
+      expect(requested).toHaveLength(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it("spaces a concurrent fan-out to one host instead of letting it burst", async () => {
     // get_law_statistics fans 8 count queries out through Promise.all. Reading a
     // "last request at" timestamp and writing it back after the sleep let all of
@@ -317,6 +364,39 @@ describe("HTTP error mapping", () => {
       .then(() => null, (e: LawApiError) => e)
     expect(err).toBeInstanceOf(LawApiError)
     expect(err?.code).toBe(ErrorCodes.NOT_FOUND)
+  })
+})
+
+describe("FRL response integrity", () => {
+  const operations = [
+    ["title lookup", (c: AuApiClient) => c.getTitle("C2004A00109")],
+    ["title search", (c: AuApiClient) => c.searchTitles({ text: "Privacy" })],
+    ["criteria search", (c: AuApiClient) => c.criteriaSearch(authorises("C2004A00109"))],
+    ["versions", (c: AuApiClient) => c.listVersions("C2004A00109")],
+    ["amenders", (c: AuApiClient) => c.listAmenders("C2004A00109")],
+    ["documents", (c: AuApiClient) => c.fetchJson("frlApi", "Documents")],
+  ] as const
+
+  for (const [label, run] of operations) {
+    it(`${label}: rejects a missing collection instead of reporting absence`, async () => {
+      // Fault injection, not an invented successful upstream fixture.
+      route("api.prod.legislation.gov.au", "{}")
+      await expect(run(client())).rejects.toMatchObject({ code: ErrorCodes.PARSE_ERROR })
+    })
+  }
+
+  it.each([
+    { error: { message: "maintenance" } }, null, [],
+    { value: null }, { value: {} }, { value: [null] },
+    { value: [], "@odata.count": -1 }, { value: [], "@odata.count": "0" },
+  ].map(body => ({ body })))("rejects malformed title data $body", async ({ body }) => {
+    route("/Titles?", JSON.stringify(body))
+    await expect(client().getTitle("C2004A00109")).rejects.toMatchObject({ code: ErrorCodes.PARSE_ERROR })
+  })
+
+  it("still reports authoritative absence for a valid empty title collection", async () => {
+    route("/Titles?", JSON.stringify({ value: [], "@odata.count": 0 }))
+    await expect(client().getTitle("C2004A00109")).rejects.toMatchObject({ code: ErrorCodes.NOT_FOUND })
   })
 })
 

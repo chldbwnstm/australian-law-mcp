@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Try Australian Law</title>
+<style>
+  :root { color-scheme: light; font-family: system-ui, sans-serif; color: #19332d; background: #f4f4ef; }
+  body { max-width: 760px; margin: 48px auto; padding: 0 24px 48px; line-height: 1.65; }
+  main { background: white; padding: 32px 40px; border-radius: 16px; }
+  h1 { font-size: 2.4rem; line-height: 1.15; margin: 12px 0; }
+  h2 { font-size: 1.2rem; margin-top: 32px; }
+  .label { text-transform: uppercase; letter-spacing: .12em; font-size: .75rem; color: #51655d; }
+  .intro { font-size: 1.12rem; }
+  a { color: #165945; text-underline-offset: 3px; }
+  .install { display: inline-block; padding: 12px 20px; background: #165945; color: white; border-radius: 8px; font-weight: 600; text-decoration: none; }
+  blockquote { margin: 16px 0; padding: 16px 20px; background: #f0f5f1; border-left: 3px solid #45836d; user-select: all; }
+  li { margin: 10px 0; }
+  .note, footer { font-size: .9rem; color: #51655d; }
+  details { margin-top: 24px; }
+  summary { cursor: pointer; font-weight: 600; }
+  @media (max-width: 520px) { body { margin-top: 20px; padding: 0 12px 24px; } main { padding: 24px; } }
+  @media print { body { background: white; margin: 0; } main { padding: 0; } details { display: block; } }
+</style>
+<main>
+  <div class="label">Private preview · for Australian lawyers</div>
+  <h1>Australian Law,<br>inside Claude.</h1>
+  <p class="intro">Ask a question in ordinary English. Retrieve public legislation and supported decisions, with links to their sources.</p>
+
+  <h2>1. Install once</h2>
+  <p>After extracting this trial pack, open <strong>au-law-mcp-1.0.0.mcpb</strong> and choose <strong>Install</strong> in Claude Desktop.</p>
+  <a class="install" href="au-law-mcp-1.0.0.mcpb">Open the Claude installer</a>
+  <p class="note">If your browser downloads the file, open the downloaded copy. No terminal commands, separate Node.js installation or legal-data API key are needed. Your usual Claude account and usage limits apply. Internet access is required.</p>
+  <p>If the file does not open in Claude: <strong>Settings → Extensions → Advanced settings → Install Extension…</strong>, then select the installation file.</p>
+
+  <h2>2. Start a new chat</h2>
+  <p>Open a new chat in Claude Desktop. If prompted, review and allow Claude to use <strong>Australian Law</strong>.</p>
+
+  <h2>3. Copy this first question</h2>
+  <blockquote>Use Australian Law to retrieve section 18 of the Australian Consumer Law. Show the provision, identify its Act and schedule, and include the official source link.</blockquote>
+  <p>Look for <strong>schedule 2, section 18</strong> of the Competition and Consumer Act 2010. Open the source link and compare it with the returned text.</p>
+
+  <h2>Two more things to try</h2>
+  <blockquote>Use Australian Law to show section 52 of the Trade Practices Act as at 30 June 2010. Identify the version used and link to the source.</blockquote>
+  <blockquote>Use Australian Law to find Fair Work Commission decisions about genuine redundancy. Include decision identifiers, source links, and any search limitations.</blockquote>
+  <p>For your own questions, include the State or Territory and relevant date whenever they matter.</p>
+
+  <h2>What this preview covers</h2>
+  <p>Start with Commonwealth provisions, historical legislation and supported public decision sources. Coverage is limited: this is not a complete case-law database or an editorial citator. An unavailable source is not proof that no authority exists.</p>
+  <p class="note">The extension runs locally and sends lookup terms to public sources. Your AI app still handles the conversation and any documents you provide under its own settings. Start your trial with public material.</p>
+
+  <details open>
+    <summary>Something did not work?</summary>
+    <ul>
+      <li>Restart Claude Desktop, check that Australian Law is enabled under Extensions, then try a new chat.</li>
+      <li>If your firm restricts extensions, ask its administrator to make this one available.</li>
+      <li>Tell the sender your app, operating system, prompt and what happened. Please omit client information.</li>
+    </ul>
+  </details>
+  <details open>
+    <summary>Using Codex?</summary>
+    <p>This installation file is for Claude Desktop. In a local Codex session, paste the repository link below and ask Codex to install Australian Law as a local MCP server. It can handle the setup for you, subject to repository access and your computer's permissions. No hosted service is required.</p>
+    <p><a href="https://github.com/chldbwnstm/australian-law-mcp">Australian Law repository</a></p>
+  </details>
+  <footer>
+    <p>Private updates arrive as a new installer. Instructions checked 9 September 2026.
+    <a href="https://support.claude.com/en/articles/10949351-getting-started-with-local-mcp-servers-on-claude-desktop">Official Claude installation help</a>.</p>
+  </footer>
+</main>
+</html>

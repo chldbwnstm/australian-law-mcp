@@ -17,14 +17,14 @@
  *     the framing and the client's error points nowhere near the cause
  */
 
-import { execFileSync, spawn } from "node:child_process"
+import { execFileSync } from "node:child_process"
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import { speakMcp } from "./mcp-stdio.mjs"
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
-const HANDSHAKE_TIMEOUT_MS = 30_000
 
 // See scripts/build-mcpb.mjs: on Windows `npx` is a `.cmd` shim and execFileSync
 // will not spawn one without a shell, so arguments are quoted for cmd.exe.
@@ -37,94 +37,6 @@ function check(label, ok, detail) {
   if (!ok) failures.push(label)
 }
 
-/**
- * Drive one MCP stdio session. Newline-delimited JSON in, newline-delimited
- * JSON out; the request for a step is written only once the previous step has
- * answered, so a server that answers out of order fails loudly rather than
- * being papered over by a buffered write.
- */
-function speakMcp(entryDir) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, ["build/index.js"], {
-      cwd: entryDir,
-      stdio: ["pipe", "pipe", "pipe"],
-      env: { ...process.env, NO_COLOR: "1" },
-    })
-
-    let stdout = ""
-    let stderr = ""
-    const responses = new Map()
-    const timer = setTimeout(() => {
-      child.kill()
-      reject(new Error(`no response within ${HANDSHAKE_TIMEOUT_MS} ms`))
-    }, HANDSHAKE_TIMEOUT_MS)
-
-    const send = (message) => child.stdin.write(`${JSON.stringify(message)}\n`)
-
-    let done = false
-    /**
-     * Resolve only once the child has actually closed. On Windows the temp
-     * directory cannot be removed while the process still holds it open, so a
-     * resolve on `kill()` alone turns a passing run into an EBUSY failure.
-     */
-    const finish = () => {
-      if (done) return
-      done = true
-      clearTimeout(timer)
-      child.once("close", () => resolve({ stdout, stderr, responses }))
-      child.kill()
-    }
-
-    child.stdout.setEncoding("utf8")
-    child.stdout.on("data", (chunk) => {
-      stdout += chunk
-      for (const line of chunk.split("\n")) {
-        const text = line.trim()
-        if (!text) continue
-        let message
-        try {
-          message = JSON.parse(text)
-        } catch {
-          continue // a non-JSON line is itself a failure; asserted on stdout below
-        }
-        if (message.id === undefined) continue
-        responses.set(message.id, message)
-        if (message.id === 1) {
-          send({ jsonrpc: "2.0", method: "notifications/initialized" })
-          send({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} })
-        }
-        if (message.id === 2) finish()
-      }
-    })
-
-    child.stderr.setEncoding("utf8")
-    child.stderr.on("data", (chunk) => {
-      stderr += chunk
-    })
-
-    child.on("error", (error) => {
-      clearTimeout(timer)
-      reject(error)
-    })
-    child.on("exit", (code) => {
-      if (!done && !responses.has(2)) {
-        clearTimeout(timer)
-        reject(new Error(`server exited (code ${code}) before answering tools/list\n${stderr}`))
-      }
-    })
-
-    send({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "initialize",
-      params: {
-        protocolVersion: "2025-06-18",
-        capabilities: {},
-        clientInfo: { name: "mcpb-verify", version: "1.0.0" },
-      },
-    })
-  })
-}
 
 async function main() {
   const pkg = JSON.parse(await readFile(path.join(ROOT, "package.json"), "utf8"))

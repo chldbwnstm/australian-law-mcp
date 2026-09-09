@@ -4,6 +4,25 @@ All notable changes to this project are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Reject malformed Federal Register collection responses with `PARSE_ERROR` before
+  they can become an empty search, a cached zero count, or a false `LAW_NOT_FOUND`.
+- Apply each host's minimum request interval to retry attempts as well as initial
+  requests. Cancelled callers now leave the host-slot wait immediately.
+- Buffer complete MCP stdio lines when verifying desktop bundles, including responses
+  split across pipe chunks or UTF-8 characters. Wait for process closure before
+  cleaning up on timeout or failure, and detect stray stdout logging.
+
+### Added
+
+- Regression coverage for malformed upstream collections, retry spacing, cancellation,
+  and the bundle verifier's child-process lifecycle and response framing.
+- `npm run verify:stdio` checks the built server's handshake, version, and advertised
+  schemas. CI runs it after building on both Ubuntu and Windows with Node 20.19 and 22.
+
 ## [1.0.0] — 2026-09-05
 
 First stable release. The tool surface is unchanged from 0.1.0 — 81 tools

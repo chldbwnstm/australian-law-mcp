@@ -231,7 +231,8 @@ will produce two plausible answers.
 npm run build          # clean + tsc
 npm run watch          # tsc --watch
 npm run typecheck      # tsc --noEmit
-npm test               # vitest run   — 105 files / 2,477 tests, no network (2026-09 measured)
+npm test               # vitest run — 2,498 passed, 18 live-gated; 106 files (2026-09-09)
+npm run verify:stdio   # after build: real process handshake + advertised schemas, no upstream calls
 npm run test:watch     # vitest
 npm start              # stdio server
 npm run start:http     # HTTP server

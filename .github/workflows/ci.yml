@@ -7,13 +7,14 @@ on:
 
 jobs:
   build:
-    name: node ${{ matrix.node }}
-    runs-on: ubuntu-latest
+    name: ${{ matrix.os }} / node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        # package.json engines: >=20.19.0. 20.19 is the floor; 22 is current LTS.
+        # Check the runtime floor and Node 22 on Linux and Windows.
         node: ["20.19", "22"]
+        os: [ubuntu-latest, windows-latest]
 
     steps:
       - uses: actions/checkout@v4
@@ -36,6 +37,8 @@ jobs:
       - run: npm test
 
       - run: npm run build
+
+      - run: npm run verify:stdio
 
       # The tarball is an allowlist (`files` in package.json). Packing here is
       # what catches a build output that stopped being included.

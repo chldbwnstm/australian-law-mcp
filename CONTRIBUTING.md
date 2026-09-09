@@ -10,8 +10,8 @@ short version of what a change has to clear.
 npm run typecheck && npm test
 ```
 
-Both must be green before a commit. CI runs the same two commands plus `npm run build`
-and `npm pack --dry-run` on Node 20.19 and 22.
+Both must be green before a commit. CI runs the same two commands plus `npm run build`,
+`npm run verify:stdio` and `npm pack --dry-run` on Node 20.19 and 22, on Ubuntu and Windows.
 
 ## Two rules that are not negotiable
 

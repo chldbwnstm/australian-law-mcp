@@ -20,6 +20,8 @@ export function maskSensitiveUrl(url: string): string {
 }
 
 export interface FetchWithRetryOptions extends RequestInit {
+  /** Reserve a host slot for every attempt, including retries, before starting its timeout. */
+  beforeAttempt?: (signal?: AbortSignal) => Promise<void>
   /** Request timeout in ms (default: 30000) */
   timeout?: number
   /** Max retry attempts (default: 3) */
@@ -86,6 +88,7 @@ export async function fetchWithRetry(
     allowHtmlBody = false,
     singleRecordLookup = false,
     signal: callerSignal,
+    beforeAttempt,
     ...fetchOptions
   } = options
   const externalSignal = callerSignal ?? undefined
@@ -97,6 +100,12 @@ export async function fetchWithRetry(
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     throwIfRequestCancelled()
+    const waitingSignal = combineAbortSignals(externalSignal, getRequestSignal())
+    if (waitingSignal?.aborted) throw requestCancelledError(waitingSignal.reason)
+    // Waiting for a host slot is neither a network failure nor upstream work:
+    // do not retry a rejected gate or charge it to the request allowance.
+    await beforeAttempt?.(waitingSignal)
+    if (waitingSignal?.aborted) throw requestCancelledError(waitingSignal.reason)
     const controller = new AbortController()
     let timedOut = false
     const timeoutId = setTimeout(() => {

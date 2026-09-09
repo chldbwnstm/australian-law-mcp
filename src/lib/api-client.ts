@@ -41,6 +41,7 @@ import {
 import { ancestorsOf, parseNcx } from "./ncx-parser.js"
 import { findNavPoint, sliceProvision } from "./provision-slicer.js"
 import { readResponseBytes, readResponseText } from "./response-body.js"
+import { requestCancelledError } from "./session-state.js"
 import { formatRef, parseSectionRef } from "./section-ref.js"
 import { getHostConfig, defaultHeadersFor, type HostKey } from "./upstream-hosts.js"
 import type { FrlTitle, FrlVersion, NcxEntry, ProvisionText } from "./types.js"
@@ -188,8 +189,9 @@ export class AuApiClient {
   async fetchJson(host: HostKey, path: string, opts: FetchOpts = {}): Promise<unknown> {
     const response = await this.request(host, path, opts, false)
     const text = await readResponseText(response)
+    let json: unknown
     try {
-      return JSON.parse(text)
+      json = JSON.parse(text)
     } catch {
       throw new LawApiError(
         `Upstream ${host} returned a non-JSON body`,
@@ -197,6 +199,25 @@ export class AuApiClient {
         ["A JSON endpoint answering with something else usually means maintenance or a wrong path — retry shortly and re-check the request."],
       )
     }
+    // All FRL collection consumers share this boundary, including tools that
+    // call fetchJson directly. An error object or a missing `value` is not an
+    // empty collection and must never become a cached zero or NOT_FOUND.
+    if (host === "frlApi" && /^\/?(?:Titles|Versions|Documents)(?:\/?(?:\?|$)|\/Search\()/.test(path)) {
+      const envelope = json as ODataList<unknown> | null
+      const count = envelope?.["@odata.count"]
+      if (
+        !envelope || !Array.isArray(envelope.value) ||
+        envelope.value.some(row => row === null || typeof row !== "object" || Array.isArray(row)) ||
+        (count !== undefined && (!Number.isSafeInteger(count) || count < 0))
+      ) {
+        throw new LawApiError(
+          "FRL returned a malformed collection response",
+          ErrorCodes.PARSE_ERROR,
+          ["The response does not establish whether any records exist. Retry and check the Register directly."],
+        )
+      }
+    }
+    return json
   }
 
   async fetchHtml(host: HostKey, path: string, opts: FetchOpts = {}): Promise<string> {
@@ -501,12 +522,13 @@ export class AuApiClient {
    * precisely the burst the floor exists to prevent on sites whose robots ask
    * for a crawl delay.
    */
-  private async politeWait(host: HostKey, minIntervalMs: number): Promise<void> {
+  private async politeWait(host: HostKey, minIntervalMs: number, signal?: AbortSignal): Promise<void> {
+    if (signal?.aborted) throw requestCancelledError(signal.reason)
     const now = Date.now()
     const slot = Math.max(now, this.nextSlotAt.get(host) ?? 0)
     this.nextSlotAt.set(host, slot + minIntervalMs)
     const wait = slot - now
-    if (wait > 0) await sleep(wait)
+    if (wait > 0) await sleep(wait, signal)
   }
 
   private async request(
@@ -522,7 +544,6 @@ export class AuApiClient {
     }
 
     const url = this.buildUrl(config.base, path, opts)
-    await this.politeWait(host, config.minIntervalMs)
 
     const headers: Record<string, string> = { ...defaultHeadersFor(host) }
     if (this.userAgent) headers["user-agent"] = this.userAgent
@@ -531,6 +552,7 @@ export class AuApiClient {
     }
 
     const response = await fetchWithRetry(url, {
+      beforeAttempt: (signal) => this.politeWait(host, config.minIntervalMs, signal),
       timeout: opts.timeoutMs ?? config.timeoutMs,
       method: opts.method ?? "GET",
       ...(opts.body !== undefined ? { body: opts.body } : {}),
