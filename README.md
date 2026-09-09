@@ -11,13 +11,19 @@
 
 > Every source is a **keyless public endpoint** — the Federal Register of Legislation, NSW Caselaw, the High Court, Queensland Judgments, the State registers, the ATO, the Fair Work Commission, the OAIC, the NACC and DFAT. **There is no API key to configure.** Works with Codex, Claude Desktop, Claude Code, Cursor, Windsurf, VS Code, Zed, Gemini CLI, and any MCP client.
 
-**Best used when you need to:**
+**Best used in day-to-day law firm work:**
 
-- **Check the citations in a draft** — every statutory pinpoint is verified against the Register's actual text, not just its existence.
-- **Know what a provision said on a given date** — the compilation in force that day, a diff against today, and the transitional provisions.
-- **Read a provision or a schedule mid-task** — `ACL s 18` is fetched as `sch 2 s 18`, and the Act's own s 18 is flagged as a different provision.
-- **Find a tribunal or regulator decision** — the Fair Work Commission, ATO rulings, the OAIC, the NACC and fourteen more domains from one search.
-- **Check delegated legislation against its enabling Act** — has the Act moved since the instrument was last compiled?
+Copy a question into your AI app and ask it to use Australian Law. Replace the dates
+and provisions with those relevant to your matter; ask for source links and any
+limits on what was checked.
+
+| Work on your desk | Example question |
+|---|---|
+| **Commercial disputes — preparing a letter of demand** | “I'm preparing a letter of demand about misleading representations. Retrieve ACL s 18 and identify its Act and schedule so I can cite it accurately.” |
+| **Litigation — checking a draft before partner review** | “Check the statutory citations in this draft submission. For each one, show the provision and flag incorrect pinpoints, wording that does not support the claim, and anything you could not verify.” |
+| **Employment — researching a redundancy dispute** | “Find Fair Work Commission decisions about genuine redundancy and consultation obligations. Give me decision dates, identifiers and links to the reasons, and say where full reasons are unavailable.” |
+| **Disputes — researching the law at the time of the conduct** | “The representations were made on 30 June 2010. Retrieve s 52 of the Trade Practices Act as in force that day, identify the compilation, and find relevant transitional provisions for me to review.” |
+| **Employment advisory — preparing a client update** | “Check whether Fair Work Act s 340 has changed since 1 January 2022. Identify any amending Acts and compare the provision then and now, with sources for my client update.” |
 
 ---
 
