@@ -2,14 +2,34 @@
 
 # Australian Law MCP
 
-**Australian legislation, decisions and citation checking, inside the AI tools a practitioner already uses.** Commonwealth Acts and instruments as compiled on any date, State and Territory registers, judgments, tribunal decisions, ATO rulings, treaties and explanatory material — all from keyless public sources, exposed as MCP tools and a natural-language CLI. Published on npm as **`au-law-mcp`**.
+**Australian legal research inside your AI app — with browser research through Aside.**
+
+Retrieve Commonwealth legislation as it stood on a chosen date, search supported
+legal sources, and check citations while preparing advice or reviewing a draft.
+Australian Law MCP connects your AI to public legislation registers, judgments,
+tribunal decisions, ATO rulings, treaties and explanatory material.
+
+**With Aside, your AI can continue the investigation in the browser.** It can
+follow missing source links, read accessible judgments and PDFs, collect relevant
+passages with paragraph or page references, and investigate later citing
+decisions. Your AI can then prepare a research note for review, keeping source
+evidence separate from its interpretation and recording what still needs checking.
+Evidence and progress are saved for the matter so you can resume the work later.
+
+The Aside workflow is an **optional preview in this repository**, available after
+project setup in local Codex or Claude Code sessions on **macOS 15 or later**.
+Windows supports the core law tools; Aside browser follow-up is not available
+there yet. The published npm **`au-law-mcp` v1.0.0** contains the core law tools.
 
 ![npm](https://img.shields.io/npm/v/au-law-mcp)
 ![MCP](https://img.shields.io/badge/MCP-1.27-blue)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue)
 
-> Every source is a **keyless public endpoint** — the Federal Register of Legislation, NSW Caselaw, the High Court, Queensland Judgments, the State registers, the ATO, the Fair Work Commission, the OAIC, the NACC and DFAT. **There is no API key to configure.** Works with Codex, Claude Desktop, Claude Code, Cursor, Windsurf, VS Code, Zed, Gemini CLI, and any MCP client.
+> **No legal-data API key is needed for the core law tools.** They use public
+> sources and work with Codex, Claude Desktop, Claude Code, Cursor, Windsurf,
+> VS Code, Zed, Gemini CLI, and other MCP clients. Aside browser research uses
+> the separate macOS setup below.
 
 ## Install
 
@@ -93,10 +113,14 @@ For other apps, manual setup, or troubleshooting, see [INSTALL.md](INSTALL.md).
 
 Copy a question into your AI app and ask it to use Australian Law. Replace the dates
 and provisions with those relevant to your matter; ask for source links and any
-limits on what was checked.
+limits on what was checked. The Aside examples require the optional Mac setup
+above and enable additional research for the selected matter.
 
 | Work on your desk | Example question |
 |---|---|
+| **Research — collect missing originals with Aside** | “Enable missing_sources mode for a new matter at ./matters/source-check. Use Aside to follow up the missing originals from our law-tool results. Keep within 10 pages, 3 documents and 5 active minutes. Save relevant passages with source links and paragraph or page references, then prepare a research note showing what was read and what remains unresolved.” |
+| **Litigation — investigate later citing decisions with Aside** | “Enable extended mode for a new matter at ./matters/citation-review. Start with [2020] HCA 41 and use Aside to investigate later citing decisions. Keep within 30 pages, 10 documents and 15 active minutes. Save the passages discussing it, explain the apparent treatment, and state the searches and sources actually covered.” |
+| **Family law — reviewing an older advice template** | “Retrieve Family Law Act 1975 (Cth) s 60CC as at 5 May 2024 and 6 May 2024. Compare the wording and suggest which statements in this fictional parenting advice template need review, with source links. Flag application or transitional questions separately.” |
 | **Commercial disputes — preparing a letter of demand** | “I'm preparing a letter of demand about misleading representations. Retrieve ACL s 18 and identify its Act and schedule so I can cite it accurately.” |
 | **Litigation — checking a draft before partner review** | “Check the statutory citations in this draft submission. For each one, show the provision and flag incorrect pinpoints, wording that does not support the claim, and anything you could not verify.” |
 | **Employment — researching a redundancy dispute** | “Find Fair Work Commission decisions about genuine redundancy and consultation obligations. Give me decision dates, identifiers and links to the reasons, and say where full reasons are unavailable.” |
@@ -288,7 +312,15 @@ note, keeping the source links and unresolved questions.”
 
 ## When a practitioner reaches for it
 
-This is not a replacement for a case-law database. It is the tool for the legislation-facing parts of ordinary practice, where the cost of a small error is high and the answer is on a public register that is slow to navigate by hand. Every row below is something the verification run actually did; the transcripts are in [`docs/VERIFICATION.md`](docs/VERIFICATION.md).
+Use it to assemble the law and source material behind advice, check draft
+citations, and prepare research notes for review. The core tools handle structured
+lookups; the optional Aside workflow lets your AI continue into accessible source
+pages and documents, retaining the evidence and progress for the matter.
+
+The core-tool workflows below were exercised in the
+[verification run](docs/VERIFICATION.md). The browser workflow has a separate
+[preview validation record](docs/AI-NATIVE-FOLLOWUP-VALIDATION.md); its searches
+cover the sources actually examined and do not constitute a complete citator check.
 
 | You are… | You ask | What comes back | Behind it |
 |---|---|---|---|
