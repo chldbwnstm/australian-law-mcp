@@ -1,0 +1,2 @@
+# Keep hashbang scripts compatible with module transforms on Windows.
+*.mjs text eol=lf

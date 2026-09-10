@@ -79,7 +79,8 @@ describe("optional Aside companion setup", () => {
       expect(codex).toContain("[mcp_servers.aside]")
       expect(readFileSync(join(project, ".claude/skills/au-law-followup/SKILL.md"), "utf8")).toContain("name: au-law-followup")
       expect(readFileSync(join(project, ".agents/skills/au-law-followup/SKILL.md"), "utf8")).toContain("name: au-law-followup")
-      expect(readFileSync(join(project, ".au-law-followup-host.json"), "utf8")).toContain(process.execPath)
+      const followupHost = JSON.parse(readFileSync(join(project, ".au-law-followup-host.json"), "utf8"))
+      expect(followupHost.asideCommand).toBe(process.execPath)
 
       const helper = join(linkedProject, ".agents/skills/au-law-followup/scripts/followup.mjs")
       const cli = (...args: string[]) => JSON.parse(execFileSync(process.execPath, [helper, ...args], { cwd: linkedProject, encoding: "utf8" }))
