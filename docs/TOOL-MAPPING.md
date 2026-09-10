@@ -65,7 +65,7 @@ to `[UPSTREAM_BLOCKED]` with deep links, and never claim absence.
 
 ## The registry, by category
 
-81 tools registered; 10 advertised. The categories below are `TOOL_CATEGORIES` in
+83 tools registered; 10 advertised. The categories below are `TOOL_CATEGORIES` in
 `src/lib/tool-profiles.ts` — the same table `discover_tools` searches and the CLI's
 `list --category` filters on. A tool can appear in more than one category, so the counts
 below do **not** sum to 81; the authoritative figure is `TOOL_COUNTS` exported from

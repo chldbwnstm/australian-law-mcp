@@ -20,6 +20,7 @@
 import { z } from "zod"
 import type { AuApiClient } from "../lib/api-client.js"
 import type { ToolResponse } from "../lib/types.js"
+import { FollowupPolicySchema } from "../lib/research-followup.js"
 import { applicableLaw } from "./applicable-law.js"
 import { citeCheck } from "./cite-check.js"
 import { impactMap } from "./impact-map.js"
@@ -43,6 +44,7 @@ export const LegalAnalysisSchema = z.object({
   deepScan: z.boolean().optional().describe("cite_check: read top citing judgments, default true."),
   includeInstruments: z.boolean().optional().describe("impact_map: default true."),
   includeMermaid: z.boolean().optional().describe("impact_map: default true."),
+  followup: FollowupPolicySchema.optional().describe("Optional matter policy consumed by the host companion after this stateless law call."),
 
   // Tolerated aliases, declared so a caller can see they exist rather than
   // discovering them by having a legal check rejected over a parameter name.

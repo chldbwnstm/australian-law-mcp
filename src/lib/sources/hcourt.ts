@@ -142,6 +142,7 @@ export function parseDetail(html: string, slug: string): SourceDocument {
     url,
     metadata: catchwords ? [...metadata, ["Catchwords", catchwords]] : metadata,
     text: catchwords ?? "",
+    bodyStatus: "summary_only",
     note:
       "hcourt.gov.au publishes catchwords and metadata as HTML; the reasons themselves are only " +
       "available as the PDF/DOCX linked below. Nothing here says the reasons do not exist.",

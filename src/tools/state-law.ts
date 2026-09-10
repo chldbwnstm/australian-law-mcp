@@ -19,7 +19,8 @@
 
 import { z } from "zod"
 import type { AuApiClient } from "../lib/api-client.js"
-import { ErrorCodes, LawApiError, formatToolError } from "../lib/errors.js"
+import { ErrorCodes, LawApiError, UpstreamBlockedError, formatToolError } from "../lib/errors.js"
+import { followupEnvelope, makeGap } from "../lib/research-followup.js"
 import { lawCache, SEARCH_CACHE_TTL } from "../lib/cache.js"
 import type { LooseToolResponse } from "../lib/types.js"
 import {
@@ -29,7 +30,8 @@ import {
   STATE_JURISDICTIONS,
   type StateJurisdiction,
 } from "../lib/sources/state-legislation.js"
-import { renderDocument, renderSearch } from "../lib/sources/render.js"
+import { renderSearch } from "../lib/sources/render.js"
+import { sourceDocumentResponse } from "./source-document.js"
 
 /** What each register can actually answer — printed with every search. */
 export const REGISTER_GRADES: Readonly<Record<StateJurisdiction, string>> = {
@@ -99,7 +101,22 @@ export async function searchStateLaw(
     lawCache.set(cacheKey, text, SEARCH_CACHE_TTL)
     return { content: [{ type: "text", text }] }
   } catch (error) {
-    return formatToolError(error, "search_state_law")
+    const response = formatToolError(error, "search_state_law")
+    const jurisdiction = normaliseJurisdiction(input.jurisdiction)
+    if (error instanceof UpstreamBlockedError && jurisdiction) {
+      response.structuredContent = { followup: followupEnvelope([makeGap({
+        kind: "source_access",
+        originTool: "search_state_law",
+        originalErrorCode: ErrorCodes.UPSTREAM_BLOCKED,
+        target: { query: input.query },
+        jurisdiction,
+        reason: `${jurisdiction} legislation was not searched because its register is blocked to this server.`,
+        sourceUrls: error.links,
+        sourceAccess: "requires_access",
+        evidenceNeeded: ["The official register search result", "The matching title and relevant provision text"],
+      })], { pending: true }) }
+    }
+    return response
   }
 }
 
@@ -121,19 +138,30 @@ export async function getStateLawText(
   try {
     const jurisdiction = requireJurisdiction(input.jurisdiction)
     const document = await fetchStateLawText(client, jurisdiction, input.id)
-    return {
-      content: [
-        {
-          type: "text",
-          text: renderDocument(document, {
-            bodyHeading: "Text",
-            full: input.full === true,
-            notes: [`Register surface: ${REGISTER_GRADES[jurisdiction]}.`],
-          }),
-        },
-      ],
-    }
+    return sourceDocumentResponse(document, {
+      bodyHeading: "Text",
+      full: input.full === true,
+      notes: [`Register surface: ${REGISTER_GRADES[jurisdiction]}.`],
+      originTool: "get_state_law_text",
+      documentId: input.id,
+      jurisdiction,
+    })
   } catch (error) {
-    return formatToolError(error, "get_state_law_text")
+    const response = formatToolError(error, "get_state_law_text")
+    const jurisdiction = normaliseJurisdiction(input.jurisdiction)
+    if (error instanceof UpstreamBlockedError && jurisdiction) {
+      response.structuredContent = { followup: followupEnvelope([makeGap({
+        kind: "document_body",
+        originTool: "get_state_law_text",
+        originalErrorCode: ErrorCodes.UPSTREAM_BLOCKED,
+        target: { documentId: input.id },
+        jurisdiction,
+        reason: `${jurisdiction} legislation body was not retrieved because its register is blocked to this server.`,
+        sourceUrls: error.links,
+        sourceAccess: "requires_access",
+        evidenceNeeded: ["The official authorised document body", "An exact relevant passage with provision and page locator"],
+      })], { pending: true }) }
+    }
+    return response
   }
 }

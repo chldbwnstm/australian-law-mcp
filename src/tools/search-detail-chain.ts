@@ -24,6 +24,8 @@
 import type { AuApiClient } from "../lib/api-client.js"
 import { SEARCH_DETAIL_CHAINS } from "../lib/tool-chain-config.js"
 import type { LooseToolResponse } from "../lib/types.js"
+import type { FollowupEnvelope } from "../lib/research-followup.js"
+import { followupEnvelope, mergeGaps } from "../lib/research-followup.js"
 import { extractHitIds } from "./search-hits.js"
 
 import { getLawText } from "./law-text.js"
@@ -45,6 +47,7 @@ import {
 export interface SearchDetailCallResult {
   text: string
   isError: boolean
+  followup?: FollowupEnvelope
 }
 
 export interface SearchDetailOptions {
@@ -106,6 +109,7 @@ async function callDetailTool(
     return {
       text: result.content?.map((item) => item.text).join("\n") || "",
       isError: !!result.isError,
+      ...(result.structuredContent?.followup ? { followup: result.structuredContent.followup } : {}),
     }
   } catch (error) {
     return {
@@ -143,7 +147,8 @@ export async function fetchSearchDetailChain(
   }
 
   const failures = details.filter(({ detail }) => detail.isError).length
-  return { text: blocks.join("\n\n"), isError: failures === ids.length }
+  const gaps = mergeGaps(...details.map(({ detail }) => detail.followup?.gaps))
+  return { text: blocks.join("\n\n"), isError: failures === ids.length, ...(gaps.length ? { followup: followupEnvelope(gaps, { pending: true }) } : {}) }
 }
 
 /**

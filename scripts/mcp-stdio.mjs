@@ -9,7 +9,7 @@ const HANDSHAKE_TIMEOUT_MS = 30_000
  * answered, so a server that answers out of order fails loudly rather than
  * being papered over by a buffered write.
  */
-export function speakMcp(entryDir, timeoutMs = HANDSHAKE_TIMEOUT_MS) {
+export function speakMcp(entryDir, timeoutMs = HANDSHAKE_TIMEOUT_MS, afterListRequest) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, ["build/index.js"], {
       cwd: entryDir,
@@ -68,7 +68,12 @@ export function speakMcp(entryDir, timeoutMs = HANDSHAKE_TIMEOUT_MS) {
         send({ jsonrpc: "2.0", method: "notifications/initialized" })
         send({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} })
       }
+      if (message.id === 2 && afterListRequest) {
+        send({ jsonrpc: "2.0", id: 3, ...afterListRequest })
+        return
+      }
       if (message.id === 2) finish()
+      if (message.id === 3) finish()
     })
 
     child.stderr.setEncoding("utf8")

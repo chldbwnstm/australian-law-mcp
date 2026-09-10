@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "./src/automation",
+    "outDir": "./build-automation"
+  },
+  "include": ["src/automation/**/*.ts"],
+  "exclude": ["node_modules", "build", "build-automation", "src/**/*.test.ts"]
+}

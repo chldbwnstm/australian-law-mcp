@@ -6,11 +6,18 @@
 > see `src/tools/statute-helpers/instruments.ts`). End-to-end verification log: `docs/VERIFICATION.md`.
 > Tool surface: `docs/TOOL-MAPPING.md`. Tool reference: `docs/API.md`.
 
+Source-preview extension: [Optional browser follow-up with Aside](AI-NATIVE-FOLLOWUP.md)
+adds versioned stateless gaps/planning/checking to the law server and a project-local
+host skill that coordinates sibling law and Aside MCP servers on local macOS 15+.
+The host owns eligibility, budgets, session IDs and evidence checkpoints; the law
+server owns no browser, cookies, model or matter state. Windows browser follow-up
+remains unavailable and standard law tools continue to work there.
+
 ## Layering (ported 1:1 from the reference)
 
 ```
 MCP client (stdio / stateless Streamable HTTP)  |  CLI (natural-language router)
-        └── tool-registry.ts  (allTools[] = 81, 10 EXPOSED via ListTools; the rest stay
+        └── tool-registry.ts  (allTools[] = 83, 10 EXPOSED via ListTools; the rest stay
               dispatchable by name through CallTool and are reached by discovery
               through discover_tools → execute_tool)
               └── src/tools/*          (one file per tool cluster, Zod schemas)

@@ -26,6 +26,7 @@ import type { AuApiClient } from "../lib/api-client.js"
 import { truncateResponse } from "../lib/schemas.js"
 import { throwIfRequestCancelled } from "../lib/session-state.js"
 import type { LooseToolResponse } from "../lib/types.js"
+import { FollowupPolicySchema } from "../lib/research-followup.js"
 import {
   MAX_CHAIN_QUERY,
   chainActionBasis,
@@ -139,6 +140,7 @@ export const LegalResearchSchema = z.preprocess(
     scheduleFilter: z.string().optional().describe("[procedure_detail] Only schedules whose heading contains this word."),
     text: z.string().optional().describe("[document_review, required] The full text of the document to review."),
     maxClauses: z.number().int().min(1).max(60).optional().describe("[document_review] Numbered clauses to analyse."),
+    followup: FollowupPolicySchema.optional().describe("Optional matter policy consumed by the host companion after this stateless law call."),
     /** Set by `preprocess` when `task` had to be corrected; never sent by a caller. */
     __taskWas: z.string().optional(),
   }),

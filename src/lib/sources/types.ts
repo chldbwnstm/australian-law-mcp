@@ -84,6 +84,8 @@ export interface SourceDocument {
    * absence.
    */
   note?: string
+  /** Machine-readable acquisition coverage; source adapters set this when `text` is not the original body. */
+  bodyStatus?: "full_text" | "summary_only" | "metadata_only" | "binary_link_only"
 }
 
 /**

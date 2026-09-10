@@ -157,6 +157,7 @@ export function parseDecisionPage(html: string, slug: string): SourceDocument {
     url,
     metadata,
     text: "",
+    bodyStatus: "binary_link_only",
     note:
       "The FWC serves decision reasons as a PDF inside a viewer; the HTML page carries only the " +
       "metadata above and the download link. The reasons exist — this server just did not receive " +

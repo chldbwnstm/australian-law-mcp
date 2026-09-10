@@ -1,6 +1,6 @@
 # Australian Law MCP — API Reference
 
-> **v1.0.0** | 10 advertised tools (81 registered; the other 71 are reached with `execute_tool`, or called directly by name)
+> **Source preview after v1.0.0** | 10 advertised tools (83 registered; the other 73 are reached with `execute_tool`, or called directly by name)
 
 Tool structure and the honest-limitations tables are in [README.md](../README.md).
 Exhaustive parameter definitions are the Zod schemas in `src/tools/*.ts` — this
@@ -137,6 +137,25 @@ Analysis tools add four verdict labels of their own:
 ```
 
 ### Caching
+
+### Structured research continuation
+
+Source, body, coverage, treatment, commencement, interpretation, truncation and
+deadline branches may add `structuredContent.followup` beside the existing text
+and `isError`. The envelope is version `1.0`; stable gap IDs are derived from
+normalised legal targets and scope, not error wording. Direct calls,
+`execute_tool`, aggregate chains, stdio/HTTP and CLI JSON preserve it within the
+same bounded response contract.
+
+`plan_research_followup` and `check_research_evidence` are registered and
+discoverable but intentionally not added to the ten advertised tools. The first
+creates bounded tasks only from a fresh host-companion eligibility result; it
+does not launch a browser. The second checks only supplied identity, passages,
+locators and coverage and never fetches, authenticates, or makes a legal verdict.
+
+Browser execution and persistence belong to the project-local `au-law-followup`
+host skill. The law server remains stateless and cannot infer that its own host
+OS is the user's client OS.
 
 | Kind | TTL |
 |---|---|
@@ -366,7 +385,7 @@ Run any of these with execute_tool(tool_name, params).
 
 #### `execute_tool`
 
-`{tool_name: string, params: object}` — runs any of the 81 by name. Parameters
+`{tool_name: string, params: object}` — runs any of the 83 by name. Parameters
 pass straight through and are validated by the target tool, so a malformed
 parameter comes back as that tool's own error rather than a generic one. Pass
 `{}` for a tool that takes none.

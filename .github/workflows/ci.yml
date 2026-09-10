@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     name: ${{ matrix.os }} / node ${{ matrix.node }}
@@ -12,12 +15,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Check the runtime floor and Node 22 on Linux and Windows.
-        node: ["20.19", "22"]
+        # Retain the published runtime floor; use supported LTS for the daemon.
+        node: ["20.19", "22", "24"]
         os: [ubuntu-latest, windows-latest]
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         with:
@@ -38,8 +43,23 @@ jobs:
 
       - run: npm run build
 
+      - run: npm run build:automation
+
+      - run: node build-automation/daemon.js --dry-run --offline --once
+
       - run: npm run verify:stdio
 
       # The tarball is an allowlist (`files` in package.json). Packing here is
       # what catches a build output that stopped being included.
       - run: npm pack --dry-run
+
+  quality:
+    name: CI quality gate
+    needs: build
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every platform and Node version
+        env:
+          BUILD_RESULT: ${{ needs.build.result }}
+        run: test "$BUILD_RESULT" = success

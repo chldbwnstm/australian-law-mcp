@@ -1,0 +1,4 @@
+interface:
+  display_name: "Australian Law Follow-up"
+  short_description: "Complete missing legal sources with local Aside"
+  default_prompt: "Use Australian Law MCP first, then complete its structured gaps with Aside if this matter is opted in and the local eligibility probe passes."

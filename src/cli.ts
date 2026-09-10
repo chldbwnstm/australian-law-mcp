@@ -82,7 +82,7 @@ export function categoriesOf(name: string): string[] {
  * one, or the two disagree: `cli-format`'s default categoriser reads a `[...]`
  * prefix off the description, which is the taxonomy this project abandoned, and
  * an Australian tool description has no such prefix — so that default silently
- * files all 81 tools under "Other".
+ * files all 83 tools under "Other".
  */
 export function headingFor(tool: McpTool): string {
   return categoriesOf(tool.name)[0] ?? "other"

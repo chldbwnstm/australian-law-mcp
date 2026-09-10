@@ -81,6 +81,34 @@ For ordinary Claude Chat, use the `.mcpb` installer described in
 Do not deploy an HTTP service, publish the repository, or request a legal-data API
 key for this installation. Local STDIO is sufficient.
 
+## Optional Aside follow-up preview
+
+Only offer this after the ordinary law server works and only in a local macOS
+15.0+ Claude Code or Codex session. Windows, WSL, Linux, older macOS, remote and
+unknown execution hosts remain on standard research; do not install Aside there
+or substitute another browser.
+
+On an eligible Mac, obtain the concrete Aside executable path from Aside's
+Developer settings, then run the built source checkout's opt-in installer:
+
+```text
+<absolute-node> <absolute-build/index.js> setup-followup --client codex|claude-code|both --project <project> --aside-command <absolute-aside>
+```
+
+The installer adds only a missing `aside` sibling MCP entry, preserves existing
+settings, installs the host skill inside the project, and records the executable
+path for desktop processes with a restricted PATH. Restart the client. In the
+new local session, invoke `au-law-followup`, run its probe, initialise a dedicated
+matter folder, and say “Use Aside to finish missing source checks for this
+matter.” The skill performs a fresh handshake before dispatch/resume and keeps
+policy, task state, Aside session IDs and evidence in that matter folder.
+
+The preview uses only Aside's observed `repl(title, code)` and
+`exec(prompt, session_id?)` tools. It never uses `memory_search`, claims a running
+exec was cancelled without proof, defeats access challenges, or certifies the
+legal validity/authenticity of supplied evidence. A successful setup or handshake
+is not the still-pending lawyer pilot.
+
 References:
 [Codex MCP configuration](https://learn.chatgpt.com/docs/extend/mcp),
 [Claude Code desktop local sessions](https://code.claude.com/docs/en/desktop),

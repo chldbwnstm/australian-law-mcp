@@ -125,6 +125,23 @@ describe("executeTool", () => {
     const result = await executeTool(client, "returns_error", {}, registry)
     expect(result.isError).toBe(true)
   })
+
+  it("bounds text and structured omissions together on the actual CLI execution path", async () => {
+    vi.stubEnv("MCP_MAX_TOOL_RESPONSE_CHARS", "3000")
+    const gap = {
+      id: "gap_large", kind: "source_access" as const, originTool: "large", target: {}, reason: "blocked",
+      sourceUrls: ["https://example.test/source"], sourceAccess: "unknown" as const, evidenceNeeded: ["body"],
+    }
+    const large: ToolRegistry = [tool("large", z.object({}), async () => ({
+      content: [{ type: "text", text: `\\\"\n`.repeat(5000) }],
+      structuredContent: { followup: { schemaVersion: "1.0" as const, gaps: [gap], pending: true, omittedGapCount: 4 } },
+    }))]
+    const result = await executeTool(client, "large", {}, large)
+    expect(JSON.stringify(result).length).toBeLessThanOrEqual(3000)
+    expect(result.structuredContent?.followup.omittedGapCount).toBeGreaterThanOrEqual(4)
+    expect(result.structuredContent?.followup.pending).toBe(true)
+    vi.unstubAllEnvs()
+  })
 })
 
 describe("the CLI runs inside a request budget", () => {

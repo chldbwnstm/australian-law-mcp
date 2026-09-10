@@ -1,0 +1,28 @@
+[Unit]
+Description=GitHub Issue Agent pipeline
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=issue-agent
+Group=issue-agent
+SupplementaryGroups=docker
+WorkingDirectory=/opt/australian-law-mcp
+Environment=AUTOMATION_ENV_FILE=/etc/issue-agent/agent.env
+ExecStart=/usr/bin/node /opt/australian-law-mcp/build-automation/daemon.js --config /etc/issue-agent/config.json
+Restart=on-failure
+RestartSec=30
+TimeoutStopSec=90
+UMask=0077
+StateDirectory=issue-agent
+StateDirectoryMode=0700
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/issue-agent
+
+[Install]
+WantedBy=multi-user.target

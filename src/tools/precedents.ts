@@ -33,6 +33,22 @@ import * as hca from "../lib/sources/hcourt.js"
 import * as qld from "../lib/sources/qld-judgments.js"
 import { interleave, renderDocument, renderSearch } from "../lib/sources/render.js"
 import type { SourceHit, SourceSearchResult } from "../lib/sources/types.js"
+import { sourceDocumentResponse } from "./source-document.js"
+import { followupEnvelope, makeGap } from "../lib/research-followup.js"
+
+function enrichCaseGap(response: LooseToolResponse, input: { query?: string; citation?: string; id?: string; jurisdiction?: string }): LooseToolResponse {
+  const existing = response.structuredContent?.followup
+  if (!existing) return response
+  const citation = input.citation ?? (input.query && /\[(?:1[89]|20)\d{2}\]\s*[A-Za-z]/.test(input.query) ? input.query : undefined)
+  const links = citation ? blockedCourtLinks(citation) : input.query ? [austliiSearchUrl(input.query), lawCiteUrl(input.query)] : []
+  response.structuredContent = { followup: followupEnvelope(existing.gaps.map((gap) => makeGap({
+    ...gap,
+    target: { ...(citation ? { citation } : {}), ...(input.id ? { documentId: input.id } : {}), ...(!citation && input.query ? { query: input.query } : {}) },
+    ...(input.jurisdiction ? { jurisdiction: input.jurisdiction } : {}),
+    sourceUrls: gap.sourceUrls.length ? gap.sourceUrls : links,
+  })), { pending: true, ...(existing.notices ? { notices: existing.notices } : {}) }) }
+  return response
+}
 
 /** Which of the three live sources a jurisdiction/court routes to. */
 export type LiveSource = "nsw" | "hca" | "qld"
@@ -282,7 +298,7 @@ export async function searchCases(
     lawCache.set(cacheKey, text, SEARCH_CACHE_TTL)
     return { content: [{ type: "text", text }] }
   } catch (error) {
-    return formatToolError(error, "search_cases")
+    return enrichCaseGap(formatToolError(error, "search_cases"), input)
   }
 }
 
@@ -398,10 +414,10 @@ export async function getCaseText(
     const info = lookupCourt(court)
     throw blockedCourtError(input.citation, info?.name ?? court)
   } catch (error) {
-    return formatToolError(error, "get_case_text")
+    return enrichCaseGap(formatToolError(error, "get_case_text"), input)
   }
 }
 
 function document(source: Parameters<typeof renderDocument>[0], full: boolean): LooseToolResponse {
-  return { content: [{ type: "text", text: renderDocument(source, { bodyHeading: "Reasons", full }) }] }
+  return sourceDocumentResponse(source, { bodyHeading: "Reasons", full, originTool: "get_case_text", documentId: source.citation ?? source.url })
 }

@@ -34,6 +34,7 @@ import { truncateResponse } from "../lib/schemas.js"
 import { mentionForTitle, primaryLawMention, provisionParam } from "../lib/query-extract.js"
 import { formatRef, parseSectionRef, type SectionRef } from "../lib/section-ref.js"
 import type { FrlTitle, ToolResponse } from "../lib/types.js"
+import { followupEnvelope, makeGap } from "../lib/research-followup.js"
 import { amendedAfter, provisionHistory } from "./analysis-helpers/amendment-lookup.js"
 import { backTrace, describeOutcomes, mergeTraces } from "./analysis-helpers/citing-search.js"
 import { headingTitle } from "../lib/citation-content-matcher.js"
@@ -289,7 +290,14 @@ export async function impactMap(apiClient: AuApiClient, input: ImpactMapInput): 
         "amendment record.",
     )
 
-    return { content: [{ type: "text", text: truncateResponse(lines.join("\n")) }] }
+    const interpretationGap = makeGap({
+      kind: "legal_interpretation", originTool: "impact_map",
+      target: { registerId: title.id, provision: pinpoint },
+      reason: "Dependency counts and enabling-provision comparisons are signals only; they do not establish treatment, validity or the legal effect of an amendment.",
+      sourceUrls: [frlHumanUrl(title.id)], sourceAccess: "permitted",
+      evidenceNeeded: ["The enabling provision before and after the relevant date", "Commencement, application and saving material", "A host-model legal assessment distinguishing primary evidence from interpretation"],
+    })
+    return { content: [{ type: "text", text: truncateResponse(lines.join("\n")) }], structuredContent: { followup: followupEnvelope([interpretationGap], { pending: true }) } }
   } catch (error) {
     return formatToolError(error, "impact_map")
   }

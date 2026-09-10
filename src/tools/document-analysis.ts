@@ -29,6 +29,7 @@ import {
 } from "../lib/risk-rules.js"
 import { truncateResponse } from "../lib/schemas.js"
 import type { LooseToolResponse } from "../lib/types.js"
+import { followupEnvelope, makeGap } from "../lib/research-followup.js"
 
 export const analyzeDocumentSchema = z.object({
   text: z
@@ -147,5 +148,12 @@ export async function analyzeDocument(
   out.push("")
   out.push("This is pattern-matching triage, not legal advice, and it never establishes that a clause is void or enforceable. Confirm every flagged provision against the current text (get_law_text / get_term_provisions) and note that the governing jurisdiction changes the answer.")
 
-  return { content: [{ type: "text", text: truncateResponse(out.join("\n")) }] }
+  const gap = makeGap({
+    kind: "legal_interpretation", originTool: "analyze_document",
+    target: { query: `${DOC_LABELS[docType]}:${findings.map((finding) => finding.rule.id).sort().join(",")}` },
+    reason: "Pattern-matching triage cannot determine enforceability, governing law, missing facts or professional legal conclusions.",
+    sourceUrls: [], sourceAccess: "permitted",
+    evidenceNeeded: ["The governing jurisdiction and relevant facts", "Current primary law for each material signal", "A host-model assessment separating evidence from interpretation"],
+  })
+  return { content: [{ type: "text", text: truncateResponse(out.join("\n")) }], structuredContent: { followup: followupEnvelope([gap], { pending: true }) } }
 }

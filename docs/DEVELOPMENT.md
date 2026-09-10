@@ -70,7 +70,7 @@ Interpretation Act 1901* — evidence, not commentary.
    searches *and* what the CLI's `list --category` filters on *and* what the CLI prints as
    a heading. `cli-format.ts` has a default categoriser that reads a `[Prefix]` off the
    description — that is the abandoned taxonomy, Australian descriptions have no prefix,
-   and using it files all 81 tools under "Other". Always pass `headingFor` from `cli.ts`.
+   and using it files all 83 tools under "Other". Always pass `headingFor` from `cli.ts`.
 
 5. **No `console.log` on the stdio path.** A stray stdout write corrupts the JSON-RPC
    framing and the client's error points nowhere near the cause. `index.ts` rebinds
@@ -124,7 +124,7 @@ Interpretation Act 1901* — evidence, not commentary.
 
 | File | Owns |
 |------|------|
-| `tool-registry.ts` | `allTools` (81), `V3_EXPOSED` filter, `TOOL_COUNTS` (derived), the CallTool boundary: budget, truncation, error formatting, cancellation |
+| `tool-registry.ts` | `allTools` (83), `V3_EXPOSED` filter, `TOOL_COUNTS` (derived), the CallTool boundary: budget, truncation, error formatting, cancellation |
 | `lib/tool-profiles.ts` | `V3_EXPOSED`, `TOOL_CATEGORIES`, `TOOL_ALIASES` — the **one** taxonomy |
 | `lib/upstream-hosts.ts` | Every host, fetched and blocked, with per-host timeout and interval |
 | `lib/api-client.ts` | `AuApiClient` — the frozen multi-host facade |
@@ -174,7 +174,7 @@ src/
 ├── index.ts                     # process entry: stdio | --mode http | setup
 ├── cli.ts                       # the australian-law binary; NL router + per-tool subcommands
 ├── setup.ts                     # MCP client config wizard (7 clients, 3 config shapes)
-├── tool-registry.ts             # allTools (81) + V3_EXPOSED filter (10) + the request boundary
+├── tool-registry.ts             # allTools (83) + V3_EXPOSED filter (10) + the request boundary
 ├── version.ts                   # VERSION/SERVER_NAME read from package.json at runtime
 │
 ├── lib/                         # source-agnostic core — no tool imports this in reverse

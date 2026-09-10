@@ -87,7 +87,7 @@ export const TOOL_ALIASES: Record<string, readonly string[]> = {
   // asking the registry, so a name that is retired here simply stops matching.
   "citations and verification": ["aglc", "citation", "citations", "verify", "hallucination", "check the cite", "citator", "shepardise", "noting up", "verify_citations", "cite_check", "applicable_law", "impact_map"],
   "documents and links": ["contract", "document review", "austlii", "lawcite", "deep link", "external link", "analyze_document", "get_external_links"],
-  research: ["research", "chain", "multi-step", "where do i start", "overview", "legal_research", "search_all"],
+  research: ["research", "chain", "multi-step", "where do i start", "overview", "legal_research", "search_all", "browser follow-up", "aside", "evidence", "plan_research_followup", "check_research_evidence"],
   utilities: ["section reference", "pinpoint", "abbreviation", "shorthand", "parse_section_ref", "get_law_abbreviations"],
 }
 
@@ -117,6 +117,6 @@ export const TOOL_CATEGORIES: Record<string, readonly string[]> = {
   // their own names stay listed for direct callers and back-compatibility.
   "citations and verification": ["legal_analysis", "verify_citations", "cite_check", "applicable_law", "impact_map"],
   "documents and links": ["legal_research", "analyze_document", "chain_document_review", "get_external_links"],
-  research: ["legal_research", "chain_full_research", "chain_law_system", "chain_action_basis", "chain_dispute_prep", "chain_procedure_detail", "search_all"],
+  research: ["legal_research", "plan_research_followup", "check_research_evidence", "chain_full_research", "chain_law_system", "chain_action_basis", "chain_dispute_prep", "chain_procedure_detail", "search_all"],
   utilities: ["parse_section_ref", "get_law_abbreviations"],
 }

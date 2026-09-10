@@ -81,6 +81,18 @@ const rpc = (method: string, params: Record<string, unknown> = {}, id = 1) =>
 /** A tools/call that reaches a purely local tool — enough to be counted, no upstream. */
 const localCall = (id = 1) => rpc("tools/call", { name: "parse_section_ref", arguments: { ref: "s 18" } }, id)
 
+const largeFollowupArguments = {
+  gaps: [{
+    id: "gap_http_bound", kind: "source_access", originTool: "http_test", target: { query: "bounded" },
+    reason: "R".repeat(1900),
+    sourceUrls: Array.from({ length: 20 }, (_, index) => `https://example.test/${index}?value=${"X".repeat(1000)}`),
+    sourceAccess: "unknown", evidenceNeeded: ["E".repeat(900)],
+  }],
+  policy: { mode: "missing_sources", browser: "aside", maxPages: 10, maxDocuments: 3, maxElapsedSeconds: 300, useAuthorizedAccounts: false },
+  eligibility: { probe: "local_companion", execution: "local", platform: "darwin", osVersion: "15.1", asideConnected: true, asideTools: ["repl"] },
+  scope: { matter: "transport bound", jurisdictions: [] },
+}
+
 const started: HttpServer[] = []
 
 async function startTestServer(env: NodeJS.ProcessEnv = {}): Promise<number> {
@@ -388,5 +400,19 @@ describe("MCP protocol over HTTP", () => {
     expect(fetchStub).toHaveBeenCalled()
     // The request never carried a key, and none was invented for the upstream.
     expect(String(fetchStub.mock.calls[0][0])).not.toMatch(/apikey|oc=/i)
+  })
+
+  it.each([
+    ["direct", { name: "plan_research_followup", arguments: largeFollowupArguments }],
+    ["execute_tool", { name: "execute_tool", arguments: { tool_name: "plan_research_followup", params: largeFollowupArguments } }],
+  ])("bounds combined structured output through the %s registry/HTTP path", async (_label, params) => {
+    const port = await startTestServer({ MCP_MAX_TOOL_RESPONSE_CHARS: "3000" })
+    const reply = await send(port, { method: "POST", path: "/mcp", headers: MCP_HEADERS, body: rpc("tools/call", params, 19) })
+    expect(reply.status).toBe(200)
+    const result = JSON.parse(reply.body).result as { content: Array<{ text: string }>; structuredContent?: { followup: { pending?: boolean; omittedGapCount?: number; gaps: Array<{ originTool: string }> } } }
+    expect(JSON.stringify(result).length).toBeLessThanOrEqual(3000)
+    expect(result.structuredContent?.followup.pending).toBe(true)
+    expect(result.structuredContent?.followup.omittedGapCount).toBeGreaterThanOrEqual(1)
+    expect(result.structuredContent?.followup.gaps).toEqual([expect.objectContaining({ originTool: "followup_envelope" })])
   })
 })

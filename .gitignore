@@ -1,5 +1,8 @@
 node_modules/
 build/
+build-automation/
+automation/config.local.json
+automation/state/
 dist/
 dist-mcpb/
 release/

@@ -36,6 +36,7 @@ import { ID_LINE, extractHitIds } from "../tools/search-hits.js"
 import { fmt, formatOutput } from "./cli-format.js"
 import { routeQuery, explainRoute, type RouteResult } from "./query-router.js"
 import type { McpTool, ToolResponse } from "./types.js"
+import { boundToolResponse } from "./research-followup.js"
 
 /** The registry a run executes against. Injectable so tests need no network client. */
 export type ToolRegistry = readonly McpTool<AuApiClient>[]
@@ -108,7 +109,7 @@ export async function executeTool(
   try {
     const parsed = tool.schema.parse(params)
     const result = await withRequestBudget(() => tool.handler(apiClient, parsed))
-    return { content: result.content.map((part) => ({ type: "text" as const, text: part.text })), ...(result.isError ? { isError: true } : {}) }
+    return boundToolResponse(result, toolName, readExecutionLimits().maxToolResponseChars)
   } catch (error) {
     const message =
       error instanceof z.ZodError
@@ -264,7 +265,7 @@ export async function executeNaturalQueryJson(
   const result = await executeTool(apiClient, route.tool, route.params, registry)
   const firstOutput = result.content.map((part) => part.text).join("\n")
 
-  const pipeline: Array<{ tool: string; result: string; isError: boolean }> = []
+  const pipeline: Array<{ tool: string; result: string; isError: boolean; structuredContent?: ToolResponse["structuredContent"] }> = []
   if (!result.isError && route.pipeline?.length) {
     const identifier = extractPipelineId(route.tool, firstOutput)
     for (const step of route.pipeline) {
@@ -274,6 +275,7 @@ export async function executeNaturalQueryJson(
         tool: step.tool,
         result: stepResult.content.map((part) => part.text).join("\n"),
         isError: Boolean(stepResult.isError),
+        ...(stepResult.structuredContent ? { structuredContent: stepResult.structuredContent } : {}),
       })
     }
   }
@@ -294,6 +296,7 @@ export async function executeNaturalQueryJson(
           alternates: route.alternates,
         },
         result: firstOutput,
+        ...(result.structuredContent ? { structuredContent: result.structuredContent } : {}),
         ...(pipeline.length ? { pipeline } : {}),
         isError: Boolean(result.isError),
       },

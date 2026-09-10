@@ -5,6 +5,7 @@
 import type { ToolResponse } from "./types.js"
 import { maskSensitiveUrl } from "./fetch-with-retry.js"
 import { UpstreamRecordMissingError } from "./upstream-miss.js"
+import { followupEnvelope, makeGap, type ResearchGap } from "./research-followup.js"
 
 /**
  * Error codes
@@ -226,8 +227,44 @@ export function formatToolError(error: unknown, context?: string): ToolResponse 
     })
   }
 
+  const gap = gapForError(error, context ?? "unknown_tool", code, msg)
   return {
     content: [{ type: "text", text: lines.join("\n") }],
     isError: true,
+    ...(gap ? { structuredContent: { followup: followupEnvelope([gap], { pending: true }) } } : {}),
   }
+}
+
+/** Build gaps from typed failure branches, never by scraping rendered error prose. */
+function gapForError(error: unknown, originTool: string, code: string, reason: string): ResearchGap | undefined {
+  let kind: ResearchGap["kind"] | undefined
+  let sourceUrls: string[] = []
+  let sourceAccess: ResearchGap["sourceAccess"] = "unknown"
+  let target: ResearchGap["target"] = {}
+
+  if (error instanceof UpstreamBlockedError) {
+    kind = "source_access"
+    sourceUrls = error.links.filter((link) => /^https?:\/\//i.test(link)).slice(0, 20)
+    sourceAccess = "requires_access"
+    target = { documentId: error.host }
+  } else if (error instanceof UpstreamRecordMissingError) {
+    kind = "document_body"
+  } else if (error instanceof LawApiError) {
+    if (error.code === ErrorCodes.ANNEX_BODY_UNAVAILABLE) kind = "document_body"
+    else if (error.code === ErrorCodes.TIMEOUT || error.code === ErrorCodes.RATE_LIMITED) kind = "budget"
+    else if (error.code === ErrorCodes.UPSTREAM_NO_DATA || error.code === ErrorCodes.API_ERROR || error.code === ErrorCodes.PARSE_ERROR) kind = "source_access"
+  }
+  if (!kind) return undefined
+  return makeGap({
+    kind,
+    originTool,
+    originalErrorCode: code,
+    target,
+    reason,
+    sourceUrls,
+    sourceAccess,
+    evidenceNeeded: kind === "document_body"
+      ? ["The original document body", "An exact relevant passage with paragraph or page locator"]
+      : ["The requested original source record", "Observed identity and relevant passage"],
+  })
 }

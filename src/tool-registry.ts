@@ -37,7 +37,6 @@ import { z } from "zod"
 import type { AuApiClient } from "./lib/api-client.js"
 import { formatToolError } from "./lib/errors.js"
 import { RequestExecutionBudget, readExecutionLimits, type ExecutionLimits } from "./lib/execution-limits.js"
-import { truncateResponse } from "./lib/schemas.js"
 import {
   getRequestSignal,
   requestContext,
@@ -46,6 +45,7 @@ import {
 } from "./lib/session-state.js"
 import { V3_EXPOSED } from "./lib/tool-profiles.js"
 import type { McpTool } from "./lib/types.js"
+import { boundToolResponse } from "./lib/research-followup.js"
 
 // ── Legislation (Federal Register) ────────────────────────────────────────
 import { AdvancedSearchSchema, advancedSearch, advancedSearchDescription } from "./tools/advanced-search.js"
@@ -205,6 +205,14 @@ import {
   setAllToolsRef,
 } from "./tools/meta-tools.js"
 import { SearchAllSchema, searchAll, searchAllDescription } from "./tools/search-all.js"
+import {
+  CheckResearchEvidenceSchema,
+  PlanResearchFollowupSchema,
+  checkResearchEvidence,
+  checkResearchEvidenceDescription,
+  planResearchFollowup,
+  planResearchFollowupDescription,
+} from "./tools/research-followup.js"
 
 // ── Analysis (killer features) ────────────────────────────────────────────
 import { ApplicableLawSchema, applicableLaw, applicableLawDescription } from "./tools/applicable-law.js"
@@ -717,6 +725,20 @@ export const allTools: Tool[] = [
   },
   { name: "impact_map", description: impactMapDescription, schema: ImpactMapSchema, handler: impactMap },
 
+  // ═══ Optional host-coordinated follow-up ═══
+  {
+    name: "plan_research_followup",
+    description: planResearchFollowupDescription,
+    schema: PlanResearchFollowupSchema,
+    handler: planResearchFollowup,
+  },
+  {
+    name: "check_research_evidence",
+    description: checkResearchEvidenceDescription,
+    schema: CheckResearchEvidenceSchema,
+    handler: checkResearchEvidence,
+  },
+
   // ═══ Meta ═══
   { name: "discover_tools", description: discoverToolsDescription, schema: DiscoverToolsSchema, handler: discoverTools },
   { name: "execute_tool", description: executeToolDescription, schema: ExecuteToolSchema, handler: executeTool },
@@ -924,29 +946,14 @@ export function registerTools(
         const input = tool.schema.parse(args ?? {})
         const result = await tool.handler(apiClient, input)
         throwIfRequestCancelled()
-        const text = truncateResponse(
-          result.content.map((content) => content.text).join("\n"),
-          executionLimits.maxToolResponseChars,
-        )
-        return { content: [{ type: "text" as const, text }], isError: result.isError }
+        return boundToolResponse(result, name, executionLimits.maxToolResponseChars)
       } catch (error) {
         // Cancellation is not a tool result. The SDK suppresses the response
         // for a cancelled item, and re-throwing keeps upstream cancellation
         // visible to the transport instead of answering a withdrawn request.
         if (getRequestSignal()?.aborted) throw error
         const formatted = formatToolError(error, name)
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: truncateResponse(
-                formatted.content.map((content) => content.text).join("\n"),
-                executionLimits.maxToolResponseChars,
-              ),
-            },
-          ],
-          isError: true,
-        }
+        return boundToolResponse(formatted, name, executionLimits.maxToolResponseChars)
       }
     })
   })

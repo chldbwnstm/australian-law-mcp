@@ -11,6 +11,84 @@
 
 > Every source is a **keyless public endpoint** — the Federal Register of Legislation, NSW Caselaw, the High Court, Queensland Judgments, the State registers, the ATO, the Fair Work Commission, the OAIC, the NACC and DFAT. **There is no API key to configure.** Works with Codex, Claude Desktop, Claude Code, Cursor, Windsurf, VS Code, Zed, Gemini CLI, and any MCP client.
 
+## Install
+
+**Open your AI app, copy the message below, and let it handle the setup.**
+You do not need to write code or run terminal commands yourself.
+
+### 1. Open the app you use
+
+| Your app | What to open |
+|---|---|
+| **Codex desktop** | Start a new task on your computer. Choose **Local** if asked where to run it. |
+| **Claude Desktop — Code tab** | Click **Code**, then choose **Local**. |
+
+If asked to select a folder, create or choose one called **Australian Law**.
+Keep using that folder for your trial. If you use Claude's ordinary **Chat** tab,
+see [the Chat tab note below](#using-claudes-chat-tab).
+
+### 2. Copy this message into the chat and send it
+
+```text
+Install https://github.com/chldbwnstm/australian-law-mcp in the desktop app
+I am using now. Follow INSTALL.md in that repository and do the setup for me.
+Help me install anything that is missing, and preserve my existing settings.
+Tell me if I need to restart the app, and verify the connected law tools.
+I do not want to run terminal commands or edit settings files myself.
+```
+
+Follow the app's prompts to allow the installation. If it asks you to restart,
+close and reopen the app, then return to the same folder and start a new chat.
+
+### 3. Try this question
+
+```text
+Use the connected Australian Law tools to retrieve ACL s 18.
+Show me the provision and its official source link.
+```
+
+The answer should identify **schedule 2, section 18 of the Competition and
+Consumer Act 2010**. Open the source link to see the original provision.
+If the app says the tools are unavailable, send: **“Please check and fix my
+Australian Law connection, then try again.”**
+
+### Optional: add Aside browser research (macOS only)
+
+**On macOS 15 or later, your AI can also use Aside to follow up source links,
+read accessible judgments and PDFs, and save its research progress.** This is a
+preview in the current source version. Windows users can use the standard law
+tools; Aside follow-up is not available on Windows yet.
+
+1. [Install Aside](https://docs.aside.com/help/get-started) and open it.
+2. Return to the same folder in Codex or Claude **Code → Local**, then send:
+
+   ```text
+   Add the Aside browser research preview to this project. Follow INSTALL.md
+   in the Australian Law repository, using its current source version.
+   Check that my Mac is supported, find Aside, and handle the setup for me.
+   Preserve my existing settings. Tell me if I need to restart the app, and
+   verify both the law tools and Aside connection before saying it is ready.
+   ```
+
+3. Follow any restart instructions, then try a [browser research example below](#example-1-finish-missing-reasons-and-pdfs).
+
+### Using Claude's Chat tab?
+
+<details>
+<summary>Click here if you normally use Chat</summary>
+
+Click **Code**, choose **Local**, and follow the three steps above. The ordinary
+Chat tab cannot perform this automatic installation. If you do not have access
+to Code, use the Codex desktop option or the [manual instructions](INSTALL.md).
+
+A downloadable Claude Chat extension has not been published on GitHub yet.
+
+</details>
+
+For other apps, manual setup, or troubleshooting, see [INSTALL.md](INSTALL.md).
+
+---
+
 **Best used in day-to-day law firm work:**
 
 Copy a question into your AI app and ask it to use Australian Law. Replace the dates
@@ -27,22 +105,128 @@ limits on what was checked.
 
 ---
 
-## Install in Codex desktop
+## Optional browser follow-up with Aside — source preview, macOS only
 
-**Ask Codex to install it for you. You do not need to run terminal commands.**
+**Available in this source tree on local macOS 15.0+ after project setup.**
+In Codex desktop or Claude Code desktop, your AI can use **Aside MCP** to retrieve
+missing originals, read judgment PDFs, investigate later citing decisions, and
+save evidence and progress for the matter. The AI starts with Australian Law MCP
+and continues through Aside when further source checks are needed.
 
-1. Open Codex desktop and start a **local** session on your computer.
-2. Copy and send this message:
+This is an **unreleased preview**. The published npm v1.0.0 package does not
+include this companion workflow. Installing the ordinary law server alone does
+not enable it.
 
-   ```text
-   Install https://github.com/chldbwnstm/australian-law-mcp as a local MCP server
-   in my Codex desktop app. Follow INSTALL.md in that repository. Handle the setup
-   for me, preserve my existing settings, and verify that the server works. Tell me
-   if I need to restart the app. I do not want to run terminal commands myself.
-   ```
+| Feature | macOS | Windows |
+|---|---|---|
+| Existing Australian Law MCP tools | Supported | Supported |
+| Optional browser follow-up through Aside MCP | Preview in this source tree for local macOS 15.0+ with Aside installed and connected | Unavailable; deferred until Aside supports Windows and this integration is validated there |
 
-3. Follow any installation approval prompts. If Codex asks you to restart the app,
-   do so, then open a new chat.
+Windows users can continue using the existing law tools and open remaining source
+links themselves. The companion also requires local execution: WSL, Linux, remote
+sessions and older macOS versions are unsupported. Windows browser follow-up will
+remain unavailable until Aside supports Windows and this integration is validated
+there; no alternative browser or remote-Mac workaround is included.
+
+### Enable Aside once for your project
+
+Follow the [simple Aside setup above](#optional-add-aside-browser-research-macos-only).
+Use the same project folder after setup so the AI can find its research skill
+and saved progress. Detailed commands and connection checks are in
+[INSTALL.md](INSTALL.md#optional-aside-follow-up-preview).
+
+### Choose how much additional research to do
+
+| Mode | What the AI does | Initial allowance for a new matter |
+|---|---|---|
+| Standard / `off` | Uses the law tools and reports missing sources for you to follow up | No Aside work |
+| Complete missing sources / `missing_sources` | Uses Aside to collect missing originals, passages and PDF reasons | 10 browser pages, 3 documents, 5 active minutes |
+| Extended research / `extended` | Also investigates later citing decisions and wider source gaps, then drafts an interpretation supported by the collected evidence | 30 browser pages, 10 documents, 15 active minutes |
+
+Opt-in and usage are saved per matter. Changing modes or restarting a session
+does not reset accumulated usage or automatically increase an existing matter's
+limits. When an allowance is reached, the AI saves what it found and reports the
+remaining gaps.
+
+### Example 1: finish missing reasons and PDFs
+
+After setup, paste this fictional exercise into the same project's local session.
+It needs no client document:
+
+```text
+Use Australian Law MCP and the au-law-followup skill for a fictional redundancy
+research exercise. Create a new matter folder at ./matters/redundancy-demo and
+enable missing_sources mode for this matter.
+
+Retrieve Fair Work Act 2009 (Cth) s 389 and identify the compilation date.
+Search Fair Work Commission decisions about genuine redundancy and consultation,
+then select up to three relevant decisions. If the law tools return only metadata
+or a PDF link, use Aside to retrieve and inspect the original reasons where access
+permits. Stay within 10 browser pages, 3 documents and 5 active minutes.
+
+Save the evidence and checkpoint in the matter folder. Return a table containing
+the citation, date, source URL, whether the original reasons were actually read,
+and a relevant passage with its paragraph or page reference. List every source
+you could not access and every question that remains unresolved.
+```
+
+The result should distinguish **originals read**, **metadata only**, and
+**unresolved checks**. A PDF link by itself does not mean its contents were read.
+Evidence, usage and checkpoints are kept under the matter's `.au-law-followup/`
+directory, with AI interpretations recorded separately from source evidence.
+
+For a shorter request after an initial law-tool search:
+
+```text
+Use the au-law-followup skill and Aside to retrieve missing originals for this
+matter. Create ./matters/source-check-demo in missing_sources mode.
+Limit the research to 10 browser pages, 3 documents and 5 active minutes.
+Save source links, paragraph or page references, and relevant quotations.
+Report any material you could not verify and the questions still unresolved.
+```
+
+### Example 2: investigate later citing decisions
+
+```text
+Use Australian Law MCP and au-law-followup in a new extended research matter at
+./matters/citation-demo. Start with [2020] HCA 41 and confirm its case identity.
+Use Aside to investigate later citing judgments from accessible official sources
+through today. State the jurisdictions, date range and searches actually covered.
+Use no more than 30 browser pages, 10 documents and 15 active minutes.
+
+For each judgment inspected, keep its own citation and source URL, quote the
+passage discussing the original case, and explain the apparent treatment.
+Save source evidence separately from your interpretation. Report uninspected
+results and restricted sources; do not present this as a complete citator check.
+```
+
+### Check progress, stop or resume
+
+Keep the same project and matter folder when continuing, including after an app
+restart. Replace the path below with the matter you started:
+
+| Action | Copy into the AI chat |
+|---|---|
+| Check progress | “Show the saved progress for `./matters/redundancy-demo`: sources read, unresolved tasks and remaining allowance.” |
+| Stop | “Stop research for `./matters/redundancy-demo` now and save a checkpoint, including any running Aside session.” |
+| Resume | “Resume `./matters/redundancy-demo` from its saved checkpoint. Clear the user stop, recheck local eligibility and inspect the existing Aside session before continuing. Keep the remaining allowance.” |
+| Turn off follow-up | “Set follow-up to off for `./matters/redundancy-demo` and continue with the ordinary law tools.” |
+
+Stopping prevents new work from being scheduled. An Aside agent already running
+may continue; the AI must report an unconfirmed completion and preserve its
+session for rechecking. Login, MFA, CAPTCHA or access decisions may still need
+your input. Retrieving a document does not certify its authenticity or legal
+effect.
+
+The macOS lawyer pilot and broader source/reconnection checks remain outstanding,
+and some legacy source tools do not yet emit structured follow-up gaps. See the
+[validation record and remaining limits](docs/AI-NATIVE-FOLLOWUP-VALIDATION.md),
+[installation instructions](INSTALL.md#optional-aside-follow-up-preview), and
+[integration design](docs/AI-NATIVE-FOLLOWUP.md).
+
+---
+
+## Try a first task
 
 ### First task in Codex: check a draft before partner review
 
@@ -70,30 +254,6 @@ limits on what was checked.
 
 For your next check, replace the fictional paragraph with the relevant excerpt
 from your draft, using material your firm permits in the AI app.
-
-## Install in Claude Code desktop
-
-**Use the Code tab in Claude Desktop and ask Claude to install it for you.**
-
-1. Open Claude Desktop, select **Code**, and start a session with the environment
-   set to **Local**. Choose a folder if the app asks for one.
-2. Copy and send this message:
-
-   ```text
-   Install https://github.com/chldbwnstm/australian-law-mcp as a local MCP server
-   for Claude Code in this desktop app, available across my projects. Follow
-   INSTALL.md in that repository. Handle the setup for me, preserve my existing
-   settings, and verify that the server works. Tell me if I need to restart the app.
-   I do not want to run terminal commands myself.
-   ```
-
-3. Follow any installation approval prompts, then start a new Code session or
-   restart the app as instructed.
-
-For either app, the agent handles the required software and local configuration.
-No hosted server or legal-data API key is needed. Your account must be able to
-access this repository, and your computer must permit the installation. Detailed
-instructions for the agent are in [INSTALL.md](INSTALL.md).
 
 ### First task in Claude Code: prepare a redundancy research note
 
@@ -123,30 +283,6 @@ instructions for the agent are in [INSTALL.md](INSTALL.md).
 
 You can then ask: “Turn the verified material into a one-page internal research
 note, keeping the source links and unresolved questions.”
-
-## Install in Claude Desktop
-
-**Using the ordinary Chat tab? Install the extension file instead.** No terminal,
-no separate Node.js installation. Claude Desktop ships its own runtime.
-
-1. **Download** `au-law-mcp-1.0.0.mcpb` from the [latest release](https://github.com/chldbwnstm/australian-law-mcp/releases/latest).
-2. **Open the file.** Claude Desktop shows an install dialog — or drag it onto Settings → Extensions. Click **Install**.
-3. **Start a new chat.** `australian-law` is in the tools menu. Try: *"what does s 18 of the ACL say"*.
-
-There is no API key: every source is a keyless public register. Everything runs on your own machine; nothing you ask goes through a third-party server.
-
-### Developer alternative (needs Node.js 20.19+)
-
-`npx -y --ignore-scripts au-law-mcp setup` writes the entry into Claude Desktop, Claude Code, Cursor, VS Code, Windsurf, Zed or Gemini CLI — whichever it finds, leaving other servers in the file untouched. To add it by hand instead:
-
-```json
-{"mcpServers":{"australian-law":{"command":"npx","args":["-y","au-law-mcp"]}}}
-```
-
-| | Config file |
-|---|---|
-| Windows | `%APPDATA%\Claude\claude_desktop_config.json` |
-| Mac | `~/Library/Application Support/Claude/claude_desktop_config.json` |
 
 ---
 
@@ -298,7 +434,7 @@ The other half of the problem is access. Several of the sources a researcher wou
 
 ## The 10 advertised tools
 
-`ListTools` returns ten. The other 71 are reachable — by name through `CallTool`, and by discovery through `discover_tools` → `execute_tool`. Nothing is ever removed from the registry to shrink the advertised list, so a name learned from an earlier version keeps working.
+`ListTools` returns ten. The other 73 are reachable — by name through `CallTool`, and by discovery through `discover_tools` → `execute_tool`. Nothing is ever removed from the registry to shrink the advertised list, so a name learned from an earlier version keeps working.
 
 Ten, not eighty, because every advertised entry is context that every client pays for on every request, and a model choosing between eighty near-synonyms chooses badly. These ten are not "the best ten" — they are the ones where the two-hop round trip is not worth its latency.
 
@@ -313,7 +449,7 @@ Ten, not eighty, because every advertised entry is context that every client pay
 | **Decisions** (2) | `search_decisions` | All 18 decision domains from one tool, chosen with `domain`. |
 | | `get_decision_text` | One decision from any domain: the same `domain` plus the `id` printed in the results — never an invented one. Long reasons are shortened from the middle with the exact number of omitted characters marked. |
 | **Meta** (2) | `discover_tools` | "What tool do I need for X?" Ranked, grouped by category, with the right call path for each. |
-| | `execute_tool` | Run any of the 81 by name. Parameters pass straight through to the target tool's own validation. |
+| | `execute_tool` | Run any of the 83 by name. Parameters pass straight through to the target tool's own validation. |
 
 ---
 
@@ -378,7 +514,7 @@ This software retrieves and formats public legal material. It does not give lega
 
 ## Under the hood
 
-- **Two-list registry** — 81 tools registered, 10 advertised. Everything stays callable by name forever; the advertised surface is a projection, not the truth.
+- **Two-list registry** — 83 tools registered, 10 advertised. Everything stays callable by name forever; the advertised surface is a projection, not the truth.
 - **Bracket-labelled errors** — `[NOT_FOUND]`, `[UPSTREAM_NO_DATA]`, `[UPSTREAM_BLOCKED]`, `[EXTERNAL_API_ERROR]` and the rest are a machine-readable contract, and the three "we don't have it" cases are kept strictly apart because they mean different things to a caller.
 - **A provision grammar checked against the statute book** — the reference parser is tested against every provision label of five recorded Federal Register tables of contents (12,642 labels), and its letter classes are set from all 1,177 in-force principal Commonwealth Acts, not from a sample.
 - **One execution budget per request** — a JSON-RPC batch and every chain step share one allowance, held in `AsyncLocalStorage`, so a single envelope cannot multiply the upstream footprint.

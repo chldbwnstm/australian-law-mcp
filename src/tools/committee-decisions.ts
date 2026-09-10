@@ -45,6 +45,7 @@ import {
 import { renderDocument, renderSearch } from "../lib/sources/render.js"
 import type { SourceHit, SourceSearchResult } from "../lib/sources/types.js"
 import { searchCases } from "./precedents.js"
+import { sourceDocumentResponse } from "./source-document.js"
 
 /**
  * `search_decisions` advertises `limit` for all eighteen domains, and these
@@ -113,11 +114,10 @@ export async function getWorkplaceDecisionText(
 ): Promise<LooseToolResponse> {
   try {
     const document = await fwc.getDecision(client, input.id)
-    return {
-      content: [
-        { type: "text", text: renderDocument(document, { bodyHeading: "Reasons", full: input.full === true }) },
-      ],
-    }
+    return sourceDocumentResponse(document, {
+      bodyHeading: "Reasons", full: input.full === true,
+      originTool: "get_decision_text[workplace]", documentId: input.id, jurisdiction: "Cth",
+    })
   } catch (error) {
     return formatToolError(error, "get_decision_text[workplace]")
   }
@@ -247,11 +247,7 @@ export async function getPrivacyDecisionText(
         ],
       )
     }
-    return {
-      content: [
-        {
-          type: "text",
-          text: renderDocument(
+    return sourceDocumentResponse(
             {
               title: hit.title,
               url: hit.url,
@@ -262,16 +258,14 @@ export async function getPrivacyDecisionText(
                 ...(hit.catchwords ? ([["Catchwords", hit.catchwords]] as Array<[string, string]>) : []),
               ],
               text: "",
+              bodyStatus: "metadata_only",
               note:
                 "The OAIC publishes a structured summary — finding, remedies, provisions, catchwords — " +
                 "and links the full determination to AustLII, which this server does not fetch. The " +
                 "reasons exist and the link above opens them in a browser.",
             },
-            { bodyHeading: "Determination" },
-          ),
-        },
-      ],
-    }
+            { bodyHeading: "Determination", originTool: "get_decision_text[privacy]", documentId: input.id, jurisdiction: "Cth" },
+          )
   } catch (error) {
     return formatToolError(error, "get_decision_text[privacy]")
   }
@@ -419,26 +413,20 @@ export async function getIntegrityDecisionText(
         ],
       )
     }
-    return {
-      content: [
-        {
-          type: "text",
-          text: renderDocument(
+    return sourceDocumentResponse(
             {
               title: operation.name,
               url: `https://www.nacc.gov.au/investigation-reports-and-case-studies#${operation.anchor}`,
               metadata: [],
               text: operation.summary,
+              bodyStatus: "summary_only",
               documents: operation.documents,
               note:
                 "The investigation report itself is a PDF; the summary above is the NACC's own index entry. " +
                 "Download links are listed under Documents.",
             },
-            { bodyHeading: "Background", full: input.full === true },
-          ),
-        },
-      ],
-    }
+            { bodyHeading: "Background", full: input.full === true, originTool: "get_decision_text[integrity]", documentId: input.id, jurisdiction: "Cth" },
+          )
   } catch (error) {
     return formatToolError(error, "get_decision_text[integrity]")
   }

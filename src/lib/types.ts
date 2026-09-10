@@ -9,6 +9,7 @@
  */
 
 import { z } from "zod"
+import type { FollowupEnvelope } from "./research-followup.js"
 
 // ──────────────────────────────────────────────────────────────────────────
 // Federal Register of Legislation entities (docs/research/frl-api-reference.md §1)
@@ -141,12 +142,14 @@ export interface ProvisionText {
 export interface ToolResponse {
   content: Array<{ type: "text"; text: string }>
   isError?: boolean
+  structuredContent?: { followup: FollowupEnvelope }
 }
 
 /** Loose shape a tool handler may return (allows `{ type: string }`). */
 export interface LooseToolResponse {
   content: Array<{ type: string; text: string }>
   isError?: boolean
+  structuredContent?: { followup: FollowupEnvelope }
 }
 
 /**

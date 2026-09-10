@@ -34,6 +34,7 @@ import * as qld from "../lib/sources/qld-judgments.js"
 import type { SourceHit } from "../lib/sources/types.js"
 import { truncateResponse } from "../lib/schemas.js"
 import type { ToolResponse } from "../lib/types.js"
+import { followupEnvelope, makeGap, type ResearchGap } from "../lib/research-followup.js"
 import { amendedAfter, provisionHistory, type DatedEffect } from "./analysis-helpers/amendment-lookup.js"
 import { backTrace, describeOutcomes, isCandidateOnly, type BackTrace } from "./analysis-helpers/citing-search.js"
 import { locateCase, type CaseLocation } from "./analysis-helpers/case-check.js"
@@ -194,6 +195,17 @@ export async function citeCheck(apiClient: AuApiClient, input: CiteCheckInput): 
     if (!usable) {
       if (anyParsed && anyParsed.ok) {
         const shown = formatCitation(anyParsed.citation)
+        const sourceUrl = lawCiteUrl(shown)
+        const gap = makeGap({
+          kind: "reported_citation",
+          originTool: "cite_check",
+          originalErrorCode: ErrorCodes.UPSTREAM_BLOCKED,
+          target: { citation: shown },
+          reason: "The reported citation can only be resolved through a source this server does not fetch.",
+          sourceUrls: [sourceUrl],
+          sourceAccess: "requires_access",
+          evidenceNeeded: ["Report-series record matching parties, court, year, volume and first page", "Any parallel medium-neutral citation"],
+        })
         return {
           content: [
             {
@@ -201,10 +213,11 @@ export async function citeCheck(apiClient: AuApiClient, input: CiteCheckInput): 
               text:
                 `[UPSTREAM_BLOCKED] ${shown} is a reported citation. Reported series resolve only through LawCite, ` +
                 `which refuses automated clients, so no citation graph can be built here.\n\n` +
-                `Open the free citator directly: ${lawCiteUrl(shown)}\n` +
+                `Open the free citator directly: ${sourceUrl}\n` +
                 `If you have the medium-neutral citation (e.g. "[2020] HCA 41"), re-run cite_check with that instead.`,
             },
           ],
+          structuredContent: { followup: followupEnvelope([gap], { pending: true }) },
         }
       }
       return notFoundResponse(`No case citation could be read out of "${input.caseNumber}".`, [
@@ -247,6 +260,40 @@ export async function citeCheck(apiClient: AuApiClient, input: CiteCheckInput): 
     const overruling = scans.filter((result) => hasOverrulingSignal(result.scan))
     const verdict = decide({ location, trace, citing, scans, overruling, override })
 
+    const gaps: ResearchGap[] = []
+    const uninspected = citing.slice(scans.length).map((hit) => hit.url).filter((url, index, urls) => url && urls.indexOf(url) === index)
+    if (uninspected.length > 0) {
+      gaps.push(makeGap({
+        kind: "treatment",
+        originTool: "cite_check",
+        target: { citation: shown },
+        jurisdiction: citation.court_info.jurisdiction,
+        reason: `${uninspected.length} accessible candidate later case(s) were not opened within this tool's deep-scan bound.`,
+        sourceUrls: uninspected,
+        sourceAccess: "permitted",
+        evidenceNeeded: ["Later citing decisions from the missing sources", "Exact passages showing how the authority was treated", "The sources, date range and inspected-result count"],
+      }))
+    }
+    if (!trace.complete || verdict === "unverified_treatment") {
+      gaps.push(makeGap({
+        kind: "treatment", originTool: "cite_check", target: { citation: shown }, jurisdiction: citation.court_info.jurisdiction,
+        reason: "Professional/report-series and unreachable-source treatment coverage remains incomplete.",
+        sourceUrls: [lawCiteUrl(shown)], sourceAccess: "requires_access",
+        evidenceNeeded: ["Treatment results from the restricted or missing sources", "Exact relevant passages", "Source and inspected-result coverage"],
+      }))
+    }
+    if (override && !override.available) {
+      gaps.push(makeGap({
+        kind: "commencement",
+        originTool: "cite_check",
+        originalErrorCode: override.gapCode,
+        target: { citation: shown, registerId: override.titleId, provision: tie?.provision },
+        reason: override.note ?? "The amendment/commencement check did not complete.",
+        sourceUrls: [],
+        sourceAccess: "unknown",
+        evidenceNeeded: ["Official amending text", "Commencement and application or saving provisions"],
+      }))
+    }
     return {
       content: [
         {
@@ -256,6 +303,7 @@ export async function citeCheck(apiClient: AuApiClient, input: CiteCheckInput): 
           ),
         },
       ],
+      ...(gaps.length ? { structuredContent: { followup: followupEnvelope(gaps, { pending: true }) } } : {}),
     }
   } catch (error) {
     return formatToolError(error, "cite_check")

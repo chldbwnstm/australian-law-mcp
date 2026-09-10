@@ -1,0 +1,35 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: en-AU
+reviews:
+  profile: assertive
+  high_level_summary_in_walkthrough: true
+  request_changes_workflow: true
+  review_progress: true
+  fail_commit_status: true
+  auto_review:
+    enabled: true
+    drafts: true
+    auto_incremental_review: true
+    auto_pause_after_reviewed_commits: 0
+  path_instructions:
+    - path: "src/automation/**"
+      instructions: >
+        Check approval event provenance and snapshot binding, persisted budgets,
+        crash recovery and PR idempotency, fail-closed handling of GitHub errors,
+        current head/test-merge SHA and trusted check/reviewer identities.
+        Check that untrusted issue/review text cannot control commands, credentials,
+        policy, filesystem paths, or readiness. Flag missing adversarial tests.
+    - path: "**/*.ts"
+      instructions: >
+        Review TypeScript correctness and runtime validation. Preserve public MCP
+        and CLI behavior, legal source provenance, response limits and offline
+        testing. Require useful tests for changed behavior.
+    - path: "**/*.test.ts"
+      instructions: >
+        Prefer observable behavior, negative cases and realistic API/process
+        boundaries. Tests must not need model credentials or live legal websites.
+    - path: ".github/workflows/**"
+      instructions: >
+        Preserve least-privilege tokens, install without lifecycle scripts, all
+        supported platform checks and the final CI quality gate. Never run
+        untrusted PR code with pull_request_target or on the agent VM.

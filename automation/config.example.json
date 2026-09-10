@@ -1,0 +1,29 @@
+{
+  "enabled": false,
+  "owner": "chldbwnstm",
+  "repo": "australian-law-mcp",
+  "baseBranch": "main",
+  "botLogin": "REPLACE-WITH-TOKEN-OWNER",
+  "stateDir": "/var/lib/issue-agent",
+  "allowedPaths": ["src/lib", "src/tools"],
+  "maxRisk": "low",
+  "maxAttempts": 3,
+  "requiredChecks": [
+    { "name": "CI quality gate", "appId": 15368, "target": "merge" }
+  ],
+  "codeRabbit": {
+    "checkName": "CodeRabbit",
+    "appId": 123456,
+    "reviewerId": 123456,
+    "surface": "check"
+  },
+  "sandbox": {
+    "image": "local/issue-agent@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "network": "none",
+    "secretNames": ["XAI_API_KEY", "ANTHROPIC_API_KEY"],
+    "grok": { "executable": "/usr/local/bin/node", "argv": ["/opt/issue-agent/agent-json.mjs", "grok", "/usr/local/bin/grok"] },
+    "fable": { "executable": "/usr/local/bin/node", "argv": ["/opt/issue-agent/agent-json.mjs", "fable", "/usr/local/bin/claude", "fable", "2"] },
+    "opus": { "executable": "/usr/local/bin/node", "argv": ["/opt/issue-agent/agent-json.mjs", "opus", "/usr/local/bin/claude", "opus", "5"] }
+  },
+  "autoMerge": false
+}

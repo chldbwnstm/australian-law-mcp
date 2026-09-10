@@ -18,6 +18,13 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- An unreleased local macOS 15+ Aside companion preview: versioned structured
+  research gaps/evidence/tasks, stateless planning and evidence-check tools,
+  project-local Codex/Claude Code setup, fresh Aside capability gates, matter
+  budgets, resumable task/session checkpoints, and honest stop/disconnect state.
+- Typed missing-original, incomplete-treatment, document-interpretation,
+  truncation and chain-deadline follow-up metadata preserved through direct,
+  meta-tool, aggregate, MCP transport and CLI JSON paths.
 - Regression coverage for malformed upstream collections, retry spacing, cancellation,
   and the bundle verifier's child-process lifecycle and response framing.
 - `npm run verify:stdio` checks the built server's handshake, version, and advertised

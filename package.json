@@ -30,6 +30,9 @@
   "scripts": {
     "clean": "node ./scripts/clean-build.mjs",
     "build": "npm run clean && tsc",
+    "build:automation": "tsc -p tsconfig.automation.json",
+    "automation:start": "node build-automation/daemon.js",
+    "automation:dry-run": "npm run build:automation && node build-automation/daemon.js --dry-run --offline --once",
     "build:mcpb": "node ./scripts/build-mcpb.mjs",
     "watch": "tsc --watch",
     "start": "node build/index.js",
@@ -38,7 +41,7 @@
     "cli": "node build/cli.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.automation.json --noEmit",
     "verify:stdio": "node ./scripts/verify-stdio.mjs",
     "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
@@ -80,6 +83,7 @@
   },
   "files": [
     "build",
+    "companion",
     "README.md",
     "LICENSE",
     "NOTICE",

@@ -1,0 +1,41 @@
+name: Agent task
+description: A bounded change with explicit acceptance criteria and risk areas
+title: "[Task] "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and expected behavior
+      description: Include a concrete before/after example and reproduction steps.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: List observable outcomes and relevant tests.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope and files
+      description: Suggest affected files and explain what is outside scope.
+    validations:
+      required: true
+  - type: checkboxes
+    id: risks
+    attributes:
+      label: Risk areas
+      description: Select every area affected; these may require human implementation.
+      options:
+        - label: Authentication, credentials, or permissions
+        - label: CI, automation policy, or deployment
+        - label: Dependencies or package publishing
+        - label: Public API, data integrity, or legal source interpretation
+  - type: markdown
+    attributes:
+      value: >
+        A maintainer can add agent-candidate for triage. After reviewing the
+        bot's snapshot, a human with repository write access must add
+        agent-approved. Editing the issue afterwards invalidates that approval.

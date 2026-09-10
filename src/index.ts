@@ -45,6 +45,8 @@ const USAGE = `au-law-mcp ${VERSION}
   au-law-mcp --mode http [--port 8000]
                                           start the stateless Streamable HTTP server
   au-law-mcp setup                        register this server in your MCP client configs
+  au-law-mcp setup-followup [--client codex|claude-code|both] [--project DIR] [--aside-command PATH]
+                                          opt in to the local macOS Aside companion
   au-law-mcp --version | --help
 
 HTTP mode binds 127.0.0.1 by default. A non-loopback MCP_HTTP_HOST requires
@@ -88,6 +90,11 @@ async function main(): Promise<void> {
   if (args[0] === "setup") {
     const { runSetup } = await import("./setup.js")
     await runSetup()
+    return
+  }
+  if (args[0] === "setup-followup") {
+    const { runFollowupSetup } = await import("./followup-setup.js")
+    await runFollowupSetup(args.slice(1))
     return
   }
   if (args.includes("--help") || args.includes("-h")) {

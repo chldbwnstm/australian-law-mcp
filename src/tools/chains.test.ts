@@ -76,7 +76,18 @@ const {
   detectDisputeDomain,
   detectExpansions,
   extractSearchHints,
+  wrapResult,
 } = await import("./chains.js")
+
+describe("chain structured follow-up", () => {
+  it("preserves source gaps and cumulative omission counts", () => {
+    const gap = { id: "gap_chain", kind: "coverage" as const, originTool: "source", target: {}, reason: "partial", sourceUrls: [], sourceAccess: "unknown" as const, evidenceNeeded: ["rest"] }
+    const result = wrapResult("partial", { text: "a", isError: false, followup: { schemaVersion: "1.0", gaps: [gap], pending: true, omittedGapCount: 3 } }, { text: "b", isError: false, followup: { schemaVersion: "1.0", gaps: [], pending: true, omittedGapCount: 2 } })
+    expect(result.structuredContent?.followup.gaps).toContainEqual(gap)
+    expect(result.structuredContent?.followup.omittedGapCount).toBe(5)
+    expect(result.structuredContent?.followup.pending).toBe(true)
+  })
+})
 
 const client = {} as AuApiClient
 const CCA = { registerId: "C2004A00109", name: "Competition and Consumer Act 2010", collection: "Act", status: "InForce" }

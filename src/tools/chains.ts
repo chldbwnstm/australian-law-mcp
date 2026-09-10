@@ -29,6 +29,7 @@ import { ErrorCodes, formatToolError } from "../lib/errors.js"
 import { truncateSections } from "../lib/schemas.js"
 import { getRequestSignal, runWithRequestContext, throwIfRequestCancelled } from "../lib/session-state.js"
 import type { LooseToolResponse, ToolResponse } from "../lib/types.js"
+import { followupEnvelope, makeGap, mergeGaps, type FollowupEnvelope } from "../lib/research-followup.js"
 import {
   raceDeadline,
   startChainDeadline,
@@ -81,6 +82,7 @@ const chainQuery = (description: string) => z.string().min(2).max(MAX_CHAIN_QUER
 export interface CallResult {
   text: string
   isError: boolean
+  followup?: FollowupEnvelope
 }
 
 type Handler = (apiClient: AuApiClient, input: never) => Promise<LooseToolResponse>
@@ -101,7 +103,7 @@ async function callTool(
     throwIfRequestCancelled()
     const result = await handler(apiClient, input as never)
     throwIfRequestCancelled()
-    return { text: result.content?.[0]?.text ?? "", isError: !!result.isError }
+    return { text: result.content?.[0]?.text ?? "", isError: !!result.isError, ...(result.structuredContent?.followup ? { followup: result.structuredContent.followup } : {}) }
   } catch (error) {
     if (getRequestSignal()?.aborted) throw error
     return { text: `Error: ${error instanceof Error ? error.message : String(error)}`, isError: true }
@@ -132,8 +134,14 @@ function clip(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max)}…`
 }
 
-function wrapResult(text: string): ToolResponse {
-  return { content: [{ type: "text", text: truncateSections(text) }] }
+export function wrapResult(text: string, ...results: Array<CallResult | CallResult[] | null | undefined>): ToolResponse {
+  const envelopes = results.flatMap((result) => Array.isArray(result) ? result : result ? [result] : []).map((result) => result.followup).filter((value): value is FollowupEnvelope => !!value)
+  const gaps = mergeGaps(...envelopes.map((envelope) => envelope.gaps))
+  const omittedGapCount = envelopes.reduce((sum, envelope) => sum + (envelope.omittedGapCount ?? 0), 0)
+  return {
+    content: [{ type: "text", text: truncateSections(text) }],
+    ...(gaps.length || omittedGapCount ? { structuredContent: { followup: followupEnvelope(gaps, { pending: true, ...(omittedGapCount ? { omittedGapCount } : {}) }) } } : {}),
+  }
 }
 
 function wrapError(error: unknown, toolName?: string): ToolResponse {
@@ -208,7 +216,12 @@ function noBaseLaw(query: string, base: ChainBaseLawResult): ToolResponse {
 
 /** Partial return when the deadline fired during the chain's groundwork. */
 function expiredChainResult(parts: string[]): ToolResponse {
-  return wrapResult([...parts, "", timedOutChainNotice()].join("\n"))
+  const gap = makeGap({
+    kind: "budget", originTool: "aggregate_chain", originalErrorCode: ErrorCodes.TIMEOUT,
+    target: {}, reason: "The aggregate chain deadline expired before all branches completed.", sourceUrls: [],
+    sourceAccess: "unknown", evidenceNeeded: ["The branches not reached before the deadline"],
+  })
+  return { content: [{ type: "text", text: truncateSections([...parts, "", timedOutChainNotice()].join("\n")) }], structuredContent: { followup: followupEnvelope([gap], { pending: true }) } }
 }
 
 /**
@@ -372,7 +385,7 @@ export async function chainLawSystem(
         ),
       )
     }
-    return wrapResult(parts.join("\n"))
+    return wrapResult(parts.join("\n"), threeTier, provisions, schedules)
   } catch (error) {
     return wrapError(error, "chain_law_system")
   }
@@ -457,7 +470,7 @@ export async function chainActionBasis(
         parts.push(secOrSkip("Schedules (penalties, fees)", schedules.value))
       }
 
-      return wrapResult(parts.join("\n"))
+      return wrapResult(parts.join("\n"), threeTier.ok ? threeTier.value : undefined, rulings.searchO.ok ? rulings.searchO.value : undefined, rulings.detailO.ok ? rulings.detailO.value : undefined, cases.searchO.ok ? cases.searchO.value : undefined, cases.detailO.ok ? cases.detailO.value : undefined, appeals.searchO.ok ? appeals.searchO.value : undefined, appeals.detailO.ok ? appeals.detailO.value : undefined, schedules.ok ? schedules.value : undefined)
     })
   } catch (error) {
     if (deadline?.expired()) return expiredChainResult(parts)
@@ -574,7 +587,7 @@ export async function chainDisputePrep(
             "anything in the search result saying so.",
         ),
       )
-      return wrapResult(parts.join("\n"))
+      return wrapResult(parts.join("\n"), cases.searchO.ok ? cases.searchO.value : undefined, cases.detailO.ok ? cases.detailO.value : undefined, appeals.searchO.ok ? appeals.searchO.value : undefined, appeals.detailO.ok ? appeals.detailO.value : undefined, specialist?.searchO.ok ? specialist.searchO.value : undefined, specialist?.detailO.ok ? specialist.detailO.value : undefined)
     })
   } catch (error) {
     if (deadline?.expired()) return expiredChainResult(parts)
@@ -647,7 +660,7 @@ export async function chainAmendmentTrack(
         ),
       )
     }
-    return wrapResult(parts.join("\n"))
+    return wrapResult(parts.join("\n"), diff, history)
   } catch (error) {
     return wrapError(error, "chain_amendment_track")
   }
@@ -746,7 +759,7 @@ export async function chainStateLawCompare(
           "link-only here — their registers are not searched, which is not evidence that they have no counterpart.",
       ),
     )
-    return wrapResult(parts.join("\n"))
+    return wrapResult(parts.join("\n"), equivalents, searches)
   } catch (error) {
     return wrapError(error, "chain_state_law_compare")
   }
@@ -860,7 +873,7 @@ export async function chainFullResearch(
           )
         }
       }
-      return wrapResult(parts.join("\n"))
+      return wrapResult(parts.join("\n"), aiResult, cases.searchO.ok ? cases.searchO.value : undefined, cases.detailO.ok ? cases.detailO.value : undefined, rulings.searchO.ok ? rulings.searchO.value : undefined, rulings.detailO.ok ? rulings.detailO.value : undefined)
     })
   } catch (error) {
     if (deadline?.expired()) return expiredChainResult(parts)
@@ -935,7 +948,7 @@ export async function chainProcedureDetail(
           "payable today. Check the compilation date shown above against the current indexation instrument.",
       ),
     )
-    return wrapResult(parts.join("\n"))
+    return wrapResult(parts.join("\n"), actSchedules, instruments)
   } catch (error) {
     return wrapError(error, "chain_procedure_detail")
   }
@@ -991,7 +1004,7 @@ export async function chainDocumentReview(
             "the triage above.",
         ),
       )
-      return wrapResult(parts.join("\n"))
+      return wrapResult(parts.join("\n"), analysis)
     }
 
     const [laws, cases] = await Promise.all([
@@ -1014,7 +1027,7 @@ export async function chainDocumentReview(
           "state Act that was never searched.",
       ),
     )
-    return wrapResult(parts.join("\n"))
+    return wrapResult(parts.join("\n"), analysis, laws, cases)
   } catch (error) {
     return wrapError(error, "chain_document_review")
   }
