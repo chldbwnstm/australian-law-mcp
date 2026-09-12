@@ -44,7 +44,7 @@ import { absoluteUrl, blockTextOf, firstText, links as htmlLinks } from "../lib/
 import { interleave, renderDocument, renderSearch } from "../lib/sources/render.js"
 import type { SourceDocument, SourceHit, SourceSearchResult } from "../lib/sources/types.js"
 import { truncateResponse } from "../lib/schemas.js"
-import { asideStatus, fetchViaAside } from "../lib/sources/aside-browser.js"
+import { asidePageFailure, asideStatus, fetchViaAside } from "../lib/sources/aside-browser.js"
 import { sourceDocumentResponse } from "./source-document.js"
 import { followupEnvelope, makeGap } from "../lib/research-followup.js"
 
@@ -347,13 +347,18 @@ const MAX_ASIDE_ATTEMPTS = 2
 
 type AsideFetch = { url: string; html: string } | { failures: string[] }
 
-async function fetchFirstViaAside(urls: string[]): Promise<AsideFetch> {
+async function fetchFirstViaAside(urls: string[], validate?: (html: string) => string | undefined): Promise<AsideFetch> {
   const failures: string[] = []
   for (const url of urls.slice(0, MAX_ASIDE_ATTEMPTS)) {
     try {
       const html = await bridge().fetchViaAside(url)
       if (!html || html.trim().length === 0) {
         failures.push(`${url} → the browser returned an empty page`)
+        continue
+      }
+      const failure = asidePageFailure(html) ?? validate?.(html)
+      if (failure) {
+        failures.push(`${url} → ${failure}`)
         continue
       }
       return { url, html }
@@ -388,14 +393,19 @@ async function judgmentViaAside(p: {
   if (!asideState().enabled) return undefined
   const urls = judgmentUrls(p.citation)
   if (urls.length === 0) return { failures: ["no judgment URL could be built for this citation"] }
-  const fetched = await fetchFirstViaAside(urls)
+  const fetched = await fetchFirstViaAside(urls, html => {
+    const text = blockTextOf(html)
+    if (text.length < MIN_ASIDE_BODY_CHARS) {
+      return `the page carried ${text.length} characters of text, too little to be the reasons`
+    }
+    const normalizeCitation = (value: string) => value.replace(/[\s.]/g, "").toUpperCase()
+    if (!normalizeCitation(text).includes(normalizeCitation(p.citation))) {
+      return "the page did not identify the requested citation; it was not accepted as the judgment"
+    }
+    return undefined
+  })
   if ("failures" in fetched) return fetched
   const text = blockTextOf(fetched.html)
-  if (text.length < MIN_ASIDE_BODY_CHARS) {
-    // A short body here is the anti-bot interstitial, not a short judgment.
-    // Reporting it as the decision would be worse than reporting the block.
-    return { failures: [`${fetched.url} → the page carried ${text.length} characters of text, too little to be the reasons`] }
-  }
   const doc: SourceDocument = {
     title: pageTitle(fetched.html) ?? p.citation,
     citation: p.citation,

@@ -77,6 +77,12 @@ describe("citator and search links", () => {
 })
 
 describe("court and document links", () => {
+  it("uses the Full Court directory while retaining FCAFC in the filename", () => {
+    expect(fedCourtJudgmentUrl(2020, 130, "fcafc")).toBe(
+      "https://www.judgments.fedcourt.gov.au/judgments/Judgments/fca/full/2020/2020fcafc0130",
+    )
+  })
+
   it("pads Federal Court judgment numbers to four digits", () => {
     expect(fedCourtJudgmentUrl(2020, 1)).toBe(
       "https://www.judgments.fedcourt.gov.au/judgments/Judgments/fca/single/2020/2020fca0001",

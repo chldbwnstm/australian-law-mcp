@@ -6,6 +6,40 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- Build Federal Court Full Court judgment links under `fca/full`, retaining
+  `fcafc` in the filename. `[2020] FCAFC 130` previously went to the nonexistent
+  `fcafc/single` path; ordinary FCA links still use `fca/single`.
+- Reject publisher error pages, including long 404 pages full of navigation,
+  before returning browser results as judgment reasons. Reject short shells
+  and pages without the requested citation before trying the next permitted
+  judgment URL. Unsuccessful retrieval remains `[UPSTREAM_BLOCKED]`, not a
+  finding that the case does not exist.
+- Extract statute content claims from leading pinpoints, markdown emphasis,
+  and wording such as "Under CCA s 18, a corporation must not engage in
+  misleading or deceptive conduct." A later, different claim about an already
+  seen section is checked separately rather than discarded as a duplicate.
+- Rank alternative headings using word coverage as well as character similarity.
+  With the full CCA table of contents, a long misleading-conduct sentence could
+  otherwise prefer the consumer-data offence in s 56BN over ACL sch 2 s 18.
+  An unmentioned qualifier such as "offence" now reduces that candidate's rank.
+- Resolve `s 82 of the Act` as well as `the Act s 82` within a paragraph,
+  respecting both LF and Windows CRLF paragraph breaks. Resolving the Act does
+  not itself establish the provision's application to schedule claims.
+- Keep existence-only statute checks `PARTIALLY_VERIFIED` and label their scope.
+  A legal proposition whose topic matches a heading remains unverified against
+  the provision's body. The tool description and README now explain this scope.
+
+### Verification correction
+
+- The v1.0.3 release note claimed that `[2020] FCAFC 130` returned 93,916
+  characters in 1.7 seconds. That claim did not establish a working
+  `get_case_text(citation="[2020] FCAFC 130")` path in the released version:
+  its URL builder and regression test both used the wrong Full Court directory.
+  Treat that timing and character count as unsubstantiated validation of the
+  released tool. The v1.0.3 installer does not contain the fixes above.
+
 ## [1.0.3] - 2026-09-12
 
 ### Fixed

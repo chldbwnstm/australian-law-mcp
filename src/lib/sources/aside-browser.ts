@@ -55,6 +55,7 @@ import {
   requestContext,
 } from "../session-state.js"
 import { BROWSER_FALLBACK_DOMAINS, isBrowserFallbackHost } from "../upstream-hosts.js"
+import { blockTextOf } from "./html.js"
 
 /** Opt-in switch. Off unless set to one of `ENABLED_VALUES`. */
 export const ASIDE_ENABLED_ENV = "AU_LAW_ASIDE"
@@ -351,6 +352,18 @@ export function looksLikeBotChallenge(html: string): boolean {
   return CHALLENGE_MARKERS.some((pattern) => pattern.test(html))
 }
 
+/** Classify page-level failures, without matching error text quoted in reasons. */
+export function asidePageFailure(html: string): string | undefined {
+  if (looksLikeBotChallenge(html)) return "a bot-verification page instead of the document"
+  const errorHeading = /^(?:(?:http(?: error)?|error)\s*[:–—-]?\s*)?(?:403|404|410|500|502|503|504)\b|^(?:(?:page|document|resource|file)\s+not\s+found|not\s+found|access\s+denied|forbidden|service\s+unavailable|internal\s+server\s+error|bad\s+gateway|gateway\s+timeout)(?:$|[\s:|–—-])/i
+  for (const match of html.matchAll(/<(title|h1)\b[^>]*>([\s\S]*?)<\/\1\s*>/gi)) {
+    if (errorHeading.test(blockTextOf(match[2]).trim())) return "a publisher error page instead of the requested document"
+  }
+  // Some browser payloads contain plain page text without title/h1 markup.
+  if (errorHeading.test(blockTextOf(html).trim())) return "a publisher error page instead of the requested document"
+  return undefined
+}
+
 /**
  * How long the page is given to get past a gate before it is read.
  *
@@ -607,13 +620,14 @@ export async function fetchViaAside(url: string, opts: FetchViaAsideOptions = {}
       ],
     )
   }
-  if (looksLikeBotChallenge(html)) {
+  const pageFailure = asidePageFailure(html)
+  if (pageFailure) {
     // The snippet already waited this out for as long as it is worth waiting.
     // Still a gate, so the browser did not get through this time — which is a
     // different fact from the record being absent, and from the page being read.
     throw new UpstreamBlockedError(
       "the browser fallback",
-      `the publisher served a bot-verification page instead of the document at ${shown}, and it did not clear`,
+      `the publisher served ${pageFailure} at ${shown}; the requested source was not retrieved`,
       [target],
     )
   }

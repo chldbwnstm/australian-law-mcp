@@ -43,6 +43,25 @@ describe("preferredStatuteName", () => {
 })
 
 describe("extractStatuteCitations", () => {
+  it("resolves a following 'of the Act' within its paragraph", () => {
+    const [cite] = extractStatuteCitations(
+      "The Competition and Consumer Act 2010 (Cth) applies. Damages are sought under s 82 of the Act.", 5,
+    )
+    expect(cite).toMatchObject({ lawName: "Competition and Consumer Act", year: 2010, jurisdiction: "Cth", pinpoint: "s 82", attachedBy: "anaphora" })
+    expect(cite.ref.schedule).toBeUndefined()
+  })
+
+  it.each(["\n\n", "\r\n\r\n", "\r\n \t\r\n"])("does not resolve a following anaphora across a paragraph: %j", separator => {
+    const [cite] = extractStatuteCitations(`The Competition and Consumer Act 2010 (Cth) applies.${separator}See s 82 of the Act.`, 5)
+    expect(cite.attachedBy).toBe("anaphora")
+    expect(cite.lawName).toBeUndefined()
+  })
+
+  it("reads a claim after the Act named following a pinpoint", () => {
+    const [cite] = extractStatuteCitations("Section 18 of the Competition and Consumer Act 2010 (Cth) prohibits misleading or deceptive conduct.", 5)
+    expect(cite.claim).toBe("misleading or deceptive conduct")
+  })
+
   it("reads a canonical AGLC citation with its jurisdiction", () => {
     const [cite] = extractStatuteCitations("See Competition and Consumer Act 2010 (Cth) s 18 for the rule.", 5)
     expect(cite.lawName).toContain("Competition and Consumer Act")

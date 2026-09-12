@@ -4,7 +4,7 @@ import type { AuApiClient } from "../lib/api-client.js"
 import { lawCache } from "../lib/cache.js"
 import { ErrorCodes, LawApiError } from "../lib/errors.js"
 import { parseNcx } from "../lib/ncx-parser.js"
-import type { FrlTitle } from "../lib/types.js"
+import type { FrlTitle, NcxEntry } from "../lib/types.js"
 import { verifyCitations } from "./verify-citations.js"
 
 const ENTRIES = parseNcx(readFileSync(new URL("./__fixtures__/cca-schedules.ncx", import.meta.url), "utf8"))
@@ -22,6 +22,7 @@ const CCA: FrlTitle = {
 }
 
 interface ClientOptions {
+  toc?: NcxEntry[]
   tocError?: Error
   searchError?: Error
   html?: (host: string, path: string) => string
@@ -38,7 +39,7 @@ function client(options: ClientOptions = {}): AuApiClient {
     getTitle: async () => CCA,
     getToc: async () => {
       if (options.tocError) throw options.tocError
-      return ENTRIES
+      return options.toc ?? ENTRIES
     },
     fetchHtml: async (host: string, path: string) => {
       if (!options.html) throw new LawApiError(`no fixture for ${host}`, ErrorCodes.API_ERROR)
@@ -55,6 +56,43 @@ async function run(text: string, options?: ClientOptions): Promise<string> {
 beforeEach(() => lawCache.clear())
 
 describe("verify_citations — the flagship ACL trap", () => {
+  // These competing headings occur in the real CCA TOC (checked 2026-09-12).
+  // The small schedule fixture omitted them, hiding a wrong redirect to s 56BN.
+  const withConsumerDataSections: NcxEntry[] = [
+    { label: "56BN Misleading or deceptive conduct—offence", volumeDoc: "document_2/document_2.html", order: 778, depth: 6 },
+    { label: "56BO Misleading or deceptive conduct—civil penalty", volumeDoc: "document_2/document_2.html", order: 779, depth: 6 },
+    ...ENTRIES,
+  ]
+  it.each([
+    "Under the Competition and Consumer Act 2010 (Cth) s 18, a corporation must not, in trade or commerce, engage in conduct that is misleading or deceptive.",
+    "Under the Competition and Consumer Act 2010 (Cth) **s 18**, misleading or deceptive conduct is prohibited.",
+    "Section 18 of the Competition and Consumer Act 2010 (Cth) prohibits misleading or deceptive conduct.",
+    "Competition and Consumer Act 2010 (Cth) s 18 applies. CCA s 18 prohibits misleading or deceptive conduct.",
+  ])("checks the proposition in natural draft wording: %s", async draft => {
+    const text = await run(draft, { toc: withConsumerDataSections })
+    expect(text).toContain("[CITATION_ERRORS_FOUND]")
+    expect(text).toContain("CONTENT_MISMATCH")
+    expect(text).toContain("sch 2 s 18")
+    expect(text).not.toContain("is s 56BN")
+  })
+
+  it("uses an offence qualifier when the draft actually supplies it", async () => {
+    const text = await run("CCA s 18 (misleading or deceptive conduct offence).", { toc: withConsumerDataSections })
+    expect(text).toContain("is s 56BN")
+  })
+
+  it("does not certify a body's legal proposition merely because its topic matches a heading", async () => {
+    const text = await run("Under ACL s 18, a corporation must not engage in misleading or deceptive conduct.")
+    expect(text).toContain("[PARTIALLY_VERIFIED]")
+    expect(text).not.toContain("✓ ACL s 18")
+    expect(text).toContain("proposition")
+  })
+
+  it("keeps a repeated section's different claim in the check", async () => {
+    const text = await run("CCA s 18 applies. CCA s 18 prohibits misleading or deceptive conduct.")
+    expect(text).toContain("[CITATION_ERRORS_FOUND]")
+  })
+
   it("names the provision the writer actually meant", async () => {
     const text = await run("CCA s 18 prohibits misleading or deceptive conduct.")
     expect(text).toContain(
@@ -84,6 +122,14 @@ describe("verify_citations — the flagship ACL trap", () => {
 })
 
 describe("verify_citations — statutes", () => {
+  it("keeps existence-only checks from green-lighting unexamined prose", async () => {
+    const text = await run("CCA s 18 applies to all misleading conduct.")
+    expect(text).toContain("[PARTIALLY_VERIFIED]")
+    expect(text).not.toContain("[VERIFIED] Citation check")
+    expect(text).toContain("1 statute citation(s) have existence-only")
+    expect(text).toContain("no content claim was extracted or checked")
+  })
+
   it("reports a section the compilation does not contain, with the real range", async () => {
     const text = await run("See Competition and Consumer Act 2010 (Cth) s 4242 for the answer.")
     expect(text).toContain("✗ NOT_FOUND")

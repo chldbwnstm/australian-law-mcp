@@ -1,5 +1,73 @@
 # Live verification log
 
+## 2026-09-12 — FCAFC URLs and citation checks, unreleased fixes after v1.0.3
+
+Environment: macOS 26.6.2, Node 22.11.0, local Aside CLI. This records the
+working-tree fixes listed under **Unreleased** in `CHANGELOG.md`, not the
+v1.0.3 installer. Browser availability depends on the user's session.
+
+| Check | Observed result |
+|---|---|
+| `npm test` | 2,710 passed across 115 files; 18 live-gated tests skipped |
+| `npm run typecheck`, `npm run build`, `npm run verify:stdio` | Passed; the built server advertised its 10 tools over stdio |
+| Actual MCP `get_case_text`, `[2020] FCAFC 130`, `full: true`, `AU_LAW_ASIDE=true` | Returned the TPG judgment title and reasons from the Federal Court's `fca/full` URL; 5,397 ms including server startup; 49,121 characters in the **returned text**, with `[TRUNCATED]` and a structured follow-up gap |
+| Actual MCP `legal_analysis`, `mode: verify_citations`, draft below | Returned `CONTENT_MISMATCH` for CCA s 18 and suggested the heading at `sch 2 s 18`; resolved `s 82 of the Act` to the CCA; 2,265 ms including server startup |
+
+The judgment check used the built server's public MCP handler, including URL
+construction and the actual Aside bridge. It did not supply a manually corrected
+URL to the browser. The returned document contained the case title, court
+metadata, orders, and numbered reasons. The source was:
+
+<https://www.judgments.fedcourt.gov.au/judgments/Judgments/fca/full/2020/2020fcafc0130>
+
+This establishes retrieval in this local run. It does not establish complete
+delivery of the reasons: the MCP transport limit truncated the response. No
+verification of `(2020) 381 ALR 507`, particular cited paragraphs, or the draft's
+remaining legal conclusions is claimed here.
+
+The citation-check input was representative wording from the tester's report;
+the tester's full original draft was not available:
+
+> Under the Competition and Consumer Act 2010 (Cth) s 18, a corporation must not, in trade or commerce, engage in conduct that is misleading or deceptive. Damages are sought under s 82 of the Act.
+
+The s 82 result is explicitly **existence only**. The tool did not verify that
+this remedy applies to the preceding claim. Matching a provision heading does
+not verify the subject, conditions, exceptions, or legal effect of its body.
+
+The first live run caught a defect the smaller fixture missed: the alternative
+heading matcher chose consumer-data offence s 56BN for that long sentence.
+Regression inputs now include both s 56BN and s 56BO, and heading ranking
+penalises qualifiers absent from the draft. The final live MCP run selected
+`sch 2 s 18` and still marked the full legal proposition as unverified.
+
+To repeat the public MCP calls from a built checkout on a Mac with Aside:
+
+```sh
+npm run build
+AU_LAW_ASIDE=true node --input-type=module <<'JS'
+import { speakMcp } from './scripts/mcp-stdio.mjs';
+const requests = [
+  { name: 'get_case_text', arguments: { citation: '[2020] FCAFC 130', full: true } },
+  { name: 'legal_analysis', arguments: {
+    mode: 'verify_citations',
+    text: 'Under the Competition and Consumer Act 2010 (Cth) s 18, a corporation must not, in trade or commerce, engage in conduct that is misleading or deceptive. Damages are sought under s 82 of the Act.'
+  } }
+];
+for (const params of requests) {
+  const { responses } = await speakMcp(process.cwd(), 220000, { method: 'tools/call', params });
+  console.log(JSON.stringify(responses.get(3), null, 2));
+}
+JS
+```
+
+The former v1.0.3 release-note claim of 93,916 characters in 1.7 seconds does
+not substantiate that released tool's citation route: its URL builder and test
+used `fcafc/single`. It is withdrawn as validation of that route. The figures
+above describe separate calls against the corrected source, with their scope
+and truncation stated explicitly.
+
+---
+
 ## 2026-09-09 — repository verification, 1.0.0 working tree
 
 Environment: Windows, Node 22.14.0. This pass includes the unreleased fixes in

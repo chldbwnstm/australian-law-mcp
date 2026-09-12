@@ -288,6 +288,23 @@ describe("the repl snippet", () => {
 })
 
 describe("fetchViaAside", () => {
+  it.each([
+    "<title>Page Not Found</title><h1>Page Not Found</h1>",
+    "<title>Federal Court</title><h1>404 - Page not found</h1>",
+    "<title>403 Forbidden</title>",
+    "<h1>Service unavailable</h1>",
+    "404 Not Found\n",
+  ])("rejects a publisher error page regardless of navigation length: %s", async heading => {
+    const { runner } = stubRunner({ stdout: `${heading}<nav>${"Navigation. ".repeat(200)}</nav>` })
+    await expect(fetchViaAside(FED_COURT, { ...enabledHost, runner })).rejects.toThrow(/error page/)
+  })
+
+  it("keeps a document that quotes a page-not-found message in its body", async () => {
+    const page = "<title>Smith v Commonwealth [2019] FCA 12</title><p>The website displayed Page Not Found and error 404.</p>"
+    const { runner } = stubRunner({ stdout: page })
+    await expect(fetchViaAside(FED_COURT, { ...enabledHost, runner })).resolves.toBe(page)
+  })
+
   it("returns the page HTML from the CLI's stdout", async () => {
     const { runner, calls } = stubRunner({ stdout: "  <html>fca</html>\n" })
     await expect(fetchViaAside(FED_COURT, { ...enabledHost, runner })).resolves.toBe("<html>fca</html>")

@@ -71,10 +71,11 @@ export function lawCiteUrl(citation: string): string {
   return `${base("lawcite")}/cgi-bin/LawCite?cit=${encodeURIComponent(citation)}`
 }
 
-/** Federal Court single-judgment page, e.g. [2020] FCA 1 (host is Cloudflare-blocked server-side). */
+/** Federal Court judgment: FCA uses fca/single; FCAFC uses fca/full. */
 export function fedCourtJudgmentUrl(year: number, num: number, court: "fca" | "fcafc" = "fca"): string {
   const padded = String(num).padStart(4, "0")
-  return `${base("fedcourt")}/judgments/Judgments/${court}/single/${year}/${year}${court}${padded}`
+  const bench = court === "fcafc" ? "full" : "single"
+  return `${base("fedcourt")}/judgments/Judgments/fca/${bench}/${year}/${year}${court}${padded}`
 }
 
 /** NSW legislation in-force view, act-YYYY-NNN addressing. */

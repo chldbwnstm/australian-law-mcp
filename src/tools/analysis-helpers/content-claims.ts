@@ -15,7 +15,7 @@
  * `citation-content-matcher.ts` against the Register's own heading.
  */
 
-export type ClaimSource = "parenthetical" | "dash" | "titled" | "verb" | "preceding"
+export type ClaimSource = "parenthetical" | "dash" | "titled" | "verb" | "preceding" | "proposition"
 
 export interface ContentClaim {
   text: string
@@ -29,7 +29,7 @@ const STOPWORDS = new Set([
   "which", "who", "whom", "not", "no", "but", "if", "then", "there", "their",
 ])
 
-const MAX_CLAIM_CHARS = 90
+const MAX_CLAIM_CHARS = 180
 
 /** Verbs a writer uses when saying what a provision does. */
 const CLAIM_VERBS =
@@ -49,6 +49,10 @@ const TITLED =
 const VERB = new RegExp(`^[\\s,]{0,4}(?:which |that |and )?(?:${CLAIM_VERBS})\\s+([^.;\n]{3,${MAX_CLAIM_CHARS}})`, "i")
 /** `s 18 makes misleading or deceptive conduct unlawful` */
 const MAKES = /^[\s,]{0,4}(?:which |that |and )?makes?\s+([^.;\n]{3,60}?)\s+(?:unlawful|an offence|actionable|void|voidable)\b/i
+
+/** "Under s 18, a corporation must not ..." states more than a heading's topic. */
+const PROPOSITION = /^[\s,]{0,6}((?:a|an|the|any|each|every|no)\s+[^.;:\n]{1,70}?\b(?:must|shall|may|cannot|can)\b[^.;:\n]{3,170})/i
+const STATES = new RegExp(`^[\\s,]{0,4}(?:provides|states|says)\\s+(?:that\\s+)?([^.;\n]{3,${MAX_CLAIM_CHARS}})`, "i")
 
 /** Past participles a writer uses when saying, in the passive, what a provision does. */
 const PASSIVE_PARTICIPLES =
@@ -112,6 +116,8 @@ function isDescriptive(value: string): boolean {
  * is the text preceding the whole citation.
  */
 export function extractContentClaim(before: string, after: string): ContentClaim | undefined {
+  // Closing markdown emphasis belongs to the citation, not the next clause.
+  after = after.replace(/[*_`]/g, "")
   const ordered: Array<[ClaimSource, RegExpExecArray | null]> = [
     ["parenthetical", PARENTHETICAL.exec(after)],
     ["titled", TITLED.exec(after)],
@@ -121,6 +127,8 @@ export function extractContentClaim(before: string, after: string): ContentClaim
     // Last of the `after` shapes: an active-voice description immediately after
     // the pinpoint is the stronger evidence, so it wins where both could match.
     ["verb", FOLLOWING_PASSIVE.exec(after)],
+    ["proposition", PROPOSITION.exec(after)],
+    ["proposition", STATES.exec(after)],
   ]
   for (const [source, match] of ordered) {
     if (!match) continue

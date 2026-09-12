@@ -332,6 +332,8 @@ const FULL_CITE_TAIL = new RegExp(
 
 /** `the Act`, `that Act`, `the same Act` — the pronoun forms. */
 const ANAPHORA_TAIL = /(?:^|[^A-Za-z])(?:the|that|this|said)\s+(?:same\s+|said\s+)?(Act|Code|Regulations|Rules)[\s,]{0,4}$/i
+/** The same pronouns after a pinpoint: "s 82 of the Act". */
+const ANAPHORA_LEAD = /^[\s,]{0,4}of\s+(?:the|that|this|said)\s+(?:same\s+|said\s+)?(Act|Code|Regulations|Rules)\b/i
 
 /** A named statute with no jurisdiction: `Crimes Act 1900`, `FW Act`. */
 const BARE_NAME_TAIL = new RegExp(
@@ -508,7 +510,7 @@ export function findShortForms(text: string, cites: readonly FullCite[]): Map<st
 
 /** True when a blank line separates the two offsets — the anaphora boundary. */
 function paragraphBroke(text: string, from: number, to: number): boolean {
-  return /\n[ \t]*\n/.test(text.slice(from, to))
+  return /\r?\n[ \t]*\r?\n/.test(text.slice(from, to))
 }
 
 interface Attribution {
@@ -519,6 +521,8 @@ interface Attribution {
   antecedent?: string
   /** Where in the source the citation begins, for building `raw`. */
   citeStart: number
+  /** A following statute/pronoun is part of the citation, not its content claim. */
+  citeEnd?: number
   /** Schedule the resolved alias forces onto the pinpoint (the ACL is CCA sch 2). */
   schedule?: string
 }
@@ -545,7 +549,7 @@ function attribute(
   cites: readonly FullCite[],
   shortForms: ReadonlyMap<string, FullCite>,
 ): Attribution {
-  const lookback = text.slice(Math.max(0, pinpointStart - LOOKBACK), pinpointStart)
+  const lookback = text.slice(Math.max(0, pinpointStart - LOOKBACK), pinpointStart).replace(/[*_`]+$/, "")
   const lookbackStart = Math.max(0, pinpointStart - LOOKBACK)
 
   const trailing = FULL_CITE_TAIL.exec(lookback)
@@ -561,7 +565,27 @@ function attribute(
     }
   }
 
-  const leading = OF_THE_LEAD.exec(text.slice(pinpointEnd, pinpointEnd + LOOKAHEAD))
+  const afterPinpoint = text.slice(pinpointEnd, pinpointEnd + LOOKAHEAD).replace(/^[*_`]+/, match => " ".repeat(match.length))
+  const pronoun = ANAPHORA_LEAD.exec(afterPinpoint)
+  // Resolve both word orders before the generic title scanner can swallow "Act".
+  if (pronoun || ANAPHORA_TAIL.test(lookback)) {
+    const citeEnd = pinpointEnd + (pronoun?.[0].length ?? 0)
+    const antecedent = lastCiteBefore(cites, pinpointStart)
+    if (antecedent && !paragraphBroke(text, antecedent.end, citeEnd)) {
+      return {
+        lawName: antecedent.name,
+        year: antecedent.year,
+        jurisdiction: antecedent.jurisdiction,
+        attachedBy: "anaphora",
+        antecedent: antecedent.raw,
+        citeStart: pinpointStart,
+        citeEnd,
+      }
+    }
+    return { attachedBy: "anaphora", citeStart: pinpointStart, citeEnd }
+  }
+
+  const leading = OF_THE_LEAD.exec(afterPinpoint)
   if (leading) {
     const abbreviation = leading[4]
     if (abbreviation && isKnownAlias(abbreviation)) {
@@ -569,6 +593,7 @@ function attribute(
         lawName: abbreviation,
         attachedBy: "leading-cite",
         citeStart: pinpointStart,
+        citeEnd: pinpointEnd + leading[0].length,
         ...(aliasSchedule(abbreviation) ? { schedule: aliasSchedule(abbreviation) } : {}),
       }
     }
@@ -581,26 +606,10 @@ function attribute(
         ...(leading[3] ? { jurisdiction: toJurisdiction(leading[3]) } : {}),
         attachedBy: "leading-cite",
         citeStart: pinpointStart,
+        citeEnd: pinpointEnd + leading[0].length,
         ...(aliasSchedule(name) ? { schedule: aliasSchedule(name) } : {}),
       }
     }
-  }
-
-  // Pronoun anaphora, before the bare-name reading: "That Act" would otherwise
-  // be captured as a statute called "That Act".
-  if (ANAPHORA_TAIL.test(lookback)) {
-    const antecedent = lastCiteBefore(cites, pinpointStart)
-    if (antecedent && !paragraphBroke(text, antecedent.end, pinpointStart)) {
-      return {
-        lawName: antecedent.name,
-        year: antecedent.year,
-        jurisdiction: antecedent.jurisdiction,
-        attachedBy: "anaphora",
-        antecedent: antecedent.raw,
-        citeStart: pinpointStart,
-      }
-    }
-    return { attachedBy: "anaphora", citeStart: pinpointStart }
   }
 
   const bare = BARE_NAME_TAIL.exec(lookback)
@@ -1048,7 +1057,7 @@ interface Located extends Span {
 
 /**
  * Every statute citation in the text, in order, de-duplicated by (law,
- * pinpoint) and capped at `maxCitations`.
+ * pinpoint, content claim) and capped at `maxCitations`.
  *
  * A multi-provision pinpoint becomes one citation per provision: "ss 45 and
  * 46" is two, "ss 45, 46, 47" is three. Reading only the first is the failure
@@ -1167,11 +1176,12 @@ export function extractStatuteCitations(text: string, maxCitations: number): Sta
     // one member's heading is how correct prose gets reported as a content
     // mismatch, which is the one verdict this server must never invent, so a
     // multi-provision pinpoint is checked for existence only.
+    const claimStart = Math.max(listEnd, attribution.citeEnd ?? listEnd)
     const claim =
       located.length === 1
         ? extractContentClaim(
             text.slice(Math.max(0, attribution.citeStart - 160), attribution.citeStart),
-            text.slice(listEnd, listEnd + 200),
+            text.slice(claimStart, claimStart + 240),
           )
         : undefined
     const prefix = text.slice(Math.min(attribution.citeStart, start), start)
@@ -1185,7 +1195,8 @@ export function extractStatuteCitations(text: string, maxCitations: number): Sta
         attribution.schedule && !entry.ref.schedule ? { ...entry.ref, schedule: attribution.schedule } : entry.ref
       const pinpoint = formatRef(effectiveRef)
 
-      const key = `${normaliseAliasKey(attribution.lawName ?? "")}|${attribution.jurisdiction ?? ""}|${pinpoint}`
+      // A repeated provision can carry a different (and wrong) assertion.
+      const key = `${normaliseAliasKey(attribution.lawName ?? "")}|${attribution.jurisdiction ?? ""}|${pinpoint}|${claim?.source ?? ""}|${claim?.text.toLowerCase() ?? ""}`
       if (seen.has(key)) {
         accounted.push({ start: entry.start, end: entry.end })
         continue
@@ -1196,7 +1207,7 @@ export function extractStatuteCitations(text: string, maxCitations: number): Sta
       // own ("46" alone is not a citation), so it is rebuilt from the
       // designation and schedule the writer put in front of the list.
       const written =
-        entry === located[0] ? text.slice(Math.min(attribution.citeStart, start), entry.end) : `${prefix}${entry.source}`
+        entry === located[0] ? text.slice(Math.min(attribution.citeStart, start), Math.max(entry.end, attribution.citeEnd ?? entry.end)) : `${prefix}${entry.source}`
 
       out.push({
         raw: written.replace(/[*_]/g, "").replace(/\s+/g, " ").trim(),

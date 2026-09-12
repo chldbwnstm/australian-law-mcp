@@ -144,7 +144,7 @@ describe("blockedCourtLinks", () => {
   })
 
   it("uses the Full Court path for FCAFC", () => {
-    expect(blockedCourtLinks("[2019] FCAFC 12")[0]).toContain("/fcafc/single/2019/2019fcafc0012")
+    expect(blockedCourtLinks("[2019] FCAFC 12")[0]).toContain("/fca/full/2019/2019fcafc0012")
   })
 
   it("still returns links for a citation it cannot parse", () => {
@@ -311,6 +311,52 @@ describe("the Aside browser fallback — off", () => {
 describe("the Aside browser fallback — on", () => {
   beforeEach(() => lawCache.clear())
 
+  const missingPage = `<html><title>Page Not Found</title><h1>Page Not Found</h1>
+    <nav>${"Court navigation and links to practice areas. ".repeat(40)}</nav></html>`
+
+  it("tries the correct FCAFC URL for an exact citation", async () => {
+    const url = "https://www.judgments.fedcourt.gov.au/judgments/Judgments/fca/full/2020/2020fcafc0130"
+    const stub = asideStub({ [url]: FCA_JUDGMENT_HTML.replaceAll("[2019] FCA 12", "[2020] FCAFC 130") })
+    setAsideBridge(stub)
+    const result = await getCaseText(noNetworkClient, { citation: "[2020] FCAFC 130" })
+    expect(result.isError).toBeUndefined()
+    expect(result.content[0].text).toContain("Reasons:")
+    expect(stub.urls).toEqual([url])
+  })
+
+  it("tries the second source when a long error page is returned first", async () => {
+    const stub = asideStub(async url => url.includes("fedcourt") ? missingPage : FCA_JUDGMENT_HTML)
+    setAsideBridge(stub)
+    const result = await getCaseText(noNetworkClient, { citation: "[2019] FCA 12" })
+    expect(result.isError).toBeUndefined()
+    expect(result.content[0].text).toContain("Reasons:")
+    expect(result.content[0].text).not.toContain("Court navigation")
+    expect(stub.urls).toHaveLength(2)
+  })
+
+  it("never renders an error page as reasons or claims the case is absent", async () => {
+    setAsideBridge(asideStub(async () => missingPage))
+    const result = await getCaseText(noNetworkClient, { citation: "[2019] FCA 12" })
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toContain("[UPSTREAM_BLOCKED]")
+    expect(result.content[0].text).not.toContain("Reasons:")
+    expect(result.content[0].text).not.toContain("Court navigation")
+    expect(result.content[0].text).not.toContain("[NOT_FOUND]")
+  })
+
+  it("does not pass a different judgment off as the requested one", async () => {
+    setAsideBridge(asideStub(async () => FCA_JUDGMENT_HTML))
+    const result = await getCaseText(noNetworkClient, { citation: "[2020] FCAFC 130" })
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).not.toContain("Reasons:")
+  })
+
+  it("does not treat a judgment discussing a 404 page as an error page", async () => {
+    setAsideBridge(asideStub(async () => FCA_JUDGMENT_HTML.replace("</body>", "<p>The website displayed Page Not Found and HTTP 404.</p></body>")))
+    const result = await getCaseText(noNetworkClient, { citation: "[2019] FCA 12" })
+    expect(result.isError).toBeUndefined()
+  })
+
   it("returns the judgment through the user's browser, marked as such", async () => {
     const stub = asideStub({
       "https://www.judgments.fedcourt.gov.au/judgments/Judgments/fca/single/2019/2019fca0012": FCA_JUDGMENT_HTML,
@@ -352,7 +398,7 @@ describe("the Aside browser fallback — on", () => {
     // be worse than returning the block.
     expect(text).toContain("[UPSTREAM_BLOCKED]")
     expect(text).toContain("the Aside browser fallback is on and was tried")
-    expect(text).toContain("too little to be the reasons")
+    expect(text).toContain("bot-verification page")
     expect(text).not.toContain("Browser fallback (off)")
   })
 

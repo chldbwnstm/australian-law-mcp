@@ -16,7 +16,7 @@
  * mean sch 2 s 18".
  */
 
-import { headingTitle, matchCitationContent } from "../../lib/citation-content-matcher.js"
+import { headingTitle, matchCitationContent, normalizeLegalText } from "../../lib/citation-content-matcher.js"
 import { ancestorsOf } from "../../lib/ncx-parser.js"
 import type { SectionRef } from "../../lib/section-ref.js"
 import type { NcxEntry } from "../../lib/types.js"
@@ -61,6 +61,19 @@ export interface HeadingMatch {
   score: number
 }
 
+const HEADING_FILLER = new Set(["a", "an", "the", "of", "or", "and", "to", "in", "on", "for", "with", "by", "as"])
+
+/** Penalise qualifiers the draft never supplied, such as "offence" or "civil penalty". */
+function headingWordCoverage(claim: string, heading: string): number {
+  const words = (value: string) => new Set(
+    (normalizeLegalText(value).match(/[a-z]+/g) ?? []).filter(word => !HEADING_FILLER.has(word)),
+  )
+  const claimWords = words(claim)
+  const headingWords = [...words(heading)]
+  if (headingWords.length === 0) return 0
+  return headingWords.filter(word => claimWords.has(word)).length / headingWords.length
+}
+
 /**
  * The provision in this Act whose heading best matches `claim`, excluding the
  * one already cited. Returns nothing unless a match actually clears the
@@ -79,7 +92,11 @@ export function bestHeadingMatch(
     if (!heading) continue
     const result = matchCitationContent(claim, heading)
     if (!result.matched) continue
-    if (best && result.score <= best.score) continue
+    // Bigrams alone ranked "Misleading or deceptive conduct—offence" above
+    // the unqualified heading for a long corporation/must-not sentence. Use
+    // whole words as a second signal, so an unmentioned qualifier costs rank.
+    const score = result.score * headingWordCoverage(claim, heading)
+    if (score < 0.25 || (best && score <= best.score)) continue
     const ref = refStringForEntry(entry)
     if (!ref) continue
     const schedule = scheduleOf(entry)
@@ -88,7 +105,7 @@ export function bestHeadingMatch(
       ref,
       heading,
       ...(schedule?.name ? { scheduleName: schedule.name } : {}),
-      score: result.score,
+      score,
     }
   }
   return best

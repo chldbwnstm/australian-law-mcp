@@ -58,8 +58,10 @@ export type VerifyCitationsInput = z.infer<typeof VerifyCitationsSchema>
 
 export const verifyCitationsDescription =
   "Check the legal citations in a block of text against the Federal Register and the reachable case-law sources. " +
-  "Catches invented sections, invented cases, and — the dangerous one — a real section cited for something it does " +
-  "not say (CCA s 18 is 'Meetings of Commission'; misleading or deceptive conduct is sch 2 s 18, the ACL). " +
+  "Checks existence and compares extracted descriptions with provision headings to flag mismatches " +
+  "(CCA s 18 is 'Meetings of Commission'; misleading or deceptive conduct is sch 2 s 18, the ACL). " +
+  "This is not a full semantic or applicability check of the provision's body. Unextracted claims remain " +
+  "existence-only checks and keep the report PARTIALLY_VERIFIED. " +
   "Handles AGLC form, markdown italics, 'the Act' anaphora within a paragraph, and citations with the jurisdiction " +
   "left off. Run this over any drafted advice before it is relied on. ✗ means the citation cannot be right; " +
   "⚠ means it could not be checked here and is NOT a finding that it is wrong.";
@@ -120,7 +122,7 @@ export async function verifyCitations(
             text:
               "[NO_CITATIONS_FOUND] No statute or case citations were found in this text.\n\n" +
               "Recognised forms: 'Competition and Consumer Act 2010 (Cth) s 18', '*Fair Work Act 2009* (Cth) s 394', " +
-              "'s 18 of the CCA', 'ACL s 18', 'the Act s 394' (after a full citation in the same paragraph), " +
+              "'s 18 of the CCA', 'ACL s 18', 's 394 of the Act' or 'the Act s 394' (after a full citation in the same paragraph), " +
               "'[2020] HCA 41', '(1992) 175 CLR 1'.\n\n" +
               "⚠️ This is NOT a clean bill of health. Nothing was checked because nothing was found to check. " +
               "Do not report the text as verified.",
@@ -165,6 +167,7 @@ export async function verifyCitations(
 
     const statuteTally = tally(statuteVerdicts.map((verdict) => verdict.mark))
     const caseTally = tally(caseVerdicts.map((verdict) => verdict.mark))
+    const existenceOnly = statuteVerdicts.filter((verdict) => verdict.existenceOnly).length
     const impossible =
       statuteVerdicts.filter((verdict) => verdict.impossible).length +
       caseVerdicts.filter((verdict) => verdict.impossible).length
@@ -175,7 +178,7 @@ export async function verifyCitations(
         : // Citations left unchecked at the cap are exactly as unverified as a
           // blocked source's: a text this tool only read the first part of has
           // not been verified, and [VERIFIED] would say it had.
-          skipped > 0 || statuteTally.warn + caseTally.warn > 0
+          skipped > 0 || existenceOnly > 0 || statuteTally.warn + caseTally.warn > 0
           ? "[PARTIALLY_VERIFIED]"
           : "[VERIFIED]"
 
@@ -200,6 +203,12 @@ export async function verifyCitations(
         `✓ ${caseTally.ok} verified | ✗ ${caseTally.bad} cannot be right | ` +
         `⚠ ${caseTally.warn + skippedCases.length} not checked here`,
     )
+    if (existenceOnly > 0) {
+      lines.push(
+        `⚠️ Scope: ${existenceOnly} statute citation(s) have existence-only ✓ checks. No content claim was ` +
+          "extracted or checked for them; the draft's propositions have not passed verification.",
+      )
+    }
     if (skipped > 0) {
       lines.push(
         `⚠️ NOT CHECKED: ${skipped} citation(s) in this text were never looked at — this call checks at most ` +
@@ -238,10 +247,14 @@ export async function verifyCitations(
     if (statuteTally.warn + caseTally.warn > 0) {
       lines.push(
         `ℹ️ ${statuteTally.warn + caseTally.warn} citation(s) carry ⚠: unclear jurisdiction, state legislation, a ` +
-          "blocked source, or an upstream failure. ⚠ is NOT a finding that the citation is wrong — it means this " +
+          "blocked source, an upstream failure, or an unverified legal proposition. ⚠ is NOT a finding that the citation is wrong — it means this " +
           "server did not establish either way. Say so rather than implying they passed.",
       )
     }
+    lines.push(
+      "Scope: statute content checks compare extracted descriptions with headings, not the full provision text. " +
+        "A heading match does not establish who a provision applies to, its exceptions, available remedies, or whether a draft's legal conclusion follows.",
+    )
     lines.push(
       "Coverage: Commonwealth legislation via the Federal Register; case law via NSW Caselaw, Queensland Judgments " +
         "and the High Court's own list only. Federal Court, Victorian, SA, WA, Tasmanian, ACT and NT judgments, and " +

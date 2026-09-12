@@ -430,6 +430,8 @@ Statute citations: 2 | ✓ 0 verified | ✗ 2 cannot be right | ⚠ 0 not checke
 
 Both citations are of real Acts. One section exists but says something else; the other does not exist. An existence-only checker catches the second and ticks the first.
 
+The content check compares descriptions it can extract with the Register's **provision headings**. It does not verify every legal proposition against the full provision text. An existence-only check is labelled explicitly and keeps the report `PARTIALLY_VERIFIED`; matching a heading does not establish who the law applies to or which remedy is available. Use `get_law_text` to read those details. Both `the Act s 82` and `s 82 of the Act` resolve to the preceding named Act within the same paragraph, without assuming a schedule.
+
 **The date question.** `legal_analysis({mode:"applicable_law", lawName:"Trade Practices Act", date:"2010-06-30", provision:"s 52"})`:
 
 ```

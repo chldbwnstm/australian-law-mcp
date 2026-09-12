@@ -58,8 +58,9 @@ export const LegalAnalysisSchema = z.object({
 export type LegalAnalysisInput = z.infer<typeof LegalAnalysisSchema>
 
 export const legalAnalysisDescription =
-  "Four verification modes. verify_citations: check every statute and case citation in a passage (catches CCA s 18 " +
-  "cited for misleading conduct — that is sch 2 s 18, the ACL). cite_check: is this case still good law — citation " +
+  "Four verification modes. verify_citations: check citation existence and extracted descriptions against statute " +
+  "headings (CCA s 18 vs ACL sch 2 s 18); existence-only checks stay partial, and full legal propositions need the body text. " +
+  "cite_check: is this case still good law — citation " +
   "graph, overruling-language scan, and whether its section was amended since. applicable_law: the version of an Act " +
   "in force on a date, diffed against today, with transitional provisions. impact_map: what depends on one provision " +
   "— citing judgments, instruments, state counterparts, amendments. Every mode separates 'wrong' from 'not checked'.";

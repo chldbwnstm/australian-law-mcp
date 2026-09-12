@@ -44,6 +44,8 @@ export interface StatuteVerdict {
   impossible?: boolean
   /** The title the citation resolved to, for callers that follow up. */
   title?: FrlTitle
+  /** The section exists, but no content claim was extracted for comparison. */
+  existenceOnly?: boolean
 }
 
 export interface StatuteCheckContext {
@@ -250,8 +252,12 @@ export async function checkStatuteCitation(
           impossible: true,
           title,
           line:
-            `✗ CONTENT_MISMATCH: ${shown} is '${heading}'; ${cite.claim} is ${elsewhere.ref}` +
-            `${elsewhere.scheduleName ? ` (${elsewhere.scheduleName})` : ""}${suffix}`,
+            `✗ CONTENT_MISMATCH: ${shown} is '${heading}'; ` +
+            (cite.claimSource === "proposition"
+              ? `the closest heading to "${cite.claim}" is '${elsewhere.heading}' at ${elsewhere.ref}`
+              : `${cite.claim} is ${elsewhere.ref}`) +
+            `${elsewhere.scheduleName ? ` (${elsewhere.scheduleName})` : ""}${suffix}` +
+            (cite.claimSource === "proposition" ? " This flags a topic mismatch, not verification of the full legal proposition." : ""),
         }
       }
       return {
@@ -261,6 +267,14 @@ export async function checkStatuteCitation(
           `⚠ ${shown} exists and is headed '${heading}', which does not match the description in the text ` +
           `("${cite.claim}"). No other provision of ${title.name} matches that description either, so this may be a ` +
           `description of the section's body rather than its heading — read the text before relying on it.${suffix}`,
+      }
+    }
+    if (cite.claimSource === "proposition") {
+      return {
+        mark: "⚠",
+        title,
+        line: `⚠ ${shown} — '${heading}' [${title.id}]; the topic matches the heading, but the legal proposition ` +
+          `("${cite.claim}") was not verified against the provision's body. Read get_law_text before relying on it.${suffix}`,
       }
     }
     return {
@@ -276,7 +290,8 @@ export async function checkStatuteCitation(
   return {
     mark: "✓",
     title,
-    line: `✓ ${shown} — '${heading}' [${title.id}]${suffix}${subsectionNote}`,
+    existenceOnly: true,
+    line: `✓ ${shown} — '${heading}' [${title.id}]${suffix}${subsectionNote} Existence only: no content claim was extracted or checked.`,
   }
 }
 
