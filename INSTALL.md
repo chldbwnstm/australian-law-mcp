@@ -57,6 +57,28 @@ local Code sessions. Do not also run `claude mcp add` on this machine.
 Handing the file to someone who is not going to build it is covered in
 [TRY-IT.md](docs/TRY-IT.md).
 
+### The one setting the extension has
+
+Open **Settings → Extensions → Australian Law**. There is a switch,
+**“Finish blocked legal sources using the Aside browser”**, and an optional
+**Aside CLI path** beside it.
+
+It is **off**, and leaving it off is the supported default. Turned on, on a Mac
+with [Aside](https://docs.aside.com/help/get-started) installed, the server may
+finish a lookup a publisher blocks it from making — the Federal Court's
+judgment site, AustLII — by driving that browser and the sessions it is already
+signed in to. It is confined to those blocked legal-source domains, and it does
+nothing at all on a machine without Aside. The trade is set out in the
+[README](README.md#optional-finishing-a-blocked-source-in-your-own-browser);
+read it before switching this on for someone else.
+
+Fill in the path only if Aside is not at
+`~/.aside/cli/Aside CLI.app/Contents/MacOS/aside`; blank means "find it".
+
+The CLI and Codex hosts (Routes 2 and 3) have no settings UI. There the same two
+settings are the environment variables `AU_LAW_ASIDE` and
+`AU_LAW_ASIDE_COMMAND` — see [`.env.example`](.env.example).
+
 ## Route 2 — Claude Code CLI or IDE, no desktop app
 
 ```bash
@@ -209,6 +231,20 @@ Do not deploy an HTTP service, publish the repository, or request a legal-data A
 key for this installation. Local STDIO is sufficient.
 
 ## Optional Aside follow-up preview
+
+**Not the same thing as the extension switch above.** Both close the same gap —
+sources whose publisher refuses this server — and they are different tools:
+
+| | Extension switch (`AU_LAW_ASIDE`) | `au-law-followup` skill |
+|---|---|---|
+| Lives in | the server, so every host has it, **including desktop Chat** | a project skill in this checkout |
+| Hosts | Claude Desktop (Chat and Code), CLI, Codex | local macOS Codex or Claude Code opened on the checkout — Chat loads extensions only and never loads a project skill |
+| Scope | one blocked lookup, finished inside the answer being written | a research session: per-matter opt-in, page/document/minute budgets, saved evidence, checkpoints, stop and resume |
+| Turned on by | a switch in **Settings → Extensions** | `setup-followup`, then a per-matter mode |
+
+Install the skill when someone needs the budgets and the evidence trail. Leave
+the switch to cover the ordinary case. Installing both on one Mac is fine — they
+are separate paths and neither reconfigures the other.
 
 Only offer this after the ordinary law server works and only in a local macOS
 15.0+ Claude Code or Codex session. Windows, WSL, Linux, older macOS, remote and

@@ -51,6 +51,32 @@ legal-data API key are needed — the bundle carries its own runtime dependencie
 and Claude supplies Node. You need Claude Desktop, an account you can use there,
 and internet access; your usual Claude plan and usage limits still apply.
 
+## Optional: the one setting, and what it is for
+
+Some publishers refuse this extension outright — the Federal Court's judgment
+site and AustLII among them — so questions that depend on them come back saying
+the source was blocked, with a link for you to open yourself.
+
+If you are on a Mac and have [Aside](https://docs.aside.com/help/get-started)
+installed, you can let the extension finish those lookups in your own browser.
+Open **Settings → Extensions → Australian Law** and turn on **“Finish blocked
+legal sources using the Aside browser”**. Leave the path field blank unless you
+moved Aside somewhere unusual.
+
+It is off until you turn it on, it only works on a Mac with Aside installed —
+with Aside absent it does nothing — and it is restricted to the legal sites
+listed in the
+[README](../README.md#optional-finishing-a-blocked-source-in-your-own-browser),
+because it is driving the real browser you are signed in to. Read that before
+turning it on. Nothing else in this page needs it.
+
+If you work in a local **Codex or Claude Code** session on a checkout of the
+repository instead, there is a second, larger tool for the same gap: the
+`au-law-followup` skill, with per-matter budgets, saved evidence and resumable
+checkpoints. It is not a duplicate of the switch and it cannot be used from
+Chat, which loads extensions only. See
+[INSTALL.md](../INSTALL.md#optional-aside-follow-up-preview).
+
 ## Ask your first question
 
 Copy this into a new chat:
@@ -78,6 +104,13 @@ This preview is strongest at retrieving Commonwealth provisions, historical
 legislation and material from supported public decision sources. It is not a
 complete case-law database or an editorial citator. An inaccessible source should
 be described as unavailable, not as proof that no authority exists.
+
+**Watch for answers that did not come from here.** When the extension reports a
+source as blocked, Claude may go on and answer from its own web search instead.
+That answer can look the same in the chat and is not this extension's work — it
+carried no source link from here and was not checked against these sources. If
+it matters which one you are reading, ask: *“Did that come from the Australian
+Law tools, and what is the source link?”*
 
 The extension runs locally and sends lookup terms to public sources. Your chat and
 any documents you provide are still handled by your AI app under its own settings;

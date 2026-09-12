@@ -18,7 +18,7 @@
  */
 
 import { execFileSync } from "node:child_process"
-import { existsSync } from "node:fs"
+import { existsSync, realpathSync } from "node:fs"
 import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
@@ -77,18 +77,105 @@ function runtimeRange(engines) {
   return node.trim()
 }
 
-async function buildManifest(pkg) {
-  // Imported from the freshly built output, so the manifest can never advertise
-  // a tool list the shipped server does not answer with.
-  const registry = await import(pathToFileURL(path.join(ROOT, "build", "tool-registry.js")).href)
-  const profiles = await import(pathToFileURL(path.join(ROOT, "build", "lib", "tool-profiles.js")).href)
+/**
+ * The settings Claude Desktop renders for this extension, and the environment
+ * variables they set.
+ *
+ * A Chat user has no config file to edit — `claude_desktop_config.json` is not
+ * a thing a lawyer opens, and the app loads extensions only, not this project's
+ * `.mcp.json` or its skills. `user_config` is the whole mechanism by which such
+ * a user turns anything on, so a capability that is not declared here is, for
+ * that user, a capability that does not exist.
+ *
+ * One table, two derived halves. The `user_config` block is what the app
+ * renders; `server.mcp_config.env` is how the chosen values reach the server
+ * process. Writing the placeholders out separately is how they come to name a
+ * setting that was renamed or removed — and the substitution fails silently
+ * (see `default` below), so the symptom is a feature that is off, or on, for no
+ * reason the user can see.
+ *
+ * Every option carries a `default`. Claude Desktop only defines
+ * `${user_config.<key>}` for keys that have a stored value **or** a manifest
+ * default; a placeholder naming neither is left in the string verbatim, so the
+ * server would receive the literal text `${user_config.aside_command}` as a
+ * path. Verified against the reference implementation in
+ * `@anthropic-ai/mcpb` 2.1.2 (`dist/shared/config.js`), which also converts a
+ * boolean to the *string* `"true"` or `"false"` — never an absent variable.
+ * `AU_LAW_ASIDE=false` is therefore what "off" looks like to the server, and
+ * the server must read it as a value, not as mere presence.
+ */
+const USER_SETTINGS = [
+  {
+    key: "aside_followup",
+    env: "AU_LAW_ASIDE",
+    option: {
+      type: "boolean",
+      title: "Finish blocked legal sources using the Aside browser (Mac only)",
+      description:
+        "Off by default. Some publishers refuse this server outright — the Federal Court's judgment " +
+        "site and AustLII among them — and those searches come back as a blocked source with a link, " +
+        "not as results. Turn this on and the server may finish those lookups by driving Aside, the " +
+        "browser app on this Mac, using the legal sites you are already signed in to. Because that is " +
+        "a real browser holding your sessions, the server may only send it to legal-source addresses. " +
+        "Requires macOS with Aside installed; with Aside absent this setting does nothing.",
+      required: false,
+      default: false,
+    },
+  },
+  {
+    key: "aside_command",
+    env: "AU_LAW_ASIDE_COMMAND",
+    option: {
+      type: "string",
+      title: "Aside CLI path (optional)",
+      description:
+        "Leave blank unless Aside is installed somewhere other than the standard location, which the " +
+        "server finds on its own. If you moved it, give the full path to the Aside command line tool, " +
+        "e.g. /Users/you/.aside/cli/Aside CLI.app/Contents/MacOS/aside. Ignored while the setting " +
+        "above is off.",
+      required: false,
+      default: "",
+    },
+  },
+]
+
+/** `user_config` and the `env` placeholders, derived from one table so they cannot disagree. */
+export function asideSettings(settings = USER_SETTINGS) {
+  const userConfig = {}
+  const env = {}
+  for (const { key, env: variable, option } of settings) {
+    if (option.default === undefined) {
+      throw new Error(
+        `user_config.${key} declares no default — an unset optional value leaves the literal ` +
+        `"\${user_config.${key}}" in ${variable} instead of an empty value`,
+      )
+    }
+    // Cloned: the manifest is data handed to a serialiser, and nothing that
+    // touches it afterwards should be able to reach back into this table.
+    userConfig[key] = structuredClone(option)
+    env[variable] = `\${user_config.${key}}`
+  }
+  return { userConfig, env }
+}
+
+/**
+ * The advertised tool list, read from the freshly built output so the manifest
+ * can never advertise a tool list the shipped server does not answer with.
+ */
+export async function loadExposedTools(root = ROOT) {
+  const registry = await import(pathToFileURL(path.join(root, "build", "tool-registry.js")).href)
+  const profiles = await import(pathToFileURL(path.join(root, "build", "lib", "tool-profiles.js")).href)
   const exposed = registry.allTools.filter((tool) => profiles.V3_EXPOSED.has(tool.name))
 
   if (exposed.length !== registry.TOOL_COUNTS.exposed) {
     throw new Error(`exposed filter returned ${exposed.length}, TOOL_COUNTS says ${registry.TOOL_COUNTS.exposed}`)
   }
+  return exposed
+}
 
+export function buildManifest(pkg, exposed) {
   const repositoryUrl = pkg.repository?.url?.replace(/^git\+/, "").replace(/\.git$/, "")
+  const { userConfig, env } = asideSettings()
 
   return {
     manifest_version: MANIFEST_VERSION,
@@ -108,11 +195,12 @@ async function buildManifest(pkg) {
       mcp_config: {
         command: "node",
         args: ["${__dirname}/build/index.js"],
-        env: {},
+        env,
       },
     },
     tools: exposed.map((tool) => ({ name: tool.name, description: summarise(tool.description) })),
     tools_generated: false,
+    user_config: userConfig,
     keywords: pkg.keywords,
     license: pkg.license,
     compatibility: {
@@ -167,11 +255,15 @@ async function countFiles(dir) {
 }
 
 async function main() {
+  if (!existsSync(path.join(ROOT, "package-lock.json"))) {
+    throw new Error("package-lock.json is missing — `npm ci` inside the staging directory needs it")
+  }
+
   const pkg = JSON.parse(await readFile(path.join(ROOT, "package.json"), "utf8"))
 
   run("npm", ["run", "build"])
 
-  const manifest = await buildManifest(pkg)
+  const manifest = buildManifest(pkg, await loadExposedTools())
   await stage(manifest)
 
   await mkdir(RELEASE, { recursive: true })
@@ -185,17 +277,32 @@ async function main() {
   const bytes = (await stat(bundle)).size
   console.log(`\nBundle: ${path.relative(ROOT, bundle)} — ${(bytes / 1024 / 1024).toFixed(2)} MiB`)
   console.log(`Advertised tools: ${manifest.tools.map((t) => t.name).join(", ")}`)
+  console.log(`Extension settings: ${Object.keys(manifest.user_config).join(", ")}`)
 
   // The bundle is not the thing that runs — the unpacked copy is. Verify that.
   run(process.execPath, [path.join("scripts", "verify-mcpb.mjs"), path.relative(ROOT, bundle)])
 }
 
-if (!existsSync(path.join(ROOT, "package-lock.json"))) {
-  console.error("package-lock.json is missing — `npm ci` inside the staging directory needs it")
-  process.exit(1)
+// Running this file builds and packs; importing it (the manifest tests) must not.
+// `npm ci`, `npm run build` and an `npx` download are not things a test suite does.
+// Compared through realpath, not `path.resolve`: the wrong answer here is silent
+// either way — a build that does nothing and exits 0, or a test run that starts
+// by rebuilding the project — and a checkout reached through a symlinked path is
+// the ordinary case on macOS (`/tmp`) and in worktrees.
+function invokedDirectly() {
+  const entry = process.argv[1]
+  if (!entry) return false
+  const self = fileURLToPath(import.meta.url)
+  try {
+    return realpathSync(entry) === realpathSync(self)
+  } catch {
+    return path.resolve(entry) === self
+  }
 }
 
-main().catch((error) => {
-  console.error(`\nbuild:mcpb failed — ${error instanceof Error ? error.message : String(error)}`)
-  process.exit(1)
-})
+if (invokedDirectly()) {
+  main().catch((error) => {
+    console.error(`\nbuild:mcpb failed — ${error instanceof Error ? error.message : String(error)}`)
+    process.exit(1)
+  })
+}

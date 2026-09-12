@@ -13,13 +13,22 @@
  * Every unreachable court therefore returns `[UPSTREAM_BLOCKED]` with a deep
  * link the user can open, and the three live sources are labelled per hit so a
  * caller can tell "no NSW hits" from "NSW was never asked".
+ *
+ * Since v1.1 there is one more rung below that link: when the user has turned
+ * the Aside browser fallback on, a blocked court is fetched through their own
+ * local browser session (`../lib/sources/aside-browser.ts`) and returned marked
+ * as browser-retrieved. The marking is not decoration — material that came out
+ * of a page render in someone's logged-in browser is not the same evidence as
+ * material a publisher's API handed over, and a caller has to be able to tell
+ * the two apart. When the fallback is off, the answer is exactly what it was
+ * before plus one line saying the fallback exists and how to switch it on.
  */
 
 import { z } from "zod"
 import type { AuApiClient } from "../lib/api-client.js"
 import { ErrorCodes, LawApiError, UpstreamBlockedError, formatToolError } from "../lib/errors.js"
 import { lookupCourt, parseCaseCitation } from "../lib/case-citation.js"
-import type { Jurisdiction } from "../lib/court-codes.js"
+import { COURT_CODES, normaliseCourtToken, type Jurisdiction } from "../lib/court-codes.js"
 import {
   austliiCaseUrl,
   austliiSearchUrl,
@@ -31,8 +40,11 @@ import type { LooseToolResponse } from "../lib/types.js"
 import * as nsw from "../lib/sources/nsw-caselaw.js"
 import * as hca from "../lib/sources/hcourt.js"
 import * as qld from "../lib/sources/qld-judgments.js"
+import { absoluteUrl, blockTextOf, firstText, links as htmlLinks } from "../lib/sources/html.js"
 import { interleave, renderDocument, renderSearch } from "../lib/sources/render.js"
-import type { SourceHit, SourceSearchResult } from "../lib/sources/types.js"
+import type { SourceDocument, SourceHit, SourceSearchResult } from "../lib/sources/types.js"
+import { truncateResponse } from "../lib/schemas.js"
+import { asideStatus, fetchViaAside } from "../lib/sources/aside-browser.js"
 import { sourceDocumentResponse } from "./source-document.js"
 import { followupEnvelope, makeGap } from "../lib/research-followup.js"
 
@@ -62,12 +74,109 @@ const JURISDICTION_SOURCES: Partial<Record<Jurisdiction, LiveSource[]>> = {
 /** Queensland Judgments also republishes HCA and Privy Council decisions. */
 const QLD_TOKENS = new Set(["QSC", "QCA", "QDC", "QMC", "QCAT", "QCATA", "QPEC", "QLC", "ICQ", "QChCM", "QMHC"])
 
+/**
+ * The short forms people actually type, mapped onto the canonical MNC token.
+ *
+ * Callers do not write `FCAFC`; they write "Federal Court" or "the Full Court",
+ * and a model relaying a user's question writes whatever the user wrote. Before
+ * this table those strings matched no branch of `sourcesFor`, which then fanned
+ * out to NSW+HCA+QLD — a Federal Court question answered with NSW rows and no
+ * marker. Full court *names* are matched separately against `COURT_CODES`, so
+ * only the colloquial forms need an entry here.
+ */
+const COURT_PROSE: Record<string, string> = {
+  "federal court": "FCA", "federal court of australia": "FCA", "fed court": "FCA", "fedcourt": "FCA",
+  "full court": "FCAFC", "full federal court": "FCAFC", "full court of the federal court": "FCAFC",
+  "federal court full court": "FCAFC", "full court of the federal court of australia": "FCAFC",
+  "high court": "HCA", "the high court": "HCA", "hc": "HCA",
+  "family court": "FedCFamC1F", "federal circuit and family court": "FedCFamC1F",
+  "federal circuit court": "FedCFamC2G",
+  "nsw supreme court": "NSWSC", "supreme court of nsw": "NSWSC", "new south wales supreme court": "NSWSC",
+  "nsw court of appeal": "NSWCA", "nsw court of criminal appeal": "NSWCCA",
+  "queensland supreme court": "QSC", "supreme court of qld": "QSC",
+  "queensland court of appeal": "QCA", "qld court of appeal": "QCA",
+  "victorian supreme court": "VSC", "vic supreme court": "VSC", "supreme court of vic": "VSC",
+  "victorian court of appeal": "VSCA", "vic court of appeal": "VSCA", "court of appeal of victoria": "VSCA",
+  "county court": "VCC",
+  "sa supreme court": "SASC", "south australian supreme court": "SASC", "supreme court of sa": "SASC",
+  "sa court of appeal": "SASCA", "south australian court of appeal": "SASCA",
+  "wa supreme court": "WASC", "western australian supreme court": "WASC", "supreme court of wa": "WASC",
+  "wa court of appeal": "WASCA", "western australian court of appeal": "WASCA",
+  "tasmanian supreme court": "TASSC", "tas supreme court": "TASSC", "supreme court of tas": "TASSC",
+  "act supreme court": "ACTSC", "supreme court of the act": "ACTSC",
+  "nt supreme court": "NTSC", "supreme court of the nt": "NTSC", "northern territory supreme court": "NTSC",
+  "aat": "AATA", "art": "ARTA",
+}
+
+/** Full court names from the code table, lowercased — "Supreme Court of Victoria" → VSC. */
+const COURT_BY_NAME = new Map<string, string>(
+  COURT_CODES.map((entry) => [entry.name.toLowerCase(), entry.code]),
+)
+
+/**
+ * Upper-cased index → the spelling each downstream lookup expects. Both source
+ * tables carry mixed-case tokens (`QChCM`, `NSWIRComm`), so matching on an
+ * upper-cased key and *returning the table's own spelling* is what keeps a
+ * user's "qchcm" routed to Queensland with its court filter intact.
+ */
+const QLD_BY_UPPER = new Map<string, string>([...QLD_TOKENS].map((token) => [token.toUpperCase(), token]))
+const NSW_BY_UPPER = new Map<string, string>(
+  Object.keys(nsw.NSW_COURT_IDS).map((token) => [token.toUpperCase(), token]),
+)
+
+/**
+ * What this server can do with a requested court. Three outcomes, never two:
+ * a court it can serve, a court it refuses to fetch, and a token that is not a
+ * court at all. Collapsing the last two would report a typo as a Cloudflare
+ * block; collapsing either into "no court specified" is the defect this type
+ * exists to make unrepresentable.
+ */
+export type CourtRoute =
+  /** Reachable: which live sources carry it, plus the canonical token to filter on. */
+  | { kind: "live"; court: string; sources: LiveSource[] }
+  /** A real court this server does not fetch — `[UPSTREAM_BLOCKED]` + deep links. */
+  | { kind: "blocked"; court: string; courtName: string }
+  /** Not a court identifier this server knows. Unclear, never "does not exist". */
+  | { kind: "unknown"; token: string }
+
+/** `"Federal Court"`, `"fca"`, `"F.C.A."` → `FCA`; unknown strings stay unknown. */
+function canonicalCourtToken(court: string): string | undefined {
+  const raw = court.trim()
+  if (!raw) return undefined
+  const upper = normaliseCourtToken(raw)
+  // The scraper tables first: they carry live tokens the AGLC code table does
+  // not (NSWCHC, NSWDDT, QChCM), and a token this server can actually serve
+  // must never be demoted to "unknown".
+  const nswToken = NSW_BY_UPPER.get(upper)
+  if (nswToken) return nswToken
+  const qldToken = QLD_BY_UPPER.get(upper)
+  if (qldToken) return qldToken
+  const known = lookupCourt(raw)
+  if (known) return known.code
+  const prose = raw.toLowerCase().replace(/[.,]/g, "").replace(/\s+/g, " ").trim()
+  return COURT_PROSE[prose] ?? COURT_BY_NAME.get(prose)
+}
+
+export function resolveCourt(court: string): CourtRoute {
+  const token = canonicalCourtToken(court)
+  if (!token) return { kind: "unknown", token: court.trim() }
+  const upper = token.toUpperCase()
+  if (upper.startsWith("NSW")) return { kind: "live", court: token, sources: ["nsw"] }
+  if (upper.startsWith("HCA")) return { kind: "live", court: token, sources: ["hca"] }
+  if (QLD_BY_UPPER.has(upper)) return { kind: "live", court: token, sources: ["qld"] }
+  return { kind: "blocked", court: token, courtName: lookupCourt(token)?.name ?? token }
+}
+
 export function sourcesFor(p: { jurisdiction?: string; court?: string }): LiveSource[] {
   if (p.court) {
-    const token = p.court.toUpperCase()
-    if (token.startsWith("NSW")) return ["nsw"]
-    if (token.startsWith("HCA")) return ["hca"]
-    if (QLD_TOKENS.has(p.court) || QLD_TOKENS.has(token)) return ["qld"]
+    const route = resolveCourt(p.court)
+    if (route.kind === "live") return route.sources
+    // A court this server cannot serve has nothing to ask, so it returns no
+    // sources — never the three-source fan-out, which used to answer a Federal
+    // Court request with NSW/HCA/QLD rows and no marker at all. The caller
+    // turns this into [UPSTREAM_BLOCKED] (blocked) or [INVALID_PARAMETER]
+    // (unknown token); it must not turn it into an empty result set.
+    return []
   }
   if (p.jurisdiction) {
     const key = normaliseJurisdiction(p.jurisdiction)
@@ -110,12 +219,264 @@ export function blockedCourtLinks(citation: string): string[] {
   return links
 }
 
-function blockedCourtError(citation: string, courtName: string): UpstreamBlockedError {
+/**
+ * `au/cases/cth/FCA` — the SINO `mask_path` that pins an AustLII search to one
+ * court. Read back out of `austliiCaseUrl` rather than kept in a second
+ * jurisdiction table here, so the search link and the judgment link cannot
+ * drift apart.
+ */
+function austliiCourtMask(court: string): string | undefined {
+  const url = austliiCaseUrl({ court, year: 2000, num: 1 })
+  const match = url ? /\/(au\/cases\/[^/]+\/[^/]+)\//.exec(url) : null
+  return match ? match[1] : undefined
+}
+
+/**
+ * Deep links for a *keyword* search of a court this server does not fetch.
+ * No citation means no single-judgment URL exists yet, so the links are the
+ * court-restricted AustLII search and the citator — never an empty list.
+ */
+export function blockedCourtSearchLinks(court: string, query: string): string[] {
+  const mask = austliiCourtMask(court)
+  return [austliiSearchUrl(query, mask ? [mask] : []), lawCiteUrl(query)]
+}
+
+function blockedCourtError(
+  citation: string,
+  courtName: string,
+  options: { links?: string[]; asideFailures?: string[] } = {},
+): UpstreamBlockedError {
+  const attempted = options.asideFailures?.length
+    // Said in the reason, not in a suggestion: "the fallback was on and still
+    // did not get the page" is part of what happened, and a caller that only
+    // reads the first line has to see it.
+    ? `; the Aside browser fallback is on and was tried, but the page did not come back (${options.asideFailures.join("; ")})`
+    : ""
   return new UpstreamBlockedError(
     `${courtName} judgments`,
-    "its publisher (AustLII / judgments.fedcourt.gov.au) blocks non-browser clients, so this server does not request them",
-    blockedCourtLinks(citation),
+    "its publisher (AustLII / judgments.fedcourt.gov.au) blocks non-browser clients, so this server does not request them" + attempted,
+    options.links ?? blockedCourtLinks(citation),
   )
+}
+
+// ── Aside browser fallback ────────────────────────────────────────────────
+
+/**
+ * The seam onto `../lib/sources/aside-browser.ts`.
+ *
+ * Declared here as a two-method interface, and injectable, for two reasons.
+ * Tests must never spawn the real Aside CLI — it drives the user's actual
+ * browser — and this file must be able to state exactly how much of Aside it
+ * uses: one status read and one URL fetch. Nothing in this module hands
+ * `fetchViaAside` a URL that came from a caller; every URL below is built by
+ * `external-links-map.ts` out of a parsed citation or a canonical court token,
+ * and the bridge enforces its own host allowlist underneath that.
+ */
+export interface AsideBridge {
+  asideStatus(): { enabled: boolean; command?: string; reason?: string }
+  fetchViaAside(url: string): Promise<string>
+}
+
+const realAsideBridge: AsideBridge = { asideStatus, fetchViaAside }
+let asideBridge: AsideBridge | null = null
+
+/** Inject a stub (tests) or `null` to restore the real bridge. */
+export function setAsideBridge(bridge: AsideBridge | null): void {
+  asideBridge = bridge
+}
+
+function bridge(): AsideBridge {
+  return asideBridge ?? realAsideBridge
+}
+
+/** Never let a broken bridge break the case-law path: no status means off. */
+function asideState(): { enabled: boolean; command?: string; reason?: string } {
+  try {
+    return bridge().asideStatus()
+  } catch (error) {
+    return { enabled: false, reason: `the browser fallback could not report its status (${message(error)})` }
+  }
+}
+
+function message(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+/**
+ * The one line that makes the fallback discoverable. A Claude Desktop Chat user
+ * never sees this repo, the project `.mcp.json` or the follow-up skill — the
+ * bundled extension is the whole surface — so if the answer does not say the
+ * fallback exists, for that user it does not exist.
+ */
+const ASIDE_OFF_HINT =
+  "Browser fallback (off): this server can retrieve a blocked court through the user's own logged-in browser via " +
+  "Aside, which reaches pages this server is refused. Turn on \"Finish blocked legal sources using the Aside " +
+  "browser\" in Claude Desktop → Settings → Extensions → Australian Law, then re-run this call."
+
+function asideOffLine(status: { reason?: string }): string {
+  return status.reason ? `${ASIDE_OFF_HINT} (Currently off: ${status.reason})` : ASIDE_OFF_HINT
+}
+
+/** Append the discoverability line to a blocked answer when the fallback is off. */
+function withAsideHint(response: LooseToolResponse, error: unknown): LooseToolResponse {
+  if (!(error instanceof UpstreamBlockedError)) return response
+  const status = asideState()
+  if (status.enabled) return response
+  const first = response.content[0]
+  if (!first) return response
+  return {
+    ...response,
+    content: [{ ...first, text: `${first.text}\n${asideOffLine(status)}` }, ...response.content.slice(1)],
+  }
+}
+
+/** How this file labels anything that came out of the user's browser. */
+const VIA_ASIDE_LABEL = "Aside — the user's own local browser session, not the publisher's API"
+
+const ASIDE_PROVENANCE_NOTE =
+  "⚠️ Provenance: this text was read out of a page rendered in the user's local browser through Aside. It did not " +
+  "come from the publisher's API and this server did not verify it against the publisher's record — page furniture " +
+  "may be mixed into the body. Cite the paragraph numbers shown on the page, and say in the answer that the " +
+  "material was retrieved through the user's browser."
+
+/** Below this, the body is an interstitial or a shell, not a judgment. */
+const MIN_ASIDE_BODY_CHARS = 400
+
+/** At most two pages per blocked answer: this drives a real browser window. */
+const MAX_ASIDE_ATTEMPTS = 2
+
+type AsideFetch = { url: string; html: string } | { failures: string[] }
+
+async function fetchFirstViaAside(urls: string[]): Promise<AsideFetch> {
+  const failures: string[] = []
+  for (const url of urls.slice(0, MAX_ASIDE_ATTEMPTS)) {
+    try {
+      const html = await bridge().fetchViaAside(url)
+      if (!html || html.trim().length === 0) {
+        failures.push(`${url} → the browser returned an empty page`)
+        continue
+      }
+      return { url, html }
+    } catch (error) {
+      failures.push(`${url} → ${message(error)}`)
+    }
+  }
+  return { failures }
+}
+
+/** The judgment pages for a citation, citator and search links dropped. */
+function judgmentUrls(citation: string): string[] {
+  return blockedCourtLinks(citation).filter((url) => !url.includes("sinosrch.cgi") && !url.includes("LawCite"))
+}
+
+function pageTitle(html: string): string | undefined {
+  return (
+    firstText(html, /<h1\b[^>]{0,300}>([\s\S]{0,600}?)<\/h1\s*>/i) ??
+    firstText(html, /<title\b[^>]{0,300}>([\s\S]{0,600}?)<\/title\s*>/i)
+  )
+}
+
+/**
+ * A blocked judgment, fetched through the user's browser.
+ * `undefined` means the fallback is off — the caller keeps today's behaviour.
+ */
+async function judgmentViaAside(p: {
+  citation: string
+  courtName: string
+  full: boolean
+}): Promise<{ response: LooseToolResponse } | { failures: string[] } | undefined> {
+  if (!asideState().enabled) return undefined
+  const urls = judgmentUrls(p.citation)
+  if (urls.length === 0) return { failures: ["no judgment URL could be built for this citation"] }
+  const fetched = await fetchFirstViaAside(urls)
+  if ("failures" in fetched) return fetched
+  const text = blockTextOf(fetched.html)
+  if (text.length < MIN_ASIDE_BODY_CHARS) {
+    // A short body here is the anti-bot interstitial, not a short judgment.
+    // Reporting it as the decision would be worse than reporting the block.
+    return { failures: [`${fetched.url} → the page carried ${text.length} characters of text, too little to be the reasons`] }
+  }
+  const doc: SourceDocument = {
+    title: pageTitle(fetched.html) ?? p.citation,
+    citation: p.citation,
+    url: fetched.url,
+    metadata: [
+      ["Court", p.courtName],
+      ["Retrieved via", VIA_ASIDE_LABEL],
+    ],
+    text,
+    note: ASIDE_PROVENANCE_NOTE,
+    bodyStatus: "full_text",
+  }
+  return {
+    response: sourceDocumentResponse(doc, {
+      bodyHeading: "Reasons",
+      full: p.full,
+      originTool: "get_case_text",
+      documentId: p.citation,
+    }),
+  }
+}
+
+/**
+ * A blocked court's *search* page, fetched through the user's browser.
+ *
+ * This returns the publisher's own result list as the browser rendered it, not
+ * parsed records: the rows are links, and they are labelled as links rather
+ * than dressed up as `id:` values that `get_case_text` would then reject.
+ */
+async function searchViaAside(p: {
+  url: string
+  label: string
+  query: string
+  limit: number
+}): Promise<{ response: LooseToolResponse } | { failures: string[] } | undefined> {
+  if (!asideState().enabled) return undefined
+  const fetched = await fetchFirstViaAside([p.url])
+  if ("failures" in fetched) return fetched
+  const origin = originOf(fetched.url)
+  const seen = new Set<string>()
+  const hits: string[] = []
+  for (const link of htmlLinks(fetched.html)) {
+    if (!/\/au\/cases\//.test(link.href)) continue
+    const url = absoluteUrl(origin, link.href)
+    if (seen.has(url)) continue
+    seen.add(url)
+    hits.push(`${hits.length + 1}. ${link.text || url}\n   ${url}`)
+    if (hits.length >= p.limit) break
+  }
+  const lines = [
+    `=== ${p.label} — retrieved through the user's browser ===`,
+    `Query: ${p.query}`,
+    `Retrieved via: ${VIA_ASIDE_LABEL}`,
+    `Search page: ${fetched.url}`,
+    "",
+    ASIDE_PROVENANCE_NOTE,
+    "",
+  ]
+  if (hits.length > 0) {
+    lines.push(...hits)
+    lines.push("")
+    lines.push(
+      "These are page links, not `id:` values — `get_case_text(citation=\"…\")` fetches one of them through the " +
+      "same browser fallback.",
+    )
+  } else {
+    // No parseable rows is not "no cases": say so, and hand over what the page
+    // did say so the caller can judge it.
+    lines.push(
+      "No case links could be read off this page. That is a statement about the page this server could parse, " +
+      "not about whether decisions exist. The page text follows so it can be judged directly:",
+      "",
+      blockTextOf(fetched.html).slice(0, 2000),
+    )
+  }
+  return { response: { content: [{ type: "text", text: truncateResponse(lines.join("\n")) }] } }
+}
+
+function originOf(url: string): string {
+  const match = /^(https?:\/\/[^/]+)/i.exec(url)
+  return match ? match[1] : url
 }
 
 // ── search_cases ──────────────────────────────────────────────────────────
@@ -130,7 +491,10 @@ export const SearchCasesSchema = z.object({
     "(the Federal Court is blocked); Vic/SA/WA/Tas/ACT/NT return deep links, not text.",
   ),
   court: z.string().optional().describe(
-    "Medium-neutral court token, e.g. HCA, NSWSC, NSWCA, QSC, QCA, NSWCATAP.",
+    "Medium-neutral court token (HCA, NSWSC, NSWCA, QSC, QCA, NSWCATAP) or the court's name " +
+    "('Federal Court', 'Supreme Court of Victoria'). A court this server cannot fetch — the Federal Court " +
+    "and the Vic/SA/WA/Tas/ACT/NT courts — returns [UPSTREAM_BLOCKED] with deep links, never another court's " +
+    "results. A string that is not a court at all is rejected as [INVALID_PARAMETER] rather than ignored.",
   ),
   limit: z.number().min(1).max(50).default(10).optional().describe("Maximum hits to return (default 10)."),
   page: z.number().min(1).default(1).optional().describe("1-based page number (default 1)."),
@@ -156,7 +520,8 @@ async function searchOneSource(
       return hca.search(client, { keywords: input.query, page })
     case "qld": {
       const params: qld.QldSearchParams = { text: input.query, page: (input.page ?? 1), perPage: 20 }
-      if (input.court && QLD_TOKENS.has(input.court.toUpperCase())) params.courts = [input.court.toUpperCase()]
+      const token = input.court ? QLD_BY_UPPER.get(normaliseCourtToken(input.court)) : undefined
+      if (token) params.courts = [token]
       return qld.search(client, params)
     }
   }
@@ -166,7 +531,7 @@ async function searchOneSource(
 async function lookupCitation(
   client: AuApiClient,
   citation: string,
-): Promise<{ result?: SourceSearchResult; blocked?: UpstreamBlockedError }> {
+): Promise<{ result?: SourceSearchResult; blocked?: { court: string; courtName: string } }> {
   const parsed = parseCaseCitation(citation)
   if (!parsed.ok || parsed.citation.kind !== "mnc") return {}
   const { court } = parsed.citation
@@ -188,7 +553,7 @@ async function lookupCitation(
     return { result: await qld.search(client, { citation, perPage: 10 }) }
   }
   const info = lookupCourt(court)
-  return { blocked: blockedCourtError(citation, info?.name ?? court) }
+  return { blocked: { court, courtName: info?.name ?? court } }
 }
 
 export async function searchCases(
@@ -206,7 +571,15 @@ export async function searchCases(
 
     if (citationShaped) {
       const { result, blocked } = await lookupCitation(client, input.query)
-      if (blocked) return formatToolError(blocked, "search_cases")
+      if (blocked) {
+        // An exact citation in a blocked court is the one case where the
+        // fallback can return the decision itself rather than a link.
+        const viaAside = await judgmentViaAside({ citation: input.query, courtName: blocked.courtName, full: false })
+        if (viaAside && "response" in viaAside) return viaAside.response
+        throw blockedCourtError(input.query, blocked.courtName, {
+          ...(viaAside ? { asideFailures: viaAside.failures } : {}),
+        })
+      }
       if (result && result.hits.length > 0) {
         const text = renderSearch(
           // Prefixed here too: `renderSearch` prints `id:` as the identifier the
@@ -229,21 +602,63 @@ export async function searchCases(
       )
     }
 
-    const sources = sourcesFor({
-      ...(input.jurisdiction ? { jurisdiction: input.jurisdiction } : {}),
-      ...(input.court ? { court: input.court } : {}),
-    })
+    const route = input.court ? resolveCourt(input.court) : undefined
+    if (route?.kind === "unknown") {
+      // Not a court, so not a block either. Saying "blocked" here would invent
+      // a Cloudflare gate in front of a typo.
+      throw new LawApiError(
+        `${JSON.stringify(route.token)} is not a court identifier this server recognises, so it was not used to route the search.`,
+        ErrorCodes.INVALID_PARAM,
+        [
+          "⚠️ This says the token is unclear to this server, not that the court or the case does not exist.",
+          "Use a medium-neutral court token (HCA, NSWCA, QSC, FCA, VSCA) or the court's full name ('Federal Court of Australia').",
+          "Or re-run without `court` to search the three reachable sources on keywords alone.",
+        ],
+      )
+    }
+    if (route?.kind === "blocked") {
+      const links = blockedCourtSearchLinks(route.court, input.query)
+      const viaAside = await searchViaAside({
+        url: links[0],
+        label: `Case law — ${route.courtName}`,
+        query: input.query,
+        limit,
+      })
+      if (viaAside && "response" in viaAside) return viaAside.response
+      throw blockedCourtError(input.query, route.courtName, {
+        links,
+        ...(viaAside ? { asideFailures: viaAside.failures } : {}),
+      })
+    }
+
+    const sources = route
+      ? route.sources
+      : sourcesFor(input.jurisdiction ? { jurisdiction: input.jurisdiction } : {})
     if (sources.length === 0) {
       const jurisdiction = input.jurisdiction ?? ""
+      const links = [austliiSearchUrl(input.query), lawCiteUrl(input.query)]
+      const viaAside = await searchViaAside({
+        url: links[0],
+        label: `Case law — ${jurisdiction} courts`,
+        query: input.query,
+        limit,
+      })
+      if (viaAside && "response" in viaAside) return viaAside.response
       throw new UpstreamBlockedError(
         `${jurisdiction} courts`,
-        "their judgments are published through AustLII or a Cloudflare-gated court site, neither of which this server requests",
-        [austliiSearchUrl(input.query), lawCiteUrl(input.query)],
+        "their judgments are published through AustLII or a Cloudflare-gated court site, neither of which this server requests" +
+        (viaAside?.failures.length
+          ? `; the Aside browser fallback is on and was tried, but the page did not come back (${viaAside.failures.join("; ")})`
+          : ""),
+        links,
       )
     }
 
+    // The canonical token, not the caller's spelling: "queensland court of
+    // appeal" has to reach the QLD court filter as `QCA`.
+    const routed: SearchCasesInput = route ? { ...input, court: route.court } : input
     const settled = await Promise.allSettled(
-      sources.map((source) => searchOneSource(client, source, input)),
+      sources.map((source) => searchOneSource(client, source, routed)),
     )
     const results: SourceSearchResult[] = []
     settled.forEach((outcome, index) => {
@@ -298,7 +713,7 @@ export async function searchCases(
     lawCache.set(cacheKey, text, SEARCH_CACHE_TTL)
     return { content: [{ type: "text", text }] }
   } catch (error) {
-    return enrichCaseGap(formatToolError(error, "search_cases"), input)
+    return withAsideHint(enrichCaseGap(formatToolError(error, "search_cases"), input), error)
   }
 }
 
@@ -412,9 +827,14 @@ export async function getCaseText(
     }
 
     const info = lookupCourt(court)
-    throw blockedCourtError(input.citation, info?.name ?? court)
+    const courtName = info?.name ?? court
+    const viaAside = await judgmentViaAside({ citation: input.citation, courtName, full })
+    if (viaAside && "response" in viaAside) return viaAside.response
+    throw blockedCourtError(input.citation, courtName, {
+      ...(viaAside ? { asideFailures: viaAside.failures } : {}),
+    })
   } catch (error) {
-    return enrichCaseGap(formatToolError(error, "get_case_text"), input)
+    return withAsideHint(enrichCaseGap(formatToolError(error, "get_case_text"), input), error)
   }
 }
 

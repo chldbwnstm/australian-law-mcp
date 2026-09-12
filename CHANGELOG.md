@@ -6,6 +6,44 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **An opt-in browser fallback for the sources whose publisher blocks this server.**
+  An outside tester asked Claude Desktop Chat for recent Federal Court decisions; the
+  server cannot reach `judgments.fedcourt.gov.au`, so Chat answered from its own web
+  search instead and the result read as though it had come from here. The fallback the
+  project already had could not run — it lives in a project skill, and Chat loads
+  extensions only. This one lives in the server, so every host has it. When it is on,
+  a blocked lookup is finished by driving Aside, the user's own browser on their Mac,
+  and what comes back is marked as browser-retrieved rather than publisher-supplied.
+  It is **off by default**, it is a no-op on a machine without Aside — the answer is
+  the same `[UPSTREAM_BLOCKED]` note and deep link as before — and because it drives a
+  browser carrying the user's logged-in sessions it may only be pointed at the blocked
+  legal-source domains, a set derived from the blocked rows of the upstream-host table
+  and not widenable by any tool argument, question or URL found in a document.
+- **Settings for it that a Claude Desktop user can actually reach.** The generated
+  MCPB manifest now carries a `user_config` block, so the app renders a switch
+  (“Finish blocked legal sources using the Aside browser”, off) and an optional Aside
+  CLI path under **Settings → Extensions → Australian Law**, and passes them to the
+  server as `AU_LAW_ASIDE` and `AU_LAW_ASIDE_COMMAND`. A Chat user has no config file
+  to edit, so a capability not declared there does not exist for them. Both are
+  derived from one table with the `env` placeholders, and each option must declare a
+  default: the app substitutes nothing for a key with neither a stored value nor a
+  default, which would hand the server the literal text `${user_config.aside_command}`
+  as a path. The CLI and Codex hosts set the same two variables in the environment;
+  `.env.example` documents them.
+
+### Fixed
+
+- **A Federal Court search no longer comes back as three other courts' decisions.**
+  `sourcesFor()` in `search_cases` recognised court tokens beginning `NSW` or `HCA`
+  and the Queensland set, and anything else fell through to the default fan-out — so
+  `court: "FCA"` searched NSW Caselaw, the High Court and Queensland and returned
+  their hits as the answer to a Federal Court question, and `jurisdiction: "Cth",
+  court: "FCA"` quietly became the High Court alone. A court token this server cannot
+  reach is now reported as the blocked source it is, with its deep links, instead of
+  being answered with a different court's material.
+
 ## [1.0.1] - 2026-09-12
 
 First release with a downloadable installer. `au-law-mcp-1.0.1.mcpb` is attached

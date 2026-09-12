@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest"
 import {
   BLOCKED_HOSTS,
+  BROWSER_FALLBACK_DOMAINS,
   DEFAULT_USER_AGENT,
   HOST_KEYS,
   UPSTREAM_HOSTS,
   defaultAcceptFor,
   defaultHeadersFor,
   getHostConfig,
+  hostDomain,
   isBlockedHost,
+  isBrowserFallbackHost,
   resolveUserAgent,
   type HostKey,
 } from "./upstream-hosts.js"
@@ -97,6 +100,71 @@ describe("blocked set", () => {
       if (BLOCKED_HOSTS.has(key)) continue
       expect(UPSTREAM_HOSTS[key].blocked).toBeUndefined()
       expect(isBlockedHost(key)).toBe(false)
+    }
+  })
+})
+
+describe("browser-fallback allowlist", () => {
+  it("is exactly the blocked sources, as domains", () => {
+    expect([...BROWSER_FALLBACK_DOMAINS].sort()).toEqual(
+      [
+        "accc.gov.au", "austlii.edu.au", "competitiontribunal.gov.au",
+        "judgments.fedcourt.gov.au", "lawcite.austlii.edu.au",
+        "legislation.nsw.gov.au", "legislation.sa.gov.au", "ombudsman.gov.au",
+      ].sort(),
+    )
+  })
+
+  // The derivation, not the literal list, is the property worth pinning: a
+  // source that gets blocked tomorrow must reach the fallback without anyone
+  // remembering a second list exists.
+  it("covers every blocked row's own hostname, in both its www and bare form", () => {
+    for (const key of BLOCKED_HOSTS) {
+      const hostname = new URL(UPSTREAM_HOSTS[key].base).hostname
+      expect(isBrowserFallbackHost(hostname)).toBe(true)
+      expect(isBrowserFallbackHost(hostDomain(key))).toBe(true)
+      expect(isBrowserFallbackHost(`www.${hostDomain(key)}`)).toBe(true)
+    }
+  })
+
+  it("accepts subdomains of an allowed domain", () => {
+    expect(isBrowserFallbackHost("lawcite.austlii.edu.au")).toBe(true)
+    expect(isBrowserFallbackHost("classic.austlii.edu.au")).toBe(true)
+    expect(isBrowserFallbackHost("www.judgments.fedcourt.gov.au")).toBe(true)
+  })
+
+  // Label-boundary matching, not substring matching: each of these contains an
+  // allowed domain as text and is a different publisher.
+  it("refuses lookalikes, parent domains and anything else", () => {
+    for (const hostname of [
+      "mail.google.com", "gov.au", "edu.au", "notaccc.gov.au",
+      "accc.gov.au.attacker.example", "austlii.edu.au.evil.test",
+      "fedcourt.gov.au", "legislation.gov.au", "www.caselaw.nsw.gov.au",
+      "127.0.0.1", "localhost", "",
+    ]) {
+      expect(isBrowserFallbackHost(hostname)).toBe(false)
+    }
+  })
+
+  it("is case- and trailing-dot-insensitive, the way DNS is", () => {
+    expect(isBrowserFallbackHost("WWW.ACCC.GOV.AU")).toBe(true)
+    expect(isBrowserFallbackHost("www.accc.gov.au.")).toBe(true)
+    expect(isBrowserFallbackHost(" www.accc.gov.au ")).toBe(true)
+  })
+
+  // Aside is a separate, opt-in path; it is not a way to un-block a host. The
+  // direct-fetch refusal has to stay exactly as strict as it was.
+  it("does not unblock anything for direct fetches", () => {
+    for (const key of BLOCKED_HOSTS) {
+      expect(isBlockedHost(key)).toBe(true)
+      expect(UPSTREAM_HOSTS[key].blocked).toBe(true)
+    }
+  })
+
+  it("never lets a host this server fetches itself become a browser target", () => {
+    for (const key of HOST_KEYS) {
+      if (BLOCKED_HOSTS.has(key)) continue
+      expect(isBrowserFallbackHost(new URL(UPSTREAM_HOSTS[key].base).hostname)).toBe(false)
     }
   })
 })

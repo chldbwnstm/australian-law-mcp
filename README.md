@@ -127,12 +127,33 @@ Consumer Act 2010**. Open the source link to see the original provision.
 If the app says the tools are unavailable, send: **“Please check and fix my
 Australian Law connection, then try again.”**
 
+### Optional: let the extension finish blocked sources (Mac, off by default)
+
+Some publishers refuse this server outright, so questions about Federal Court
+judgments or anything AustLII-hosted come back as a blocked source and a link.
+On a Mac with [Aside](https://docs.aside.com/help/get-started) installed, you
+can let the server finish those lookups in your own browser instead. In the
+Claude desktop app it is a switch on the extension itself —
+**Settings → Extensions → Australian Law → “Finish blocked legal sources using
+the Aside browser”** — so there is no file to edit and nothing to install into
+a project. Read
+[what that switch does and does not do](#optional-finishing-a-blocked-source-in-your-own-browser)
+before turning it on; with Aside absent it does nothing at all.
+
 ### Optional: add Aside browser research (macOS only)
 
 **On macOS 15 or later, your AI can also use Aside to follow up source links,
 read accessible judgments and PDFs, and save its research progress.** This is a
 preview in the current source version. Windows users can use the standard law
 tools; Aside follow-up is not available on Windows yet.
+
+This is the other half of the same gap, not a duplicate of the switch above.
+The switch lets the *server* finish one blocked lookup inside a single answer,
+in any host including desktop Chat. The `au-law-followup` skill below is a
+*research session* — per-matter budgets, saved evidence, checkpoints you can
+stop and resume — and it runs only in a local Codex or Claude Code session
+opened on a checkout, because Chat loads extensions and never loads a project
+skill.
 
 1. [Install Aside](https://docs.aside.com/help/get-started) and open it.
 2. Open your project folder in a local Codex or Claude Code session, then send:
@@ -581,6 +602,17 @@ This section is not a disclaimer. It is the list of things you would otherwise d
 
 **A blocked source is never reported as absence.** The label is `[UPSTREAM_BLOCKED]`, distinct from `[NOT_FOUND]` (the source authoritatively says the record is not there) and from `[UPSTREAM_NO_DATA]` (the source was asked and did not hand it over). The response says, in words, that it carries no evidence either way.
 
+### Optional: finishing a blocked source in your own browser
+
+Those publishers refuse *this server*. They do not refuse *you*. On a Mac with [Aside](https://docs.aside.com/help/get-started) installed, the server can be allowed to finish a blocked lookup by driving that browser — the one already signed in to the sites you use — and return what the page actually said.
+
+- **Off by default, and it stays off until a person turns it on.** In the Claude desktop app: **Settings → Extensions → Australian Law → “Finish blocked legal sources using the Aside browser”**. On the CLI and Codex hosts, which have no settings UI, set `AU_LAW_ASIDE=1`; see [`.env.example`](.env.example) for both variables.
+- **macOS, with Aside installed, or nothing happens.** There is no Windows build, no bundled browser, no remote fallback. With Aside absent the switch has no effect whatever: blocked sources answer with the same `[UPSTREAM_BLOCKED]` note and deep link as before. Installing the extension does not give a Chat user Federal Court coverage, and turning this on does not give it to one without Aside.
+- **It drives a browser holding your logged-in sessions.** That is exactly why it gets past gates this server cannot, and exactly why it is fenced: the server may only point it at the blocked legal-source domains in the table above — the Federal Court, AustLII, LawCite, the NSW and SA registers, the ACCC, the Competition Tribunal, the Ombudsman. That list is derived from those rows; no question, tool argument or URL in a document can widen it.
+- **What comes back is labelled as browser-retrieved.** A page rendered in your own session is not the same evidence as a document a publisher's endpoint handed over, and the answer says which one it is.
+
+**Why it exists.** With the extension installed and the switch off, ask Claude Desktop Chat for recent Federal Court decisions: the server reports the court as blocked, and Chat then answers from its own web search. That answer can read as though it came from here. It did not — nothing in it passed through this server's sources, citation parsing or blocked-source labelling. The switch is what lets the server answer that question itself, and when it is off the honest reading of “blocked” is *this server did not check*, not *the Federal Court has nothing*.
+
 ### What is materially incomplete even where it works
 
 - **No reported citations.** CLR, FCR, NSWLR and every other reported series is reachable only through AustLII/LawCite. `verify_citations` marks a reported citation `⚠`, never `✓` or `✗`.
@@ -611,7 +643,14 @@ This software retrieves and formats public legal material. It does not give lega
 
 ## Configuration reference
 
-These apply only when the server is started as an HTTP service (`--mode http`). The stdio server that Claude Desktop launches needs none of them.
+Two settings apply in every mode, including the stdio server the desktop app launches. Desktop users set them from **Settings → Extensions → Australian Law** rather than as environment variables; the extension then passes them to the server on every launch.
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `AU_LAW_ASIDE` | No | off | Allows the [browser fallback](#optional-finishing-a-blocked-source-in-your-own-browser) for sources the publisher blocks. Off unless set to `1` or `true` — read as a value, never as presence, because the desktop extension always sets it, to `"true"` or `"false"`. macOS with Aside installed; a no-op otherwise. |
+| `AU_LAW_ASIDE_COMMAND` | No | the standard install path | Full path to the Aside CLI, for an installation the server cannot find on its own. Empty means unset. Ignored while `AU_LAW_ASIDE` is off. |
+
+Everything below applies only when the server is started as an HTTP service (`--mode http`). The stdio server that Claude Desktop launches needs none of them.
 
 | Variable | Required | Default | Description |
 |---|---|---|---|

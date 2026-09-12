@@ -2,7 +2,7 @@
  * Every upstream this server knows about — the single source of base URLs,
  * timeouts and politeness intervals (docs/ARCHITECTURE.md "Upstream hosts").
  *
- * Two things live here that could plausibly live elsewhere, deliberately:
+ * Three things live here that could plausibly live elsewhere, deliberately:
  *
  *  - **Blocked hosts are rows in the same table, not a separate list.** They
  *    are real sources with real URL grammars; the only difference is that this
@@ -12,6 +12,11 @@
  *  - **Per-host timeouts and intervals.** Queensland content search takes ~90s
  *    and the ATO form ~60s; a single global timeout either cuts those off or
  *    makes a dead host hang every other tool for a minute and a half.
+ *  - **The browser-fallback allowlist** (`BROWSER_FALLBACK_DOMAINS` below).
+ *    The opt-in Aside path drives a real local browser carrying the user's
+ *    logged-in sessions, so the set of hosts it may be pointed at is derived
+ *    from the blocked rows here rather than assembled anywhere a caller can
+ *    reach.
  */
 
 /** Wire shape a host speaks. Governs `allowHtmlBody` and the default `Accept`. */
@@ -371,6 +376,56 @@ export function getHostConfig(key: HostKey): HostConfig {
 
 export function isBlockedHost(key: HostKey): boolean {
   return BLOCKED_HOSTS.has(key)
+}
+
+/**
+ * The registrable-looking domain a row addresses: its base URL's hostname with
+ * a leading `www.` and any trailing root dot removed. `www.accc.gov.au` and
+ * `accc.gov.au` are the same publisher, and the table records whichever form
+ * that publisher's canonical links use.
+ */
+export function hostDomain(key: HostKey): string {
+  const hostname = new URL(getHostConfig(key).base).hostname.toLowerCase().replace(/\.$/, "")
+  return hostname.startsWith("www.") ? hostname.slice(4) : hostname
+}
+
+/**
+ * Domains the opt-in browser fallback (`sources/aside-browser.ts`) may point a
+ * real browser at.
+ *
+ * Derived from `blocked === true`, never hand-written, for two reasons that
+ * pull in opposite directions and are both satisfied by deriving it:
+ *
+ *  - A source that gets blocked later must not become silently unreachable:
+ *    adding a blocked row is the same act as saying "this server wants this
+ *    material and cannot get it itself", which is exactly what the fallback
+ *    is for.
+ *  - The set must not be extendable from a tool argument. A URL handed to the
+ *    fallback can originate in text a model read somewhere, and the browser it
+ *    drives holds the user's logged-in sessions. Nothing outside this table
+ *    can widen the set, and this table is source, not input.
+ *
+ * Blocking is unaffected: a blocked host is still refused for direct fetches:
+ * `BLOCKED_HOSTS` and `isBlockedHost` do not consult this at all.
+ */
+export const BROWSER_FALLBACK_DOMAINS: ReadonlySet<string> = new Set(
+  [...BLOCKED_HOSTS].map(hostDomain),
+)
+
+/**
+ * True when `hostname` is one of the fallback domains or a subdomain of one.
+ *
+ * Matching is on label boundaries, so `accc.gov.au.attacker.example` and
+ * `notaccc.gov.au` are both refused; only `accc.gov.au` and `*.accc.gov.au`
+ * pass. There is no wildcard, no suffix list and no `includes()`.
+ */
+export function isBrowserFallbackHost(hostname: string): boolean {
+  const candidate = hostname.trim().toLowerCase().replace(/\.$/, "")
+  if (!candidate) return false
+  for (const domain of BROWSER_FALLBACK_DOMAINS) {
+    if (candidate === domain || candidate.endsWith(`.${domain}`)) return true
+  }
+  return false
 }
 
 /** Accept header a host expects when the caller does not set one. */
