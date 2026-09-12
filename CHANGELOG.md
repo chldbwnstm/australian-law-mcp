@@ -6,6 +6,19 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-09-12
+
+First release with a downloadable installer. `au-law-mcp-1.0.1.mcpb` is attached
+to the GitHub release, so installing into the Claude desktop app no longer needs
+a clone, a terminal or Node.js — 1.0.0 was tagged but never distributed, and the
+two install bugs below meant the routes it documented did not work.
+
+### Added
+
+- The desktop extension bundle is published on the Releases page. `npm run
+  build:mcpb` produces the identical file, and starts the server inside the
+  bundle to check its tool list before the build finishes.
+
 ### Fixed
 
 - **The setup wizard now writes a launch command it has verified.** It wrote

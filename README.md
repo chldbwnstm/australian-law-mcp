@@ -21,15 +21,17 @@ project setup in local Codex or Claude Code sessions on **macOS 15 or later**.
 Windows supports the core law tools; Aside browser follow-up is not available
 there yet.
 
-> **This repository is how you get it.** Nothing is published: there is no
-> `au-law-mcp` package on the npm registry (`npx -y au-law-mcp` answers **404**)
-> and the repository has **no releases**, so nothing can be downloaded. Both
-> installers are built here. `npm run build:mcpb` writes
-> `release/au-law-mcp-1.0.0.mcpb` (~4 MB), the extension the Claude desktop app
-> installs by double-click; `npm ci --ignore-scripts && npm run build` gives a
-> CLI, IDE or Codex client something to register, by `claude mcp add` or by
-> `node build/index.js setup`, which writes a launch command it has checked on
-> disk. Pick **one per host** — full route in [INSTALL.md](INSTALL.md).
+> **Download the extension, or build it here.** The desktop installer is
+> attached to the
+> [latest release](https://github.com/chldbwnstm/australian-law-mcp/releases/latest)
+> — `au-law-mcp-1.0.1.mcpb` (~4 MB), which the Claude desktop app installs by
+> double-click. There is still no npm package (`npx -y au-law-mcp` answers
+> **404**), so a CLI, IDE or Codex client is registered from a checkout:
+> `npm ci --ignore-scripts && npm run build` gives it something to register, by
+> `claude mcp add` or by `node build/index.js setup`, which writes a launch
+> command it has checked on disk. `npm run build:mcpb` rebuilds the same bundle
+> if you would rather not download it. Pick **one per host** — full route in
+> [INSTALL.md](INSTALL.md).
 
 ![Install](https://img.shields.io/badge/install-from%20source-blue)
 ![MCP](https://img.shields.io/badge/MCP-1.27-blue)
@@ -73,14 +75,14 @@ there yet.
 
 ### 2a. Claude desktop app — install the extension
 
-Someone may have sent you `au-law-mcp-1.0.0.mcpb` already; open it and skip ahead.
+Someone may have sent you `au-law-mcp-1.0.1.mcpb` already; open it and skip ahead.
 To build it yourself:
 
 ```bash
 git clone https://github.com/chldbwnstm/australian-law-mcp
 cd australian-law-mcp
 npm ci --ignore-scripts
-npm run build:mcpb          # → release/au-law-mcp-1.0.0.mcpb
+npm run build:mcpb          # → release/au-law-mcp-1.0.1.mcpb
 ```
 
 That build unpacks the bundle, starts the server inside it and checks its tool

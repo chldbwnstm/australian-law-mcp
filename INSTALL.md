@@ -26,21 +26,24 @@ file.
 
 ### Get the file
 
-This repository's Releases page has nothing to download — there are no releases
-— so you build the bundle yourself, once:
+Download `au-law-mcp-1.0.1.mcpb` (about 4 MB) from the
+[latest release](https://github.com/chldbwnstm/australian-law-mcp/releases/latest).
+That is the whole step — no clone, no terminal, no Node.
+
+Someone may have sent you the file already; it is the same bundle.
+
+To build it yourself instead:
 
 ```bash
 git clone https://github.com/chldbwnstm/australian-law-mcp
 cd australian-law-mcp
 npm ci --ignore-scripts
-npm run build:mcpb          # → release/au-law-mcp-1.0.0.mcpb, about 4 MB
+npm run build:mcpb          # → release/au-law-mcp-1.0.1.mcpb
 ```
 
 The build unpacks the bundle, starts the server inside it and checks that it
 advertises the expected tools before it finishes, so a file that appears has
-already been proved to run.
-
-Someone may have sent you the file already — if so, skip straight to installing it.
+already been proved to run. The released file is built the same way.
 
 ### Install it
 
@@ -109,17 +112,16 @@ must grant access first. The app may ask for permission to perform installation.
 
 ## What is and is not available
 
-Install from this repository. There is no other route today:
+The desktop bundle is a download; everything else starts from a checkout:
 
 | Route | Status |
 |---|---|
-| `npm run build:mcpb` → `release/au-law-mcp-1.0.0.mcpb`, installed through **Settings → Extensions** | **Works.** You build the file yourself. Route 1. |
+| `au-law-mcp-1.0.1.mcpb` from [Releases](https://github.com/chldbwnstm/australian-law-mcp/releases/latest), installed through **Settings → Extensions** | **Works.** Download it, or rebuild it with `npm run build:mcpb`. Route 1. |
 | Clone, `npm ci --ignore-scripts`, `npm run build`, register `build/index.js` with `claude mcp add` or `codex mcp add` | **Works.** Routes 2 and 3. |
-| `npx -y au-law-mcp` | **Does not resolve.** `registry.npmjs.org/au-law-mcp` answers 404 — the package has never been published. A client config naming it fails with "server disconnected". |
-| Downloading a `.mcpb` from the repository's Releases page | **Nothing to download.** The repository has no releases. |
+| `npx -y au-law-mcp` | **Does not resolve.** `registry.npmjs.org/au-law-mcp` answers 404 — the package has never been published. A client config naming it fails with "server disconnected", so do not write it into anyone's configuration. |
 
-Both unavailable routes turn on the day the owner publishes; until then, do not
-write `npx -y au-law-mcp` into anyone's configuration.
+The npm route turns on the day the package is published. Until then every route
+above starts either from the released bundle or from a checkout.
 
 ## Instructions for the installing agent
 

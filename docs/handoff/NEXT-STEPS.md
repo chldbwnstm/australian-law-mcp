@@ -15,7 +15,7 @@ reconciled into one `main`.
 | Tools | 83 registered, 10 advertised — `TOOL_COUNTS`, derived, never written down twice |
 | Package | `au-law-mcp` v1.0.0 (bins: `au-law-mcp`, `australian-law`) |
 | Remote | `github.com/chldbwnstm/australian-law-mcp` — the repo keeps that name, only the npm package was renamed. **Public**; `v1.0.0` is pushed but points at `73d272b`, **14 commits behind** current `main` — do not cut a release from it, see [below](#cut-the-release-from-a-new-tag-not-v100) |
-| Distribution | **None.** `registry.npmjs.org/au-law-mcp` → 404, `gh release list` → empty (checked 2026-09-12). Source install only — see [Turning the npx and .mcpb routes on](#turning-the-npx-and-mcpb-routes-on) |
+| Distribution | **Desktop bundle released.** `au-law-mcp-1.0.1.mcpb` is attached to the v1.0.1 GitHub release. npm is still unpublished (`registry.npmjs.org/au-law-mcp` → 404), so CLI/Codex hosts install from a checkout — see [Turning the npm route on](#turning-the-npm-route-on) |
 | Live matrix | `docs/VERIFICATION.md` — MCP stdio, all 18 decision domains, CLI, HTTP, packaging |
 
 Six adversarial review rounds and two live-verification passes fixed **97 confirmed
@@ -119,16 +119,16 @@ rewritten so that every commit is authored and committed by
 commit and the session trailers dropped — `Co-Authored-By` lines stay — so nothing personal
 ships with the flip.
 
-Done: `main` is pushed, `v1.0.0` is tagged and pushed, and the repository is public.
-Publication is the one step left, and it is the owner's call — see the next section.
+Done: `main` is pushed, the repository is public, and **v1.0.1 is released with the
+desktop bundle attached**. The `v1.0.0` tag is left where it is — it points 15 commits
+behind and was never distributed. npm publication is the one route still off.
 
-## Turning the npx and .mcpb routes on
+## Turning the npm route on
 
-Two install routes are written about in this project and **neither exists today**:
-`npx -y au-law-mcp` (the registry answers 404) and a `.mcpb` downloaded from Releases
-(there are none). Every install instruction in the tree now documents the source install
-instead, so nothing here is waiting on a publish. This is what turning the two routes on
-takes — owner-only, because both steps push something outward.
+One install route is written about and does not exist: `npx -y au-law-mcp` (the registry
+answers 404). The `.mcpb` download now works — v1.0.1 carries it. Nothing in the tree is
+waiting on the npm publish; this is what turning it on takes, owner-only because it pushes
+something outward.
 
 ```bash
 # 1. npm — turns `npx -y au-law-mcp` on
