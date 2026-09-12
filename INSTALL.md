@@ -174,13 +174,16 @@ above starts either from the released bundle or from a checkout.
    `claude mcp remove --scope user australian-law` — the extension is app-managed
    and runs on the app's own Node. Use `claude mcp add` only when there is no
    desktop app on the machine.
-8. For the Claude Desktop app, build the bundle and install it: `npm run build:mcpb`
-   writes `release/au-law-mcp-<version>.mcpb` (the script builds `build/` fresh,
-   stages production dependencies, generates the manifest and fails unless the
-   packed bundle starts and answers `tools/list`), and the app installs that file
-   through **Settings → Extensions**. There is no release to download — the
-   repository has none — so nothing arrives by URL. That one install covers Chat
-   and local Code sessions; do not follow it with `claude mcp add`.
+8. For the Claude Desktop app, install the bundle. Prefer the released file —
+   `au-law-mcp-<version>.mcpb`, attached to the
+   [latest release](https://github.com/chldbwnstm/australian-law-mcp/releases/latest)
+   — which needs no checkout at all. If the machine cannot reach it, or you want
+   the code at this revision, `npm run build:mcpb` writes the identical file to
+   `release/` (the script builds `build/` fresh, stages production dependencies,
+   generates the manifest and fails unless the packed bundle starts and answers
+   `tools/list`). Either way the app installs it through **Settings →
+   Extensions**. That one install covers Chat and local Code sessions; do not
+   follow it with `claude mcp add`.
 
    If the bundle cannot be installed — managed extensions are blocked, say —
    merge a `mcpServers.australian-law` command/args entry (absolute node, absolute

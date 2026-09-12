@@ -75,8 +75,15 @@ there yet.
 
 ### 2a. Claude desktop app — install the extension
 
-Someone may have sent you `au-law-mcp-1.0.1.mcpb` already; open it and skip ahead.
-To build it yourself:
+Download `au-law-mcp-1.0.1.mcpb` (~4 MB) from the
+[latest release](https://github.com/chldbwnstm/australian-law-mcp/releases/latest),
+or open the copy someone sent you — it is the same file. No clone, no terminal,
+no Node.js.
+
+Open it, choose **Install**, and restart the app. Nothing further is needed for
+Code: the app supplies installed extensions to its own local Code sessions.
+
+To rebuild it from source instead:
 
 ```bash
 git clone https://github.com/chldbwnstm/australian-law-mcp
@@ -87,8 +94,7 @@ npm run build:mcpb          # → release/au-law-mcp-1.0.1.mcpb
 
 That build unpacks the bundle, starts the server inside it and checks its tool
 list before it finishes, so a file that appears has already been proved to run.
-Open it, choose **Install**, and restart the app. Nothing further is needed for
-Code: the app supplies installed extensions to its own local Code sessions.
+The released file is built the same way.
 Step-by-step version for a non-technical tester: [docs/TRY-IT.md](docs/TRY-IT.md).
 
 ### 2b. Codex, or a machine with no desktop app — let the agent register it
