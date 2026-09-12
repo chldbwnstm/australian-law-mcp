@@ -3,9 +3,30 @@
 A private preview for Australian lawyers. Ask ordinary questions and get public
 legal material with links back to its sources.
 
+## First, get the installer file
+
+Everything below needs one file, `au-law-mcp-1.0.0.mcpb`. There is nowhere to
+download it from: this project has no npm package and the repository has no
+releases. It reaches you one of two ways.
+
+- **The person who invited you sends it**, as a trial pack. Unzip the pack; the
+  `.mcpb` is inside it.
+- **You build it**, which is the only self-service route and does need a terminal
+  and Node.js 20.19 or later, once:
+
+  ```bash
+  git clone https://github.com/chldbwnstm/australian-law-mcp
+  cd australian-law-mcp
+  npm ci --ignore-scripts
+  npm run build:mcpb          # writes release/au-law-mcp-1.0.0.mcpb
+  ```
+
+  The build refuses to finish unless the packed bundle starts and answers with
+  the ten tools it advertises, so a file that appears is a file that ran.
+
 ## Install once
 
-1. Download and unzip the trial pack, then open `au-law-mcp-1.0.0.mcpb`.
+1. Open `au-law-mcp-1.0.0.mcpb`.
 2. Choose **Install** in Claude Desktop.
 3. Start a new chat. If Claude asks to use Australian Law, review and allow the request.
 
@@ -14,9 +35,10 @@ If opening the file does not show an install dialog, open Claude Desktop and go 
 the same file. If your firm manages extensions, ask its administrator to make
 Australian Law available to you.
 
-No terminal commands, separate Node.js installation, or legal-data API key are
-needed. You need Claude Desktop, an account you can use there, and internet access;
-your usual Claude plan and usage limits still apply.
+Once you have that file, no terminal commands, separate Node.js installation or
+legal-data API key are needed — the bundle carries its own runtime dependencies
+and Claude supplies Node. You need Claude Desktop, an account you can use there,
+and internet access; your usual Claude plan and usage limits still apply.
 
 ## Ask your first question
 
@@ -55,7 +77,8 @@ local installation does not make the conversation offline.
 - Restart Claude Desktop, open a new chat and check that Australian Law is enabled
   under Extensions. Ask it to use Australian Law explicitly.
 - If installation is restricted, your firm's administrator may need to allow it.
-- Tell the person who sent you the trial pack which app and operating system you
+- Tell the person who sent you the trial pack — or, if you built the file
+  yourself, open an issue on the repository — which app and operating system you
   use, the prompt you tried, and what happened. Please omit client information.
 - Private trial updates arrive as a new installation file.
 

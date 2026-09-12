@@ -24,3 +24,9 @@ CLAUDE.md
 # Local state written by MCP tools run inside this checkout, not part of the server
 .debate-war/
 .debate-of-agents/
+
+# Written by `au-law-mcp setup-followup` when it is run inside this checkout.
+# They are a developer's local opt-in, never part of the package.
+.agents/
+.codex/
+.au-law-followup-host.json

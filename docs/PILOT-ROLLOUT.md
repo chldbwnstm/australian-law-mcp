@@ -2,10 +2,23 @@
 
 ## Ready now: Claude Desktop
 
-Send `release/australian-law-pilot.zip` directly to each tester. It contains a short
-browser-readable guide and the locally verified `.mcpb` installer. No public
-repository, npm publication or app-directory listing is necessary for this route.
-The ZIP is a convenience pack: recipients extract it and install the `.mcpb` inside.
+Send each tester a pack containing the locally verified `.mcpb` installer and a
+short browser-readable guide. No npm publication or app-directory listing is
+necessary for this route. Recipients extract the pack and install the `.mcpb`
+inside.
+
+Assemble the pack yourself — there is no script that builds it, and no
+`release/australian-law-pilot.zip` in the repository:
+
+```bash
+npm ci --ignore-scripts && npm run build:mcpb   # → release/au-law-mcp-<version>.mcpb
+mkdir -p /tmp/australian-law-pilot
+cp release/au-law-mcp-*.mcpb docs/START-HERE.html /tmp/australian-law-pilot/
+cd /tmp && zip -r australian-law-pilot.zip australian-law-pilot
+```
+
+`build:mcpb` starts the server inside the bundle and checks its tool list before
+it finishes, so the installer you send has been proved to run on your machine.
 
 Suggested invitation:
 

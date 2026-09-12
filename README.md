@@ -19,9 +19,18 @@ Evidence and progress are saved for the matter so you can resume the work later.
 The Aside workflow is an **optional preview in this repository**, available after
 project setup in local Codex or Claude Code sessions on **macOS 15 or later**.
 Windows supports the core law tools; Aside browser follow-up is not available
-there yet. The published npm **`au-law-mcp` v1.0.0** contains the core law tools.
+there yet.
 
-![npm](https://img.shields.io/npm/v/au-law-mcp)
+> **This repository is how you get it.** Nothing is published: there is no
+> `au-law-mcp` package on the npm registry (`npx -y au-law-mcp` answers **404**)
+> and the repository has **no releases**, so there is no `.mcpb` file to
+> download. What works today is a source install — clone,
+> `npm ci --ignore-scripts`, `npm run build` — after which `node build/index.js
+> setup` writes a launch command it has checked on disk, and
+> `npm run build:mcpb` builds the Claude Desktop bundle locally. Full route:
+> [INSTALL.md](INSTALL.md).
+
+![Install](https://img.shields.io/badge/install-from%20source-blue)
 ![MCP](https://img.shields.io/badge/MCP-1.27-blue)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue)
@@ -101,7 +110,10 @@ Click **Code**, choose **Local**, and follow the three steps above. The ordinary
 Chat tab cannot perform this automatic installation. If you do not have access
 to Code, use the Codex desktop option or the [manual instructions](INSTALL.md).
 
-A downloadable Claude Chat extension has not been published on GitHub yet.
+There is no Claude Chat extension to download: the repository has no releases.
+Build the bundle yourself — `npm run build:mcpb` writes
+`release/au-law-mcp-1.0.0.mcpb`, and Claude Desktop installs that file. See
+[docs/TRY-IT.md](docs/TRY-IT.md).
 
 </details>
 
@@ -137,9 +149,10 @@ missing originals, read judgment PDFs, investigate later citing decisions, and
 save evidence and progress for the matter. The AI starts with Australian Law MCP
 and continues through Aside when further source checks are needed.
 
-This is an **unreleased preview**. The published npm v1.0.0 package does not
-include this companion workflow. Installing the ordinary law server alone does
-not enable it.
+This is an **unreleased preview** that exists only in this source tree. There is
+no published npm package and no release bundle of this project at all, and
+neither would carry this companion workflow. Installing the ordinary law server
+alone does not enable it.
 
 | Feature | macOS | Windows |
 |---|---|---|

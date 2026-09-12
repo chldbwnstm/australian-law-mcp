@@ -1,18 +1,21 @@
 # Handoff — where the work stands
 
-Updated 2026-09-05, after the two round-6 branches were reconciled into one `main`.
+Updated 2026-09-12 — distribution status and the publish follow-up below are current as at
+that date; everything else dates from 2026-09-05, after the two round-6 branches were
+reconciled into one `main`.
 
 ## State
 
 | | |
 |---|---|
 | Last commit | *README test count at 2,477; VERIFICATION.md notes the rename* |
-| Tests | 2,477 passing, 18 live-gated (skipped offline), 105 files, suite runs in ~5 s |
+| Tests | 2,477 passing, 18 live-gated (skipped offline), 105 files, suite runs in ~5 s *(measured 2026-09-05; the count drifts upward with every change)* |
 | Typecheck | clean (`tsc --noEmit`) |
 | Build | clean (`npm run build`) |
 | Tools | 81 registered, 10 advertised — `TOOL_COUNTS`, derived, never written down twice |
 | Package | `au-law-mcp` v1.0.0 (bins: `au-law-mcp`, `australian-law`) |
-| Remote | `github.com/chldbwnstm/australian-law-mcp` — the repo keeps that name, only the npm package was renamed — **still private, not yet tagged** |
+| Remote | `github.com/chldbwnstm/australian-law-mcp` — the repo keeps that name, only the npm package was renamed. **Public**; `v1.0.0` is pushed but points at `73d272b`, which is behind current `main` |
+| Distribution | **None.** `registry.npmjs.org/au-law-mcp` → 404, `gh release list` → empty (checked 2026-09-12). Source install only — see [Turning the npx and .mcpb routes on](#turning-the-npx-and-mcpb-routes-on) |
 | Live matrix | `docs/VERIFICATION.md` — MCP stdio, all 18 decision domains, CLI, HTTP, packaging |
 
 Six adversarial review rounds and two live-verification passes fixed **97 confirmed
@@ -95,8 +98,9 @@ node build/cli.js "what does s 18 of the ACL say"
 LIVE=1 npx vitest run src/tools/decision-domains.live.test.ts
 ```
 
-Installed from npm the package is `au-law-mcp` (`npx -y --ignore-scripts au-law-mcp setup`
-runs the client-config wizard), and the natural-language CLI is `australian-law`.
+`node build/index.js setup` runs the client-config wizard; it writes the absolute launch
+command it has just checked on disk, because nothing is published for `npx` to fetch. The
+natural-language CLI is `australian-law` (`node build/cli.js` from a checkout).
 
 Known limitations are documented, not hidden: `README.md` has the blocked-source and
 degraded-domain tables (AustLII, LawCite, the Federal Court, the NSW and SA registers, the
@@ -115,5 +119,43 @@ rewritten so that every commit is authored and committed by
 commit and the session trailers dropped — `Co-Authored-By` lines stay — so nothing personal
 ships with the flip.
 
-Four steps are left for a human: force-push the rewritten `main` to `origin`, tag `v1.0.0`,
-flip the repository to public, and — optionally — `npm publish`.
+Done: `main` is pushed, `v1.0.0` is tagged and pushed, and the repository is public.
+Publication is the one step left, and it is the owner's call — see the next section.
+
+## Turning the npx and .mcpb routes on
+
+Two install routes are written about in this project and **neither exists today**:
+`npx -y au-law-mcp` (the registry answers 404) and a `.mcpb` downloaded from Releases
+(there are none). Every install instruction in the tree now documents the source install
+instead, so nothing here is waiting on a publish. This is what turning the two routes on
+takes — owner-only, because both steps push something outward.
+
+```bash
+# 1. npm — turns `npx -y au-law-mcp` on
+npm run typecheck && npm test            # prepublishOnly runs typecheck, tests and a clean build again
+npm pack --dry-run                       # build/ + companion + README + LICENSE + NOTICE + CHANGELOG, nothing else
+npm publish                              # unscoped name; needs an npm account that can claim `au-law-mcp`
+curl -s -o /dev/null -w '%{http_code}\n' https://registry.npmjs.org/au-law-mcp   # expect 200
+
+# 2. GitHub release — turns the .mcpb download on
+npm run build:mcpb                       # → release/au-law-mcp-1.0.0.mcpb; the build fails unless the packed bundle starts
+git tag -f v1.0.0 && git push -f origin v1.0.0        # the pushed tag is older than main; retag or cut a new version
+sed -n '/^## \[1.0.0\]/,/^## \[0.1.0\]/p' CHANGELOG.md | sed '$d' > /tmp/release-notes.md
+gh release create v1.0.0 release/au-law-mcp-1.0.0.mcpb --title "v1.0.0" --notes-file /tmp/release-notes.md
+gh release list                          # expect one row with the .mcpb asset
+```
+
+Only after those two checks pass (200, and a release row carrying the asset) does the
+wording go back:
+
+| File | What to restore |
+|---|---|
+| `README.md` | The "This repository is how you get it" blockquote becomes the published install; put `![npm](https://img.shields.io/npm/v/au-law-mcp)` back in place of the install-from-source badge — it renders as soon as the registry answers; the Chat-tab note can link the release asset instead of `npm run build:mcpb`. |
+| `INSTALL.md` | The "What is and is not available" table: flip the `npx -y au-law-mcp` and Releases rows. Step 8 can prefer the downloaded `.mcpb` again. Step 5's note about `--npx` stays true either way. |
+| `docs/TRY-IT.md` | "First, get the installer file" becomes a download link to the release asset; keep the build route for anyone off a release. |
+| `CHANGELOG.md` | The 1.0.0 preamble ("tagged, not distributed") and the rename entry's install line. |
+| `src/setup.ts` | Nothing has to change: `--npx` re-checks the registry every run, so it starts succeeding by itself. Optional follow-up — make npx the default when the entry point resolves inside a `node_modules/au-law-mcp/` or `_npx` layout, since that path is npm's to evict. |
+
+`docs/PILOT-ROLLOUT.md` names `release/australian-law-pilot.zip`, which no script builds and
+which is not in the tree; `docs/VERIFICATION.md` records packaging runs. Both are worth a
+pass in the same sitting — they are not covered by the fixes above.

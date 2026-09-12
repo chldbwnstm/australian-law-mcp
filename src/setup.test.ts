@@ -1,10 +1,21 @@
 import { describe, expect, it } from "vitest"
 import { execFileSync } from "node:child_process"
-import { SERVER_KEY, buildServerEntry, buildZedEntry, detectClients, entryFor, mergeEntry } from "./setup.js"
+import {
+  SERVER_KEY,
+  buildServerEntry,
+  buildZedEntry,
+  detectClients,
+  entryFor,
+  mergeEntry,
+  resolveEntryPoint,
+  resolveLaunchCommand,
+} from "./setup.js"
+import type { LaunchCommand } from "./setup.js"
 import { followupHostEligibility, mergeClaudeAside, mergeCodexAside, runFollowupSetup } from "./followup-setup.js"
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { pathToFileURL } from "node:url"
 
 describe("client detection", () => {
   it("uses the platform's Claude Desktop path", () => {
@@ -113,40 +124,149 @@ describe("optional Aside companion setup", () => {
 })
 
 
+/** A resolved launch command, the shape `resolveLaunchCommand` hands back. */
+const LAUNCH: LaunchCommand = { command: "/usr/bin/node", args: ["/opt/au-law-mcp/build/index.js"] }
+
+/** A directory that looks like `build/` — an `index.js` beside a `setup.js`. */
+function builtLayout(): { dir: string; moduleUrl: string; entryPoint: string } {
+  const dir = mkdtempSync(join(tmpdir(), "au-law-launch-"))
+  const entryPoint = join(dir, "index.js")
+  writeFileSync(entryPoint, "// built entry point\n")
+  return { dir, moduleUrl: pathToFileURL(join(dir, "setup.js")).href, entryPoint }
+}
+
+describe("the launch command the wizard writes", () => {
+  // `npx -y au-law-mcp` cannot be verified: registry.npmjs.org/au-law-mcp
+  // answers 404 (checked 2026-09-12), so a client spawning it fails with
+  // "server disconnected" and the config file that caused it looks correct.
+  // What this process *can* prove is the file it is running from.
+  it("writes the absolute entry point it is running from, checked on disk", async () => {
+    const { dir, moduleUrl, entryPoint } = builtLayout()
+    try {
+      const plan = await resolveLaunchCommand({ moduleUrl, execPath: "/fake/node" })
+      expect(plan.form).toBe("absolute")
+      expect(plan.launch).toEqual({ command: "/fake/node", args: [entryPoint] })
+      expect(plan.note).toContain(entryPoint)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it("writes nothing at all when no built entry point is there", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "au-law-launch-empty-"))
+    try {
+      const plan = await resolveLaunchCommand({ moduleUrl: pathToFileURL(join(dir, "setup.js")).href })
+      expect(plan.form).toBe("unverified")
+      expect(plan.launch).toBeUndefined()
+      expect(plan.note).toContain("npm run build")
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it("falls back to the absolute path when --npx is asked for and the registry has no such package", async () => {
+    const { dir, moduleUrl, entryPoint } = builtLayout()
+    try {
+      const plan = await resolveLaunchCommand({
+        allowNpx: true,
+        moduleUrl,
+        execPath: "/fake/node",
+        registryProbe: async () => false,
+      })
+      expect(plan.launch).toEqual({ command: "/fake/node", args: [entryPoint] })
+      expect(plan.note).toContain("--npx was ignored")
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it("writes npx once the registry actually serves the package", async () => {
+    const plan = await resolveLaunchCommand({ allowNpx: true, registryProbe: async () => true })
+    expect(plan.form).toBe("npx")
+    expect(plan.launch).toEqual({ command: "npx", args: ["-y", "au-law-mcp"] })
+  })
+
+  it("does not touch the network unless --npx was passed", async () => {
+    const { dir, moduleUrl } = builtLayout()
+    let probes = 0
+    try {
+      await resolveLaunchCommand({
+        moduleUrl,
+        registryProbe: async () => {
+          probes += 1
+          return true
+        },
+      })
+      expect(probes).toBe(0)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  // The invariant, stated over this machine rather than a fixture: whatever the
+  // wizard hands back, either it is a path that is there or it is nothing.
+  it("never returns a command it has not verified", async () => {
+    const plan = await resolveLaunchCommand()
+    if (plan.form === "absolute") {
+      expect(existsSync(plan.launch?.args[0] ?? "")).toBe(true)
+      expect(plan.launch?.command).toBe(process.execPath)
+      expect(resolveEntryPoint()).toBe(plan.launch?.args[0])
+    } else {
+      expect(plan.launch).toBeUndefined()
+    }
+  })
+})
+
 describe("the registered entry", () => {
   // Australian sources are keyless, so there is nothing to put in `env` — an
   // empty env block would only invite someone to paste a credential into it.
   it("carries no API key", () => {
-    expect(buildServerEntry()).toEqual({ command: "npx", args: ["-y", "au-law-mcp"] })
-    expect(JSON.stringify(buildServerEntry())).not.toMatch(/env|key/i)
+    expect(buildServerEntry(LAUNCH)).toEqual({ command: "/usr/bin/node", args: ["/opt/au-law-mcp/build/index.js"] })
+    expect(JSON.stringify(buildServerEntry(LAUNCH))).not.toMatch(/env|key/i)
   })
 
   it("nests the command for Zed", () => {
-    expect(buildZedEntry()).toEqual({ command: { path: "npx", args: ["-y", "au-law-mcp"] } })
-    expect(entryFor("context_servers")).toEqual(buildZedEntry())
-    expect(entryFor("servers")).toEqual(buildServerEntry())
+    expect(buildZedEntry(LAUNCH)).toEqual({
+      command: { path: "/usr/bin/node", args: ["/opt/au-law-mcp/build/index.js"] },
+    })
+    expect(entryFor("context_servers", LAUNCH)).toEqual(buildZedEntry(LAUNCH))
+    expect(entryFor("servers", LAUNCH)).toEqual(buildServerEntry(LAUNCH))
   })
 })
 
 describe("merging into an existing config", () => {
   it("keeps every other server and every unrelated setting", () => {
     const existing = { theme: "dark", mcpServers: { "some-other": { command: "node" } } }
-    const merged = mergeEntry(existing, "mcpServers") as { theme: string; mcpServers: Record<string, unknown> }
+    const merged = mergeEntry(existing, "mcpServers", LAUNCH) as { theme: string; mcpServers: Record<string, unknown> }
     expect(merged.theme).toBe("dark")
     expect(merged.mcpServers["some-other"]).toEqual({ command: "node" })
-    expect(merged.mcpServers[SERVER_KEY]).toEqual(buildServerEntry())
+    expect(merged.mcpServers[SERVER_KEY]).toEqual(buildServerEntry(LAUNCH))
+  })
+
+  // The config the client reads must carry the verified command, not a package
+  // name the client would have to resolve from a registry that 404s.
+  it("writes the verified launch command into the file, not a registry name", () => {
+    const merged = mergeEntry({}, "mcpServers", LAUNCH) as { mcpServers: Record<string, unknown> }
+    expect(merged.mcpServers[SERVER_KEY]).toEqual({
+      command: "/usr/bin/node",
+      args: ["/opt/au-law-mcp/build/index.js"],
+    })
+    const zed = mergeEntry({}, "context_servers", LAUNCH) as { context_servers: Record<string, unknown> }
+    expect(zed.context_servers[SERVER_KEY]).toEqual({
+      command: { path: "/usr/bin/node", args: ["/opt/au-law-mcp/build/index.js"] },
+    })
   })
 
   it("replaces a previous registration rather than duplicating it", () => {
-    const merged = mergeEntry({ mcpServers: { [SERVER_KEY]: { command: "stale" } } }, "mcpServers") as {
+    const merged = mergeEntry({ mcpServers: { [SERVER_KEY]: { command: "stale" } } }, "mcpServers", LAUNCH) as {
       mcpServers: Record<string, unknown>
     }
     expect(Object.keys(merged.mcpServers)).toEqual([SERVER_KEY])
-    expect(merged.mcpServers[SERVER_KEY]).toEqual(buildServerEntry())
+    expect(merged.mcpServers[SERVER_KEY]).toEqual(buildServerEntry(LAUNCH))
   })
 
   it("writes into the key the client actually reads", () => {
-    expect(Object.keys(mergeEntry({}, "servers"))).toEqual(["servers"])
-    expect(Object.keys(mergeEntry({}, "context_servers"))).toEqual(["context_servers"])
+    expect(Object.keys(mergeEntry({}, "servers", LAUNCH))).toEqual(["servers"])
+    expect(Object.keys(mergeEntry({}, "context_servers", LAUNCH))).toEqual(["context_servers"])
   })
 })

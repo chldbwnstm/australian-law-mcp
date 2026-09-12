@@ -8,6 +8,18 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The setup wizard now writes a launch command it has verified.** It wrote
+  `{"command":"npx","args":["-y","au-law-mcp"]}` into every client config
+  unconditionally, and that package has never been published —
+  `registry.npmjs.org/au-law-mcp` answers 404 — so the client it had just
+  configured failed with "server disconnected", an error naming nothing the user
+  could act on. The wizard now resolves the absolute entry point it is itself
+  running from (`process.execPath` plus the built `index.js` beside it), checks
+  that file on disk, and writes that. `npx -y au-law-mcp` is written only when
+  asked for with `au-law-mcp setup --npx` **and** the registry answers for the
+  package at the moment setup runs. If neither form can be established the
+  wizard writes nothing and says which step to take, rather than leaving a
+  plausible-looking config behind.
 - Reject malformed Federal Register collection responses with `PARSE_ERROR` before
   they can become an empty search, a cached zero count, or a false `LAW_NOT_FOUND`.
 - Apply each host's minimum request interval to retry attempts as well as initial
@@ -30,9 +42,26 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `npm run verify:stdio` checks the built server's handshake, version, and advertised
   schemas. CI runs it after building on both Ubuntu and Windows with Node 20.19 and 22.
 
+### Changed
+
+- **The documented install routes are now the ones that exist.** Nothing about
+  this project is published: there is no `au-law-mcp` package on the npm
+  registry and the repository has no releases. So the README's npm version badge
+  and its "the published npm `au-law-mcp` v1.0.0" sentence are gone, INSTALL.md
+  and `docs/TRY-IT.md` tell the reader to build the Claude Desktop bundle with
+  `npm run build:mcpb` instead of downloading a release artefact that does not
+  exist, and each file names the route that works today alongside the ones that
+  do not. `docs/handoff/NEXT-STEPS.md` records what publishing would take and
+  which wording then goes back.
+
 ## [1.0.0] — 2026-09-05
 
-First stable release. The tool surface is unchanged from 0.1.0 — 81 tools
+First stable release **of the source tree**: it was tagged `v1.0.0`, not
+distributed. Nothing was pushed to the npm registry and no GitHub release was
+created, so `npx -y au-law-mcp` and any `.mcpb` download link do not resolve.
+Install from source — see [INSTALL.md](INSTALL.md).
+
+The tool surface is unchanged from 0.1.0 — 81 tools
 registered, 10 advertised — and everything below is a correctness fix, a rename,
 or a test that keeps a fixed defect fixed. Six adversarial review rounds and two
 live-verification passes closed 97 confirmed defects; the ones a user would
@@ -40,11 +69,13 @@ notice are listed here.
 
 ### Changed
 
-- **The npm package is now `au-law-mcp`.** The unscoped name
+- **The npm package name is now `au-law-mcp`.** The unscoped name
   `australian-law-mcp` on the npm registry belongs to an unrelated project, so
-  `npx -y australian-law-mcp` installed somebody else's package. Install with
-  `npx -y --ignore-scripts au-law-mcp setup`, or add
-  `"args": ["-y", "au-law-mcp"]` to your client config. The GitHub repository
+  `npx -y australian-law-mcp` installed somebody else's package. `au-law-mcp` is
+  the name this project would publish under, and nothing has been published
+  under it: clone the repository, `npm run build`, and run
+  `node build/index.js setup`, which writes the absolute launch command it has
+  just verified. The GitHub repository
   and the project title stay `australian-law-mcp`, the CLI binary stays
   `australian-law`, and the key the setup wizard writes into client configs
   stays `australian-law` — an existing install keeps working untouched.
