@@ -8,6 +8,9 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Enforce macOS eligibility before probing or launching Aside, including when a
+  CLI path is configured. Use macOS path rules in the probe so its simulated
+  Mac fixtures also run correctly in Windows CI.
 - Build Federal Court Full Court judgment links under `fca/full`, retaining
   `fcafc` in the filename. `[2020] FCAFC 130` previously went to the nonexistent
   `fcafc/single` path; ordinary FCA links still use `fca/single`.

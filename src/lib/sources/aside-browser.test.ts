@@ -15,7 +15,7 @@ import {
   ASIDE_REQUEST_COST,
   asideChildEnv,
   asideReplScript,
-  asideStatus,
+  asideStatus as probeAsideStatus,
   assertAsideUrl,
   clampAsideTimeout,
   defaultAsideCommandPath,
@@ -24,6 +24,7 @@ import {
   type AsideRunOptions,
   type AsideRunResult,
   type AsideRunner,
+  type AsideEnvironment,
 } from "./aside-browser.js"
 
 const FED_COURT = "https://www.judgments.fedcourt.gov.au/judgments/Judgments/fca/single/2025/2025fca0001"
@@ -33,9 +34,13 @@ const env = (values: Record<string, string>): NodeJS.ProcessEnv => values as Nod
 
 /** Host with the fallback switched on and the CLI at a known absolute path. */
 const enabledHost = {
+  platform: "darwin" as const,
   env: env({ [ASIDE_ENABLED_ENV]: "1", [ASIDE_COMMAND_ENV]: ASIDE_PATH }),
   exists: (path: string) => path === ASIDE_PATH,
 }
+
+/** The fixtures describe a Mac regardless of the machine running the suite. */
+const asideStatus = (options: AsideEnvironment) => probeAsideStatus({ platform: "darwin", ...options })
 
 interface RunnerCall {
   command: string
@@ -79,6 +84,14 @@ function stubRunner(result: Partial<AsideRunResult> = {}): { runner: AsideRunner
 }
 
 describe("asideStatus", () => {
+  it.each(["win32", "linux"] as const)("never launches the fallback on %s, even with an explicit CLI path", async platform => {
+    const { runner, calls } = stubRunner()
+    const options = { ...enabledHost, platform, exists: () => { throw new Error("must not probe") }, runner }
+    expect(asideStatus(options)).toMatchObject({ enabled: false, reason: expect.stringContaining("requires macOS") })
+    await expect(fetchViaAside(FED_COURT, options)).rejects.toThrow("requires macOS")
+    expect(calls).toHaveLength(0)
+  })
+
   it("is off, with a reason, when the opt-in variable is unset", () => {
     const status = asideStatus({ env: env({}), exists: () => true })
     expect(status.enabled).toBe(false)
@@ -324,6 +337,7 @@ describe("fetchViaAside", () => {
     const { runner, calls } = stubRunner()
     await expect(
       fetchViaAside(FED_COURT, {
+        platform: "darwin",
         env: env({ [ASIDE_ENABLED_ENV]: "1", PATH: "/usr/bin" }),
         home: "/Users/tester",
         exists: () => false,

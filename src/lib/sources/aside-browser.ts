@@ -43,7 +43,7 @@
 import { spawn } from "node:child_process"
 import { existsSync } from "node:fs"
 import { homedir } from "node:os"
-import { delimiter, isAbsolute, join } from "node:path"
+import { posix as macPath } from "node:path"
 
 import { ErrorCodes, LawApiError, UpstreamBlockedError } from "../errors.js"
 import { DEFAULT_EXECUTION_LIMITS, ExecutionLimitError } from "../execution-limits.js"
@@ -89,7 +89,7 @@ export const ASIDE_MAX_URL_LENGTH = 4_000
 
 /** The install path Aside ships to on macOS. Note the spaces in the .app name. */
 export function defaultAsideCommandPath(home: string = homedir()): string {
-  return join(home, ".aside", "cli", "Aside CLI.app", "Contents", "MacOS", "aside")
+  return macPath.join(home, ".aside", "cli", "Aside CLI.app", "Contents", "MacOS", "aside")
 }
 
 export interface AsideStatus {
@@ -104,6 +104,8 @@ export interface AsideStatus {
 /** Seams. Defaults are the real environment, filesystem and child process. */
 export interface AsideEnvironment {
   env?: NodeJS.ProcessEnv
+  /** Host platform; the Aside integration is supported only on macOS. */
+  platform?: NodeJS.Platform
   /** Filesystem probe. Injected so a test can describe a host without an Aside install. */
   exists?: (path: string) => boolean
   /** Home directory used for the standard install path. */
@@ -151,9 +153,10 @@ export interface FetchViaAsideOptions extends AsideEnvironment {
 }
 
 function findOnPath(name: string, env: NodeJS.ProcessEnv, exists: (path: string) => boolean): string | undefined {
-  for (const directory of (env.PATH ?? "").split(delimiter)) {
+  // This probe runs only for a macOS host, including simulated hosts in CI.
+  for (const directory of (env.PATH ?? "").split(macPath.delimiter)) {
     if (!directory) continue
-    const candidate = join(directory, name)
+    const candidate = macPath.join(directory, name)
     if (exists(candidate)) return candidate
   }
   return undefined
@@ -196,9 +199,13 @@ export function asideStatus(options: AsideEnvironment = {}): AsideStatus {
     }
   }
 
+  if ((options.platform ?? process.platform) !== "darwin") {
+    return { enabled: false, reason: "The Aside browser fallback requires macOS. It is unavailable on this platform." }
+  }
+
   const configured = (env[ASIDE_COMMAND_ENV] ?? "").trim()
   if (configured) {
-    if (!isAbsolute(configured)) {
+    if (!macPath.isAbsolute(configured)) {
       return {
         enabled: false,
         reason: `${ASIDE_COMMAND_ENV} must be an absolute path to the Aside CLI; it is set to ${JSON.stringify(configured)}.`,

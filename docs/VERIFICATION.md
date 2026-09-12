@@ -8,7 +8,7 @@ v1.0.3 installer. Browser availability depends on the user's session.
 
 | Check | Observed result |
 |---|---|
-| `npm test` | 2,710 passed across 115 files; 18 live-gated tests skipped |
+| `npm test` | 2,712 passed across 115 files; 18 live-gated tests skipped |
 | `npm run typecheck`, `npm run build`, `npm run verify:stdio` | Passed; the built server advertised its 10 tools over stdio |
 | Actual MCP `get_case_text`, `[2020] FCAFC 130`, `full: true`, `AU_LAW_ASIDE=true` | Returned the TPG judgment title and reasons from the Federal Court's `fca/full` URL; 5,397 ms including server startup; 49,121 characters in the **returned text**, with `[TRUNCATED]` and a structured follow-up gap |
 | Actual MCP `legal_analysis`, `mode: verify_citations`, draft below | Returned `CONTENT_MISMATCH` for CCA s 18 and suggested the heading at `sch 2 s 18`; resolved `s 82 of the Act` to the CCA; 2,265 ms including server startup |
@@ -39,6 +39,11 @@ heading matcher chose consumer-data offence s 56BN for that long sentence.
 Regression inputs now include both s 56BN and s 56BO, and heading ranking
 penalises qualifiers absent from the draft. The final live MCP run selected
 `sch 2 s 18` and still marked the full legal proposition as unverified.
+
+Windows CI also exposed three existing Aside probe tests that interpreted Mac
+paths using the runner's Windows path rules. The probe now uses explicit macOS
+path rules and rejects non-macOS hosts before inspecting a CLI path. Tests
+cover Windows and Linux refusal even when a command is explicitly configured.
 
 To repeat the public MCP calls from a built checkout on a Mac with Aside:
 
