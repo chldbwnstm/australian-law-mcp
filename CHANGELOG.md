@@ -6,6 +6,22 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-09-12
+
+### Fixed
+
+- **A bot-verification page is no longer returned as though it were the
+  document.** An outside tester driving Aside at AustLII got Cloudflare's
+  interstitial twice, with Ray IDs, where the same URL fetched here returned the
+  judgment — so a browser does not always walk through the gate, and what comes
+  back has to be checked rather than assumed. The bridge checked nothing: an
+  interstitial would have been handed to the caller as the reasons, which is the
+  worst form of this project's oldest failure, because the result reads like a
+  retrieved page and nothing downstream flags it. The snippet now waits a gate
+  out in the browser — an interstitial replaces itself once its script finishes,
+  so the difference is often a few seconds of patience — and a page still
+  showing one is reported as a blocked source with its link, never as content.
+
 ## [1.0.2] - 2026-09-12
 
 Adds the browser fallback, and makes it reachable from Claude Desktop Chat —

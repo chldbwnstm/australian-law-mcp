@@ -45,7 +45,7 @@ import { existsSync } from "node:fs"
 import { homedir } from "node:os"
 import { delimiter, isAbsolute, join } from "node:path"
 
-import { ErrorCodes, LawApiError } from "../errors.js"
+import { ErrorCodes, LawApiError, UpstreamBlockedError } from "../errors.js"
 import { DEFAULT_EXECUTION_LIMITS, ExecutionLimitError } from "../execution-limits.js"
 import { maskSensitiveUrl } from "../fetch-with-retry.js"
 import {
@@ -323,10 +323,55 @@ export function assertAsideUrl(url: string): string {
 export const ASIDE_BEGIN_MARKER = "<<<AU-LAW-PAGE-BEGIN>>>"
 export const ASIDE_END_MARKER = "<<<AU-LAW-PAGE-END>>>"
 
+/**
+ * Text that means "this is the gate, not the document".
+ *
+ * A browser walks through these gates most of the time, which is the whole
+ * reason for this bridge — but not always: an outside tester driving Aside at
+ * AustLII got the interstitial twice, with Ray IDs, where the same URL fetched
+ * here returned the judgment. Whatever decides that (session age, reputation,
+ * how recently the profile last passed) is Cloudflare's business, so the page
+ * that comes back has to be checked rather than assumed.
+ *
+ * Returning an interstitial as though it were the reasons would be the exact
+ * failure this project exists to prevent, and a worse version of it: the caller
+ * gets prose that looks like a retrieved page, so nothing downstream flags it.
+ */
+const CHALLENGE_MARKERS: readonly RegExp[] = [
+  /performing\s+security\s+verification/i,
+  /checking\s+(?:if\s+the\s+site\s+connection\s+is\s+secure|your\s+browser)/i,
+  /just\s+a\s+moment\s*(?:\.{3}|…)/i,
+  /cf-browser-verification|cf_chl_|__cf_chl|cf-challenge/i,
+  /attention\s+required!?\s*\|\s*cloudflare/i,
+  /enable\s+javascript\s+and\s+cookies\s+to\s+continue/i,
+  /\bray\s*id\b/i,
+]
+
+export function looksLikeBotChallenge(html: string): boolean {
+  return CHALLENGE_MARKERS.some((pattern) => pattern.test(html))
+}
+
+/**
+ * How long the page is given to get past a gate before it is read.
+ *
+ * A Cloudflare interstitial replaces itself once its script finishes, so the
+ * difference between an interstitial and the judgment is often a few seconds of
+ * patience. Polling inside the snippet spends them in the browser, where the
+ * wait actually helps, rather than in a retry that opens a second tab.
+ */
+const CHALLENGE_WAIT_MS = 12_000
+const CHALLENGE_POLL_MS = 750
+
 export function asideReplScript(url: string): string {
+  const markers = CHALLENGE_MARKERS.map((pattern) => pattern.source)
   return (
     `const page = await openTab(${JSON.stringify(url)}); ` +
-    `const html = await page.content(); ` +
+    `const gate = ${JSON.stringify(markers)}.map(s => new RegExp(s, "i")); ` +
+    `let html = await page.content(); ` +
+    `const until = Date.now() + ${CHALLENGE_WAIT_MS}; ` +
+    `while (gate.some(r => r.test(html)) && Date.now() < until) { ` +
+    `await new Promise(r => setTimeout(r, ${CHALLENGE_POLL_MS})); ` +
+    `html = await page.content(); } ` +
     `console.log(${JSON.stringify(ASIDE_BEGIN_MARKER)}); ` +
     `console.log(html); ` +
     `console.log(${JSON.stringify(ASIDE_END_MARKER)})`
@@ -560,6 +605,16 @@ export async function fetchViaAside(url: string, opts: FetchViaAsideOptions = {}
       [
         "⚠️ An empty page is not evidence the record is absent — open the link to check.",
       ],
+    )
+  }
+  if (looksLikeBotChallenge(html)) {
+    // The snippet already waited this out for as long as it is worth waiting.
+    // Still a gate, so the browser did not get through this time — which is a
+    // different fact from the record being absent, and from the page being read.
+    throw new UpstreamBlockedError(
+      "the browser fallback",
+      `the publisher served a bot-verification page instead of the document at ${shown}, and it did not clear`,
+      [target],
     )
   }
 

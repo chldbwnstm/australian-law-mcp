@@ -24,7 +24,7 @@ there yet.
 > **Download the extension, or build it here.** The desktop installer is
 > attached to the
 > [latest release](https://github.com/chldbwnstm/australian-law-mcp/releases/latest)
-> — `au-law-mcp-1.0.2.mcpb` (~4 MB), which the Claude desktop app installs by
+> — `au-law-mcp-1.0.3.mcpb` (~4 MB), which the Claude desktop app installs by
 > double-click. There is still no npm package (`npx -y au-law-mcp` answers
 > **404**), so a CLI, IDE or Codex client is registered from a checkout:
 > `npm ci --ignore-scripts && npm run build` gives it something to register, by
@@ -75,7 +75,7 @@ there yet.
 
 ### 2a. Claude desktop app — install the extension
 
-Download `au-law-mcp-1.0.2.mcpb` (~4 MB) from the
+Download `au-law-mcp-1.0.3.mcpb` (~4 MB) from the
 [latest release](https://github.com/chldbwnstm/australian-law-mcp/releases/latest),
 or open the copy someone sent you — it is the same file. No clone, no terminal,
 no Node.js.
@@ -89,7 +89,7 @@ To rebuild it from source instead:
 git clone https://github.com/chldbwnstm/australian-law-mcp
 cd australian-law-mcp
 npm ci --ignore-scripts
-npm run build:mcpb          # → release/au-law-mcp-1.0.2.mcpb
+npm run build:mcpb          # → release/au-law-mcp-1.0.3.mcpb
 ```
 
 That build unpacks the bundle, starts the server inside it and checks its tool

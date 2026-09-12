@@ -1,6 +1,6 @@
 {
   "name": "au-law-mcp",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "MCP server for Australian law — legislation, case law and delegated instruments from keyless public sources, exposed as MCP tools and a natural-language CLI",
   "type": "module",
   "main": "build/index.js",

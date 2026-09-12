@@ -26,7 +26,7 @@ file.
 
 ### Get the file
 
-Download `au-law-mcp-1.0.2.mcpb` (about 4 MB) from the
+Download `au-law-mcp-1.0.3.mcpb` (about 4 MB) from the
 [latest release](https://github.com/chldbwnstm/australian-law-mcp/releases/latest).
 That is the whole step — no clone, no terminal, no Node.
 
@@ -38,7 +38,7 @@ To build it yourself instead:
 git clone https://github.com/chldbwnstm/australian-law-mcp
 cd australian-law-mcp
 npm ci --ignore-scripts
-npm run build:mcpb          # → release/au-law-mcp-1.0.2.mcpb
+npm run build:mcpb          # → release/au-law-mcp-1.0.3.mcpb
 ```
 
 The build unpacks the bundle, starts the server inside it and checks that it
@@ -138,7 +138,7 @@ The desktop bundle is a download; everything else starts from a checkout:
 
 | Route | Status |
 |---|---|
-| `au-law-mcp-1.0.2.mcpb` from [Releases](https://github.com/chldbwnstm/australian-law-mcp/releases/latest), installed through **Settings → Extensions** | **Works.** Download it, or rebuild it with `npm run build:mcpb`. Route 1. |
+| `au-law-mcp-1.0.3.mcpb` from [Releases](https://github.com/chldbwnstm/australian-law-mcp/releases/latest), installed through **Settings → Extensions** | **Works.** Download it, or rebuild it with `npm run build:mcpb`. Route 1. |
 | Clone, `npm ci --ignore-scripts`, `npm run build`, register `build/index.js` with `claude mcp add` or `codex mcp add` | **Works.** Routes 2 and 3. |
 | `npx -y au-law-mcp` | **Does not resolve.** `registry.npmjs.org/au-law-mcp` answers 404 — the package has never been published. A client config naming it fails with "server disconnected", so do not write it into anyone's configuration. |
 

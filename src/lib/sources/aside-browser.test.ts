@@ -20,6 +20,7 @@ import {
   clampAsideTimeout,
   defaultAsideCommandPath,
   fetchViaAside,
+  looksLikeBotChallenge,
   type AsideRunOptions,
   type AsideRunResult,
   type AsideRunner,
@@ -273,7 +274,16 @@ describe("the repl snippet", () => {
   it("reads the page and nothing else", () => {
     const script = asideReplScript(FED_COURT)
     expect(script).toContain("page.content()")
-    expect(script).not.toMatch(/cookie|storage|localStorage|document\.cookie/i)
+    // Access, not the bare word: one of the gate markers the snippet matches on
+    // is "Enable JavaScript and cookies to continue", so a test that banned the
+    // substring would fail on a string the snippet only ever compares against.
+    // What must not appear is a way to *read* any of it.
+    expect(script).not.toMatch(/document\s*\.\s*cookie/i)
+    expect(script).not.toMatch(/\b(?:local|session)Storage\b/i)
+    expect(script).not.toMatch(/\.\s*cookies\s*\(/i)
+    expect(script).not.toMatch(/storageState|context\s*\(\s*\)/i)
+    // The only page API it uses.
+    expect(script.match(/page\s*\.\s*\w+/g)).toEqual(["page.content", "page.content"])
   })
 })
 
@@ -412,5 +422,49 @@ describe("the child's environment", () => {
       }),
     )
     expect(child).toEqual({ HOME: "/Users/tester", PATH: "/usr/bin", LANG: "en_AU.UTF-8" })
+  })
+})
+
+describe("bot-verification pages", () => {
+  const CHALLENGE =
+    "<html><head><title>Just a moment...</title></head><body>" +
+    "<h1>www.austlii.edu.au</h1><p>Performing security verification…</p>" +
+    "<p>Ray ID: a39ceb695b0df013</p></body></html>"
+
+  /**
+   * An outside tester driving Aside at AustLII got this page twice, with those
+   * Ray IDs, where the same URL fetched here returned the judgment. So a
+   * browser does not always walk through the gate, and the page that comes back
+   * has to be checked rather than assumed. Returning an interstitial as the
+   * reasons would be the worst version of this project's oldest failure: prose
+   * that reads like a retrieved document, so nothing downstream flags it.
+   */
+  it("does not hand back an interstitial as though it were the document", async () => {
+    const { runner } = stubRunner({ stdout: CHALLENGE })
+    await expect(fetchViaAside(FED_COURT, { ...enabledHost, runner })).rejects.toThrow(
+      /bot-verification|verification page/i,
+    )
+  })
+
+  it("recognises the gate by its several spellings, and leaves a judgment alone", () => {
+    for (const page of [
+      CHALLENGE,
+      "<html><body>Checking your browser before accessing…</body></html>",
+      "<html><body><div id='cf-browser-verification'></div></body></html>",
+      "<html><title>Attention Required! | Cloudflare</title></html>",
+      "<html><body>Enable JavaScript and cookies to continue</body></html>",
+    ]) {
+      expect(looksLikeBotChallenge(page)).toBe(true)
+    }
+    expect(looksLikeBotChallenge("<html><body>ORDERS 1. The appeal is dismissed.</body></html>")).toBe(false)
+  })
+
+  it("waits the gate out in the browser rather than returning it straight away", () => {
+    const script = asideReplScript(FED_COURT)
+    expect(script).toContain("setTimeout")
+    expect(script).toMatch(/Date\.now\(\)/)
+    // The wait happens before the payload is fenced, so a page that clears is
+    // returned as the document rather than as a refusal.
+    expect(script.indexOf("setTimeout")).toBeLessThan(script.indexOf(ASIDE_BEGIN_MARKER))
   })
 })
