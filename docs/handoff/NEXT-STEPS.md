@@ -8,13 +8,13 @@ reconciled into one `main`.
 
 | | |
 |---|---|
-| Last commit | *README test count at 2,477; VERIFICATION.md notes the rename* |
-| Tests | 2,477 passing, 18 live-gated (skipped offline), 105 files, suite runs in ~5 s *(measured 2026-09-05; the count drifts upward with every change)* |
+| Last commit | `b583e4e` *Fix two reported install bugs, and the docs that promised routes we never shipped* |
+| Tests | 2,612 passing, 18 live-gated (skipped offline), 114 files, suite runs in ~14 s *(measured 2026-09-12; the count drifts upward with every change)* |
 | Typecheck | clean (`tsc --noEmit`) |
 | Build | clean (`npm run build`) |
-| Tools | 81 registered, 10 advertised — `TOOL_COUNTS`, derived, never written down twice |
+| Tools | 83 registered, 10 advertised — `TOOL_COUNTS`, derived, never written down twice |
 | Package | `au-law-mcp` v1.0.0 (bins: `au-law-mcp`, `australian-law`) |
-| Remote | `github.com/chldbwnstm/australian-law-mcp` — the repo keeps that name, only the npm package was renamed. **Public**; `v1.0.0` is pushed but points at `73d272b`, which is behind current `main` |
+| Remote | `github.com/chldbwnstm/australian-law-mcp` — the repo keeps that name, only the npm package was renamed. **Public**; `v1.0.0` is pushed but points at `73d272b`, **14 commits behind** current `main` — do not cut a release from it, see [below](#cut-the-release-from-a-new-tag-not-v100) |
 | Distribution | **None.** `registry.npmjs.org/au-law-mcp` → 404, `gh release list` → empty (checked 2026-09-12). Source install only — see [Turning the npx and .mcpb routes on](#turning-the-npx-and-mcpb-routes-on) |
 | Live matrix | `docs/VERIFICATION.md` — MCP stdio, all 18 decision domains, CLI, HTTP, packaging |
 
@@ -137,25 +137,76 @@ npm pack --dry-run                       # build/ + companion + README + LICENSE
 npm publish                              # unscoped name; needs an npm account that can claim `au-law-mcp`
 curl -s -o /dev/null -w '%{http_code}\n' https://registry.npmjs.org/au-law-mcp   # expect 200
 
-# 2. GitHub release — turns the .mcpb download on
-npm run build:mcpb                       # → release/au-law-mcp-1.0.0.mcpb; the build fails unless the packed bundle starts
-git tag -f v1.0.0 && git push -f origin v1.0.0        # the pushed tag is older than main; retag or cut a new version
-sed -n '/^## \[1.0.0\]/,/^## \[0.1.0\]/p' CHANGELOG.md | sed '$d' > /tmp/release-notes.md
-gh release create v1.0.0 release/au-law-mcp-1.0.0.mcpb --title "v1.0.0" --notes-file /tmp/release-notes.md
+# 2. GitHub release — turns the .mcpb download on. Cut it from a NEW tag, not v1.0.0 (below)
+npm version patch --no-git-tag-version   # 1.0.0 → 1.0.1, so tag, manifest and asset filename agree
+npm run build:mcpb                       # → release/au-law-mcp-1.0.1.mcpb; the build fails unless the packed bundle starts
+git commit -am "Release 1.0.1" && git tag v1.0.1 && git push origin main v1.0.1
+# rename CHANGELOG.md's [Unreleased] heading to [1.0.1] in that commit, then:
+sed -n '/^## \[1.0.1\]/,/^## \[1.0.0\]/p' CHANGELOG.md | sed '$d' > /tmp/release-notes.md
+gh release create v1.0.1 release/au-law-mcp-1.0.1.mcpb --title "v1.0.1" --notes-file /tmp/release-notes.md
 gh release list                          # expect one row with the .mcpb asset
 ```
+
+### Cut the release from a new tag, not v1.0.0
+
+`v1.0.0` resolves to `73d272b`; `main` is `b583e4e`, **14 commits ahead** (checked
+2026-09-12). A release cut from that tag would ship the tree as it stood *before*
+the install-bug fixes, and before the bundle existed at all — `97e14d0`, the commit
+that added `npm run build:mcpb`, is one of the 14. The asset could not be built
+from its own tagged source, and the notes would re-publish the install claims
+`b583e4e` removed.
+
+Do not fix this with `git tag -f v1.0.0 && git push -f`. The tag is already pushed
+on a public repository; moving it hands a different `v1.0.0` to anyone who fetched
+the old one, and leaves no record of which is which. Bump the version, tag that
+commit, and leave `v1.0.0` where it is.
 
 Only after those two checks pass (200, and a release row carrying the asset) does the
 wording go back:
 
 | File | What to restore |
 |---|---|
-| `README.md` | The "This repository is how you get it" blockquote becomes the published install; put `![npm](https://img.shields.io/npm/v/au-law-mcp)` back in place of the install-from-source badge — it renders as soon as the registry answers; the Chat-tab note can link the release asset instead of `npm run build:mcpb`. |
+| `README.md` | The "This repository is how you get it" blockquote becomes the published install; put `![npm](https://img.shields.io/npm/v/au-law-mcp)` back in place of the install-from-source badge — it renders as soon as the registry answers; step **2a** can link the release asset instead of the four build commands. The host table and the "one host, one route" note are not about publication and stay exactly as they are. |
 | `INSTALL.md` | The "What is and is not available" table: flip the `npx -y au-law-mcp` and Releases rows. Step 8 can prefer the downloaded `.mcpb` again. Step 5's note about `--npx` stays true either way. |
-| `docs/TRY-IT.md` | "First, get the installer file" becomes a download link to the release asset; keep the build route for anyone off a release. |
+| `docs/TRY-IT.md` | "First, get the installer file" becomes a download link to the release asset; keep the build route for anyone off a release. `docs/PILOT-ROLLOUT.md`'s pack recipe can then fetch the asset instead of building it. |
 | `CHANGELOG.md` | The 1.0.0 preamble ("tagged, not distributed") and the rename entry's install line. |
 | `src/setup.ts` | Nothing has to change: `--npx` re-checks the registry every run, so it starts succeeding by itself. Optional follow-up — make npx the default when the entry point resolves inside a `node_modules/au-law-mcp/` or `_npx` layout, since that path is npm's to evict. |
 
-`docs/PILOT-ROLLOUT.md` names `release/australian-law-pilot.zip`, which no script builds and
-which is not in the tree; `docs/VERIFICATION.md` records packaging runs. Both are worth a
-pass in the same sitting — they are not covered by the fixes above.
+### Untested: giving the extension the CLI's server name
+
+The tester who hit the duplicate raised one hypothesis and **explicitly did not test
+it**: that naming the bundle's server `australian-law` — the same key the CLI
+registration uses in `~/.claude.json` — might make the app treat the two as one
+registration rather than two. Nothing in this repository depends on it and nobody
+has tried it. Recorded here so it is not rediscovered as if it were new, and so it
+is not acted on as if it were established. The manifest today declares
+`name: au-law-mcp`, `display_name: Australian Law`, and the desktop app records the
+installation as `local.mcpb.chldbwnstm.au-law-mcp`.
+
+Before anyone tries it, the counter-argument. The two registrations are not the same
+program: the extension runs the app's bundled Node against the build packed inside
+the `.mcpb`, while the `~/.claude.json` entry runs the user's Node against
+`build/index.js` in a checkout that can sit at any revision. The differing names are
+currently the only thing that tells those two apart in a tool list. Merging them
+under one name would make a stale or wrong answer untraceable to the copy that
+produced it — a worse failure than the visible duplicate, because it is silent.
+**One host, one route** is the safer rule either way: remove the second
+registration rather than disguise it.
+
+### Loose ends around the same area
+
+- **The setup wizard can create the duplicate by itself.** `detectClients()` in
+  `src/setup.ts` lists Claude Desktop's `claude_desktop_config.json` as a target,
+  so a user who has already installed the extension and then picks that number
+  ends up with a second definition of this server in the app's own config. The
+  docs now say not to pick it, which is the weakest possible guard. The wizard
+  could check `extensions-installations.json` for
+  `local.mcpb.chldbwnstm.au-law-mcp` and say so before writing — the same check
+  `INSTALL.md` now asks an installing agent to make by hand.
+- **`docs/VERIFICATION.md`** records packaging runs and was not in the set of
+  files this install-doc pass touched; worth reading in the same sitting.
+- **Version-bump chore.** `docs/PILOT-ROLLOUT.md` no longer claims a
+  `release/australian-law-pilot.zip`; it carries the commands that assemble the
+  pack by hand. But `START-HERE.html`'s install button hard-codes
+  `au-law-mcp-1.0.0.mcpb`, so a version bump means editing that filename in
+  `docs/START-HERE.html` and `docs/TRY-IT.md` too.

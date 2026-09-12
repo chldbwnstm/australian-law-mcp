@@ -23,12 +23,13 @@ there yet.
 
 > **This repository is how you get it.** Nothing is published: there is no
 > `au-law-mcp` package on the npm registry (`npx -y au-law-mcp` answers **404**)
-> and the repository has **no releases**, so there is no `.mcpb` file to
-> download. What works today is a source install — clone,
-> `npm ci --ignore-scripts`, `npm run build` — after which `node build/index.js
-> setup` writes a launch command it has checked on disk, and
-> `npm run build:mcpb` builds the Claude Desktop bundle locally. Full route:
-> [INSTALL.md](INSTALL.md).
+> and the repository has **no releases**, so nothing can be downloaded. Both
+> installers are built here. `npm run build:mcpb` writes
+> `release/au-law-mcp-1.0.0.mcpb` (~4 MB), the extension the Claude desktop app
+> installs by double-click; `npm ci --ignore-scripts && npm run build` gives a
+> CLI, IDE or Codex client something to register, by `claude mcp add` or by
+> `node build/index.js setup`, which writes a launch command it has checked on
+> disk. Pick **one per host** — full route in [INSTALL.md](INSTALL.md).
 
 ![Install](https://img.shields.io/badge/install-from%20source-blue)
 ![MCP](https://img.shields.io/badge/MCP-1.27-blue)
@@ -42,32 +43,69 @@ there yet.
 
 ## Install
 
-**Open your AI app, copy the message below, and let it handle the setup.**
-You do not need to write code or run terminal commands yourself.
+**Install once per host, not once per tab.** The Claude desktop app and the
+`claude` command line read different configuration, so the choice that matters is
+*where you are running Claude* — not whether you are in Chat or in Code.
 
-### 1. Open the app you use
+### 1. Find your host
 
-| Your app | What to open |
-|---|---|
-| **Codex desktop** | Start a new task on your computer. Choose **Local** if asked where to run it. |
-| **Claude Desktop — Code tab** | Click **Code**, then choose **Local**. |
+| Host | What to install | Covers |
+|---|---|---|
+| **Claude desktop app** | The `.mcpb` extension, installed by double-click | Chat **and** the app's local Code sessions — one install, both tabs |
+| **`claude` in a terminal or an IDE, on a machine with no desktop app** | One `~/.claude.json` entry, from a source checkout | Terminal and IDE sessions |
+| **Codex desktop, Cursor, Windsurf, VS Code, Zed, other MCP clients** | That client's own MCP config, from a source checkout | That client |
 
-If asked to select a folder, create or choose one called **Australian Law**.
-Keep using that folder for your trial. If you use Claude's ordinary **Chat** tab,
-see [the Chat tab note below](#using-claudes-chat-tab).
+> **One host, one route.** On a machine with the desktop app, installing the
+> extension *and* also running `claude mcp add` registers the same server twice:
+> it turns up as both `Australian Law` (the extension) and `australian-law` (the
+> CLI entry). That is the duplicate an outside tester hit. The two are not even
+> the same program — the extension runs the build packed inside the bundle on the
+> app's own Node, the CLI entry runs `build/index.js` in your checkout on yours —
+> so they drift apart the moment one is rebuilt. If you use both the app and the
+> terminal CLI, [INSTALL.md](INSTALL.md) keeps the extension and skips
+> `claude mcp add` — the tools then live in the app, not in your terminal. It also
+> has the removal step if you already have both.
+>
+> The same goes for the setup wizard: `node build/index.js setup` lists **Claude
+> Desktop** among the clients it can write to, and picking that number puts a
+> second definition of this server into `claude_desktop_config.json`, beside the
+> extension you already installed. If you have the extension, do not pick it.
 
-### 2. Copy this message into the chat and send it
+### 2a. Claude desktop app — install the extension
 
-```text
-Install https://github.com/chldbwnstm/australian-law-mcp in the desktop app
-I am using now. Follow INSTALL.md in that repository and do the setup for me.
-Help me install anything that is missing, and preserve my existing settings.
-Tell me if I need to restart the app, and verify the connected law tools.
-I do not want to run terminal commands or edit settings files myself.
+Someone may have sent you `au-law-mcp-1.0.0.mcpb` already; open it and skip ahead.
+To build it yourself:
+
+```bash
+git clone https://github.com/chldbwnstm/australian-law-mcp
+cd australian-law-mcp
+npm ci --ignore-scripts
+npm run build:mcpb          # → release/au-law-mcp-1.0.0.mcpb
 ```
 
-Follow the app's prompts to allow the installation. If it asks you to restart,
-close and reopen the app, then return to the same folder and start a new chat.
+That build unpacks the bundle, starts the server inside it and checks its tool
+list before it finishes, so a file that appears has already been proved to run.
+Open it, choose **Install**, and restart the app. Nothing further is needed for
+Code: the app supplies installed extensions to its own local Code sessions.
+Step-by-step version for a non-technical tester: [docs/TRY-IT.md](docs/TRY-IT.md).
+
+### 2b. Codex, or a machine with no desktop app — let the agent register it
+
+Start a session that runs on your own computer — in Codex, a new task with
+**Local** selected if it asks where to run. Then send:
+
+```text
+Install https://github.com/chldbwnstm/australian-law-mcp as a local MCP server
+for the app I am using right now. Follow INSTALL.md in that repository and do
+the setup for me. Register it once for this host only: if Australian Law is
+already available here, or already installed as a Claude desktop extension,
+tell me instead of adding a second entry under another name. Preserve my
+existing settings, tell me if I need to restart, and verify the law tools.
+```
+
+If asked to select a folder, create or choose one called **Australian Law** and
+keep using it for your trial. Follow the app's prompts to allow the installation;
+if it asks you to restart, close and reopen the app and start a new session.
 
 ### 3. Try this question
 
@@ -89,35 +127,26 @@ preview in the current source version. Windows users can use the standard law
 tools; Aside follow-up is not available on Windows yet.
 
 1. [Install Aside](https://docs.aside.com/help/get-started) and open it.
-2. Return to the same folder in Codex or Claude **Code → Local**, then send:
+2. Open your project folder in a local Codex or Claude Code session, then send:
 
    ```text
    Add the Aside browser research preview to this project. Follow INSTALL.md
    in the Australian Law repository, using its current source version.
    Check that my Mac is supported, find Aside, and handle the setup for me.
-   Preserve my existing settings. Tell me if I need to restart the app, and
+   Add only the Aside entry and the project skill; leave my existing Australian
+   Law registration exactly as it is. Tell me if I need to restart the app, and
    verify both the law tools and Aside connection before saying it is ready.
    ```
 
 3. Follow any restart instructions, then try a [browser research example below](#example-1-finish-missing-reasons-and-pdfs).
 
-### Using Claude's Chat tab?
+This adds a project-local `aside` server and the `au-law-followup` skill to that
+folder. It does not touch how the law server itself is registered, so it is safe
+alongside the desktop extension; it does need the source checkout, because the
+skill ships in it.
 
-<details>
-<summary>Click here if you normally use Chat</summary>
-
-Click **Code**, choose **Local**, and follow the three steps above. The ordinary
-Chat tab cannot perform this automatic installation. If you do not have access
-to Code, use the Codex desktop option or the [manual instructions](INSTALL.md).
-
-There is no Claude Chat extension to download: the repository has no releases.
-Build the bundle yourself — `npm run build:mcpb` writes
-`release/au-law-mcp-1.0.0.mcpb`, and Claude Desktop installs that file. See
-[docs/TRY-IT.md](docs/TRY-IT.md).
-
-</details>
-
-For other apps, manual setup, or troubleshooting, see [INSTALL.md](INSTALL.md).
+For other apps, manual setup, removing a duplicate registration, or
+troubleshooting, see [INSTALL.md](INSTALL.md).
 
 ---
 
@@ -149,10 +178,11 @@ missing originals, read judgment PDFs, investigate later citing decisions, and
 save evidence and progress for the matter. The AI starts with Australian Law MCP
 and continues through Aside when further source checks are needed.
 
-This is an **unreleased preview** that exists only in this source tree. There is
-no published npm package and no release bundle of this project at all, and
-neither would carry this companion workflow. Installing the ordinary law server
-alone does not enable it.
+This is an **unreleased preview** that exists only in this source tree. The
+`.mcpb` bundle does not carry it — `npm run build:mcpb` packs `build/` and its
+runtime dependencies, not the `companion/` skill — so installing the desktop
+extension alone does not enable it. It needs a checkout and a local Codex or
+Claude Code session.
 
 | Feature | macOS | Windows |
 |---|---|---|
@@ -292,10 +322,11 @@ and some legacy source tools do not yet emit structured follow-up gaps. See the
 For your next check, replace the fictional paragraph with the relevant excerpt
 from your draft, using material your firm permits in the AI app.
 
-### First task in Claude Code: prepare a redundancy research note
+### First task in Claude: prepare a redundancy research note
 
-1. Start a new **Code → Local** session after installation. Choose a folder for
-   the trial if prompted. Use the fictional brief below; no client file is needed.
+1. Start a new session after installation — an ordinary chat or a local Code
+   session, whichever you use. Use the fictional brief below; no client file is
+   needed.
 2. Copy and send:
 
    ```text
@@ -566,7 +597,7 @@ This software retrieves and formats public legal material. It does not give lega
 - **Chains that degrade rather than die** — on deadline a chain assembles what arrived and marks the rest, instead of losing everything to a client timeout.
 - **Per-host politeness** — every upstream has its own timeout and minimum interval, sized from measurement (Queensland content search takes up to 90s; the ATO form up to 60s), so one slow host does not stall every other tool.
 - **Natural-language CLI** — a query router with an `explain` mode that shows where a question would go without running it, plus a generated subcommand per tool.
-- **2,498 offline tests**, including recorded fixtures and process checks, plus **18 live-gated tests** that only run with `LIVE=1` and check the real upstreams still answer the shapes the parsers expect.
+- **2,612 offline tests**, including recorded fixtures and process checks, plus **18 live-gated tests** that only run with `LIVE=1` and check the real upstreams still answer the shapes the parsers expect.
 
 ---
 

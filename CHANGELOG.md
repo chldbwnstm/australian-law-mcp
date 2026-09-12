@@ -44,6 +44,36 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Install documentation is organised by host, not by tab.** It used to split
+  the Claude desktop app's **Chat** and **Code** tabs into two different
+  installs, so a reader who wanted both and followed the instructions precisely
+  registered this server twice — once as the `.mcpb` extension (`Australian Law`,
+  recorded as `local.mcpb.chldbwnstm.au-law-mcp`) and once as `australian-law` in
+  `~/.claude.json`. That is the duplicate the first outside
+  tester hit, and the two entries do not even run the same code: one is the build
+  packed inside the bundle, the other is `build/index.js` in a checkout. The
+  boundary that matters is the host. One `.mcpb` install covers the desktop app's
+  ordinary chats *and* its local Code sessions; `claude` in a terminal, an IDE
+  session, Codex and every other client is a separate host with one registration
+  of its own. `README.md`, `docs/TRY-IT.md`, `docs/PILOT-ROLLOUT.md` and
+  `docs/START-HERE.html` now say so, state what having both costs, and link
+  `INSTALL.md` for removal instead of repeating the steps. `README.md` no longer
+  tells a desktop-app reader to open the Code tab or to have an agent run
+  `claude mcp add`.
+- Dropped from the trial documents: the Streamable HTTP "hosted connection"
+  walkthrough in `docs/TRY-IT.md` and the hosted-endpoint and Codex-plugin planning in
+  `docs/PILOT-ROLLOUT.md`. No endpoint, OAuth service or plugin exists, and
+  nothing in the tree deploys one. `docs/PILOT-ROLLOUT.md` keeps what a pilot
+  actually needs: build the pack, send it, and do not ask a Claude Desktop tester
+  to run a terminal command for the law server.
+- `docs/handoff/NEXT-STEPS.md` records two things for the owner: that `v1.0.0`
+  points at a commit **14 behind `main`** — so a release cut from it would ship the
+  tree from before the install-bug fixes, and before `npm run build:mcpb` existed —
+  and the tester's untested hypothesis that renaming the bundle's server to
+  `australian-law` might merge the two registrations, with the argument against
+  acting on it.
+- Counts corrected against a run on 2026-09-12: **2,612** offline tests (was 2,498
+  in `README.md`) and **83** registered tools (was 81 in the handoff note).
 - **The documented install routes are now the ones that exist.** Nothing about
   this project is published: there is no `au-law-mcp` package on the npm
   registry and the repository has no releases. So the README's npm version badge

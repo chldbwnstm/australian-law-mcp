@@ -28,12 +28,19 @@ releases. It reaches you one of two ways.
 
 1. Open `au-law-mcp-1.0.0.mcpb`.
 2. Choose **Install** in Claude Desktop.
-3. Start a new chat. If Claude asks to use Australian Law, review and allow the request.
+3. Restart Claude Desktop, then start a new chat. If Claude asks to use Australian
+   Law, review and allow the request.
 
 If opening the file does not show an install dialog, open Claude Desktop and go to
 **Settings → Extensions → Advanced settings → Install Extension…**, then select
 the same file. If your firm manages extensions, ask its administrator to make
 Australian Law available to you.
+
+That single install is the whole setup for this app. The tools appear in ordinary
+chats and in the app's local **Code** sessions; there is nothing separate to
+install for Code, and nothing to add in a terminal. If you also use `claude` from
+a terminal, do not add it there as well — a second registration on the same
+machine is the one thing to avoid, and [INSTALL.md](../INSTALL.md) explains why.
 
 Once you have that file, no terminal commands, separate Node.js installation or
 legal-data API key are needed — the bundle carries its own runtime dependencies
@@ -77,6 +84,9 @@ local installation does not make the conversation offline.
 - Restart Claude Desktop, open a new chat and check that Australian Law is enabled
   under Extensions. Ask it to use Australian Law explicitly.
 - If installation is restricted, your firm's administrator may need to allow it.
+- If the same law tools appear twice, this server is registered twice — usually the
+  extension plus an older entry someone added from a terminal. Keep the extension
+  and remove the terminal entry; [INSTALL.md](../INSTALL.md) has the command.
 - Tell the person who sent you the trial pack — or, if you built the file
   yourself, open an issue on the repository — which app and operating system you
   use, the prompt you tried, and what happened. Please omit client information.
@@ -84,18 +94,14 @@ local installation does not make the conversation offline.
 
 ## Using Codex instead
 
-This pack installs into **Claude Desktop**. It is not a Codex installation file.
-In a local Codex session, you can instead paste the repository URL and ask the agent
-to install it for you, following [INSTALL.md](../INSTALL.md). The agent handles the
-commands and configuration; repository access and local permissions are required.
-Hosting is optional. No hosted service is supplied in this pack.
+This pack installs into **Claude Desktop**. It is not a Codex installation file,
+and it supplies no hosted connection for Codex to point at. Codex is a separate
+host and needs its own registration, even if you have the extension installed
+already. In a local Codex session, paste the repository URL and ask
+the agent to install it for you, following [INSTALL.md](../INSTALL.md). The agent
+handles the commands and configuration; repository access and local permissions
+are required.
 
-If the sender provides a hosted connection, Codex's desktop MCP settings support
-**Add server → Streamable HTTP**, followed by
-the supplied URL, authentication, **Save**, and **Restart**. Once connected, the
-same example prompts apply. A hosted connection processes tool requests on the
-operator's server as well as the AI app and public sources.
-
-Installation references, checked 9 September 2026:
+Installation references, checked 12 September 2026:
 [Claude Desktop extensions](https://support.claude.com/en/articles/10949351-getting-started-with-local-mcp-servers-on-claude-desktop)
 and [Codex desktop MCP setup](https://learn.chatgpt.com/docs/extend/mcp).

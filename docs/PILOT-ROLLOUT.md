@@ -20,6 +20,10 @@ cd /tmp && zip -r australian-law-pilot.zip australian-law-pilot
 `build:mcpb` starts the server inside the bundle and checks its tool list before
 it finishes, so the installer you send has been proved to run on your machine.
 
+`START-HERE.html` names the file `au-law-mcp-1.0.0.mcpb` in its install button.
+After a version bump, update that filename there and in `docs/TRY-IT.md`, or the
+button in the pack points at a file that is not in it.
+
 Suggested invitation:
 
 > I've put together a small Australian legal research extension for Claude Desktop.
@@ -37,38 +41,43 @@ Suggested first round: a few testers, one familiar question each, then one task
 from their usual research workflow. Collect the app, OS, installation outcome,
 prompt, expected result and observed limitation, without client information.
 
+## One tester, one route per host
+
+The extension is the whole Claude Desktop install. It serves ordinary chats and
+the app's local **Code** sessions, so do not ask a Claude Desktop tester to also
+run `claude mcp add`, the setup wizard or any terminal command for the law server
+— that registers the same server a second time, and it then appears as both
+`Australian Law` (the extension) and `australian-law` (the CLI entry). That is
+what the first outside tester hit. Send the pack and nothing else.
+
+Ask in the feedback round whether the tester had Australian Law set up anywhere
+before the pack arrived; that is the case where a duplicate appears, and
+[INSTALL.md](../INSTALL.md) carries the removal step.
+
 ## Codex: let the local agent install it
 
-The simplest trial for someone already using a local Codex session is to send the
-repository URL and the copy-and-paste request in [INSTALL.md](../INSTALL.md).
-The agent can install dependencies, build the server and register local STDIO on
-the user's behalf. This requires repository access and local installation permissions,
-but does not require the lawyer to run terminal commands or the owner to host a service.
-Claude Code desktop local sessions can also assist; ordinary Claude Chat should use
-the desktop extension route above.
+Codex is a separate host, so a Codex tester needs the agent route rather than the
+pack: send the repository URL and the copy-and-paste request in
+[INSTALL.md](../INSTALL.md). The agent can install dependencies, build the server
+and register local STDIO on the user's behalf. This requires repository access and
+local installation permissions, but does not require the lawyer to run terminal
+commands or the owner to host a service. The same applies to a tester who works in
+`claude` from a terminal — one entry in their `~/.claude.json`, and no pack.
 
-## Optional hosted connection
+## There is no hosted connection
 
-The project already has Streamable HTTP transport and bearer-token checking, but
-there is no hosted trial endpoint, OAuth service or Codex plugin in this checkout.
-Do not send a placeholder URL or imply that a plugin is already listed.
+The project has Streamable HTTP transport and bearer-token checking in the code,
+but this checkout contains no hosted endpoint, no OAuth service and no Codex
+plugin, and nothing in the tree deploys one. Do not send a URL, and do not imply
+a plugin is listed.
 
-For a simple Codex trial, prepare an HTTPS MCP endpoint and a tested way to supply
-its access credentials through the desktop app. The recipient's intended flow is
-Settings → MCP servers → Add server → Streamable HTTP → enter connection details
-→ Save → Restart. Test that exact flow in the recipient's app version before
-calling it ready. The current shared-token implementation is a pilot mechanism;
-individual sign-in and revocation require additional authentication work.
-
-A plugin can later package the connection with guided research tasks. Local
-marketplaces require setup and workspace-only publication does not make a plugin
-available to friends in unrelated organisations. Packaging a plugin alone does
-not remove a local MCP server's runtime requirements.
-
-Before distributing a hosted option, decide who operates it, how access is issued
-and revoked, what request data is retained, and how outages and updates are handled.
-Hosted tool requests pass through the operator's infrastructure; describe that
-accurately to testers. The local Claude pack does not require that infrastructure.
+Standing one up is a project, not a step: someone has to own the deployment,
+decide how access is issued and revoked, decide what request data is retained,
+and handle outages and updates. The shared-token implementation in the tree is a
+pilot mechanism — individual sign-in and revocation need further authentication
+work. Hosted tool requests would pass through the operator's infrastructure, and
+testers would have to be told so. The local Claude pack needs none of it, which is
+why it is the route above.
 
 ## References
 
