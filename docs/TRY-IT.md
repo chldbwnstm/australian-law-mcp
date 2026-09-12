@@ -5,7 +5,7 @@ legal material with links back to its sources.
 
 ## First, get the installer file
 
-Everything below needs one file, `au-law-mcp-1.0.1.mcpb`. There is nowhere to
+Everything below needs one file, `au-law-mcp-1.0.2.mcpb`. There is nowhere to
 download it from: this project has no npm package and the repository has no
 releases. It reaches you one of two ways.
 
@@ -13,7 +13,7 @@ releases. It reaches you one of two ways.
   `.mcpb` is inside it.
 - **You download it** from the
   [latest release](https://github.com/chldbwnstm/australian-law-mcp/releases/latest)
-  — `au-law-mcp-1.0.1.mcpb`, about 4 MB. No terminal, no Node.js.
+  — `au-law-mcp-1.0.2.mcpb`, about 4 MB. No terminal, no Node.js.
 
 - **You build it**, if you would rather not download it. This one does need a
   terminal and Node.js 20.19 or later, once:
@@ -22,7 +22,7 @@ releases. It reaches you one of two ways.
   git clone https://github.com/chldbwnstm/australian-law-mcp
   cd australian-law-mcp
   npm ci --ignore-scripts
-  npm run build:mcpb          # writes release/au-law-mcp-1.0.1.mcpb
+  npm run build:mcpb          # writes release/au-law-mcp-1.0.2.mcpb
   ```
 
   The build refuses to finish unless the packed bundle starts and answers with
@@ -30,7 +30,7 @@ releases. It reaches you one of two ways.
 
 ## Install once
 
-1. Open `au-law-mcp-1.0.1.mcpb`.
+1. Open `au-law-mcp-1.0.2.mcpb`.
 2. Choose **Install** in Claude Desktop.
 3. Restart Claude Desktop, then start a new chat. If Claude asks to use Australian
    Law, review and allow the request.

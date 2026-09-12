@@ -6,6 +6,12 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-09-12
+
+Adds the browser fallback, and makes it reachable from Claude Desktop Chat —
+where the project's existing Aside follow-up could never run, because that lives
+in a project skill and Chat loads extensions only.
+
 ### Added
 
 - **An opt-in browser fallback for the sources whose publisher blocks this server.**

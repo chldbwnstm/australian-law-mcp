@@ -303,8 +303,49 @@ export function assertAsideUrl(url: string): string {
  * It reads exactly one thing, the rendered page. Not cookies, not storage, not
  * another tab.
  */
+/**
+ * Markers that fence the page off from the CLI's own chatter.
+ *
+ * Measured against the real CLI (2026-09-12), `aside repl` puts everything on
+ * stdout — the page, and around it its own reporting:
+ *
+ *     🔭 Opened a new tab and set it active: tabs[0], page → <title> (<url>)
+ *     <the page>
+ *     \x1b[2m[ok | 2522ms]\x1b[0m
+ *
+ * Both would otherwise be returned as part of the document, and the opening
+ * line is not a fixed string — it carries the page's own title and URL, so it
+ * cannot be recognised by shape. Fencing the payload is the only version of
+ * this that does not depend on reverse-engineering output the CLI is free to
+ * change: the markers are ours, and text outside them is discarded whatever it
+ * turns out to say.
+ */
+export const ASIDE_BEGIN_MARKER = "<<<AU-LAW-PAGE-BEGIN>>>"
+export const ASIDE_END_MARKER = "<<<AU-LAW-PAGE-END>>>"
+
 export function asideReplScript(url: string): string {
-  return `const page = await openTab(${JSON.stringify(url)}); console.log(await page.content())`
+  return (
+    `const page = await openTab(${JSON.stringify(url)}); ` +
+    `const html = await page.content(); ` +
+    `console.log(${JSON.stringify(ASIDE_BEGIN_MARKER)}); ` +
+    `console.log(html); ` +
+    `console.log(${JSON.stringify(ASIDE_END_MARKER)})`
+  )
+}
+
+/**
+ * The page, or undefined when the run produced no fenced payload.
+ *
+ * A missing fence is never treated as "the whole of stdout is the page": that
+ * is how the CLI's status line ends up inside a judgment.
+ */
+export function extractAsidePayload(stdout: string): string | undefined {
+  const start = stdout.indexOf(ASIDE_BEGIN_MARKER)
+  if (start === -1) return undefined
+  const from = start + ASIDE_BEGIN_MARKER.length
+  const end = stdout.indexOf(ASIDE_END_MARKER, from)
+  if (end === -1) return undefined
+  return stdout.slice(from, end).trim()
 }
 
 /**
@@ -498,7 +539,20 @@ export async function fetchViaAside(url: string, opts: FetchViaAsideOptions = {}
     )
   }
 
-  const html = result.stdout.trim()
+  const html = extractAsidePayload(result.stdout)
+  if (html === undefined) {
+    // Reached when the fence is absent: the run was cut short, or the CLI
+    // changed what it prints. Returning stdout anyway would hand back its
+    // status line as though it were the document.
+    throw new LawApiError(
+      `Aside did not return a complete page for ${shown}.`,
+      ErrorCodes.PARSE_ERROR,
+      [
+        "The browser session ended before the page was handed back.",
+        "⚠️ This is not evidence the record is absent — open the link to check.",
+      ],
+    )
+  }
   if (!html) {
     throw new LawApiError(
       `Aside returned an empty page for ${shown}.`,

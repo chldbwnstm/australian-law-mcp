@@ -5,8 +5,10 @@ import { DEFAULT_EXECUTION_LIMITS, ExecutionLimitError, RequestExecutionBudget }
 import { requestContext } from "../session-state.js"
 import { BROWSER_FALLBACK_DOMAINS } from "../upstream-hosts.js"
 import {
+  ASIDE_BEGIN_MARKER,
   ASIDE_COMMAND_ENV,
   ASIDE_DEFAULT_TIMEOUT_MS,
+  ASIDE_END_MARKER,
   ASIDE_ENABLED_ENV,
   ASIDE_MAX_TIMEOUT_MS,
   ASIDE_MAX_URL_LENGTH,
@@ -40,12 +42,37 @@ interface RunnerCall {
   options: AsideRunOptions
 }
 
+/**
+ * Wrap a page the way the real CLI hands it back.
+ *
+ * Measured against `aside repl` on 2026-09-12: the page arrives on stdout with
+ * the CLI's own reporting around it — an opening line carrying the tab, the
+ * page *title* and the URL, and a closing `[ok | Nms]` status in dim ANSI. A
+ * stub that returns a bare page would let a regression that strips neither pass
+ * the whole suite, which is exactly what happened before the bridge was ever
+ * run against the real thing.
+ */
+function framed(page: string): string {
+  return (
+    "\u{1F52D} Opened a new tab and set it active: tabs[0], page → Some Case [2020] HCA 41 (https://x)\n" +
+    `${ASIDE_BEGIN_MARKER}\n${page}\n${ASIDE_END_MARKER}\n` +
+    "[2m[ok | 2522ms][0m\n"
+  )
+}
+
 /** Records every spawn that *would* have happened and answers with a canned result. */
 function stubRunner(result: Partial<AsideRunResult> = {}): { runner: AsideRunner; calls: RunnerCall[] } {
   const calls: RunnerCall[] = []
   const runner: AsideRunner = async (command, args, options) => {
     calls.push({ command, args, options })
-    return { stdout: "<html><body>judgment</body></html>", exitCode: 0, ...result }
+    // A caller passing `stdout` is describing the PAGE, so it gets framed the
+    // way the CLI would frame it. A caller that already wrote a fence is
+    // describing the raw stream and is left alone.
+    const stdout =
+      result.stdout === undefined || result.stdout.includes(ASIDE_BEGIN_MARKER)
+        ? result.stdout ?? framed("<html><body>judgment</body></html>")
+        : framed(result.stdout)
+    return { exitCode: 0, ...result, stdout }
   }
   return { runner, calls }
 }
@@ -202,8 +229,8 @@ describe("containment", () => {
 
 describe("the repl snippet", () => {
   it("quotes the URL as a JSON literal", () => {
-    expect(asideReplScript("https://www.accc.gov.au/x")).toBe(
-      'const page = await openTab("https://www.accc.gov.au/x"); console.log(await page.content())',
+    expect(asideReplScript("https://www.accc.gov.au/x")).toContain(
+      'openTab("https://www.accc.gov.au/x")',
     )
   })
 
@@ -239,7 +266,8 @@ describe("the repl snippet", () => {
     const broke = (globalThis as Record<string, unknown>).__asideEscapeProbe === true
     delete (globalThis as Record<string, unknown>).__asideEscapeProbe
     expect(broke).toBe(false)
-    expect(logged).toEqual([`<html>${hostile}</html>`])
+    // The page is fenced, so the payload is what sits between the markers.
+    expect(logged).toEqual([ASIDE_BEGIN_MARKER, `<html>${hostile}</html>`, ASIDE_END_MARKER])
   })
 
   it("reads the page and nothing else", () => {
