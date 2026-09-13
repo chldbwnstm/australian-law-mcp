@@ -6,6 +6,12 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-09-13
+
+Robustness work on the browser fallback introduced in 1.0.2, after a tester
+reading real judgments through it found the places where it could still hand
+back something that was not the document.
+
 ### Fixed
 
 - Harden automatic Aside case research with exact heading/citation checks,
@@ -35,7 +41,7 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   report. See [the verification record](docs/ASIDE-ROBUSTNESS.md) for observed
   retrievals, PDF-only pages, empty queries and unresolved lookups.
 
-### Earlier unreleased fixes
+### Also in this release
 
 - Enforce macOS eligibility before probing or launching Aside, including when a
   CLI path is configured. Use macOS path rules in the probe so its simulated
