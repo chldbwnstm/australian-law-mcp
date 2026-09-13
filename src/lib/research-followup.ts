@@ -202,7 +202,10 @@ export function boundToolResponse(result: TextResultInput, originTool: string, m
   if (envelope) envelope = boundFollowupEnvelope(envelope, Math.max(256, maxChars - 256))
   if (JSON.stringify(makeResult(rawText)).length <= maxChars) return makeResult(rawText)
 
-  const truncationGap = makeGap({
+  // A document renderer can already identify the omitted source. Reuse that
+  // gap instead of creating a second browser task with no URL or citation.
+  const identified = envelope?.gaps.filter(gap => gap.kind === "truncated" && gap.originTool === originTool && gap.sourceUrls.length)
+  const truncationGap = identified?.length === 1 ? identified[0] : makeGap({
     kind: "truncated",
     originTool,
     target: {},

@@ -77,9 +77,8 @@ export class LawApiError extends Error {
 /**
  * A host on the blocked list was requested.
  *
- * Thrown *before* any network call, so it can never be confused with a
- * failed one. The message never says the record is absent — it says this
- * server did not look, and points at where a human can.
+ * Direct requests are refused before a network call. An optional browser
+ * attempt can also leave the source unavailable; retain that distinction.
  */
 export class UpstreamBlockedError extends Error {
   /** The `HostKey` that was refused (kept as a string so `errors.ts` stays host-table-agnostic). */
@@ -87,10 +86,10 @@ export class UpstreamBlockedError extends Error {
   /** Human-usable deep links for the same material. */
   readonly links: string[]
 
-  constructor(host: string, reason: string, links: string[] = []) {
+  constructor(host: string, reason: string, links: string[] = [], readonly browserAttempted = false) {
     super(
       `${host} is not fetched by this server (${reason}). ` +
-      `This is a refusal to request, not an observation about the record — ` +
+      (browserAttempted ? `The browser attempt did not retrieve the requested material — ` : `This is a refusal to request, not an observation about the record — `) +
       `nothing here says the material is absent.`
     )
     this.name = "UpstreamBlockedError"
@@ -169,7 +168,9 @@ export function formatToolError(error: unknown, context?: string): ToolResponse 
     code = ErrorCodes.UPSTREAM_BLOCKED
     msg = error.message
     suggestions = [
-      "⚠️ Do not report this as 'no such case/legislation'. The source was never queried, so this response carries no evidence either way.",
+      error.browserAttempted
+        ? "⚠️ Do not report this as 'no such case/legislation'. Browser retrieval did not yield the requested source; its contents remain unverified."
+        : "⚠️ Do not report this as 'no such case/legislation'. The source was never queried, so this response carries no evidence either way.",
       ...error.links.map((link) => `Open directly: ${link}`),
     ]
   } else if (error instanceof UpstreamRecordMissingError) {

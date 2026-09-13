@@ -101,6 +101,11 @@ export interface RenderDocumentOptions {
 }
 
 export function renderDocument(document: SourceDocument, options: RenderDocumentOptions = {}): string {
+  return truncateResponse(renderDocumentContent(document, options))
+}
+
+/** Unbounded rendering lets document callers preserve source identity when shortening. */
+export function renderDocumentContent(document: SourceDocument, options: RenderDocumentOptions = {}): string {
   const lines: string[] = []
   lines.push(`=== ${document.title} ===`)
   if (document.citation) lines.push(`Citation: ${document.citation}`)
@@ -127,7 +132,7 @@ export function renderDocument(document: SourceDocument, options: RenderDocument
     lines.push(`${options.bodyHeading ?? "Full text"}:`)
     lines.push(compactBody(document.text, { full: options.full === true }))
   }
-  return truncateResponse(lines.join("\n"))
+  return lines.join("\n")
 }
 
 /**

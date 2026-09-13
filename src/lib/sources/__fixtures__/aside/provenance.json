@@ -1,0 +1,42 @@
+[
+  {
+    "file": "fedcourt-tpg.html",
+    "sourceUrl": "https://www.judgments.fedcourt.gov.au/judgments/Judgments/fca/full/2020/2020fcafc0130",
+    "capturedAt": "2026-09-13",
+    "title": "Australian Competition and Consumer Commission v TPG Internet Pty Ltd [2020] FCAFC 130",
+    "originalHtmlSha256": "e82dd17287c24e396ef5870f3e14faa31bf9833afcd6dfdf9f7732155e7b17ca",
+    "transformation": "Script and style elements removed; document structure and visible text retained."
+  },
+  {
+    "file": "austlii-tpg.html",
+    "sourceUrl": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/cth/FCAFC/2020/130.html",
+    "capturedAt": "2026-09-13",
+    "title": "Australian Competition and Consumer Commission v TPG Internet Pty Ltd [2020] FCAFC 130 (30 July 2020)",
+    "originalHtmlSha256": "2ef9af6c20ca6d4d938b1f665f79a58f6fdc162381143ff404281687f83d03f9",
+    "transformation": "Script and style elements removed; document structure and visible text retained."
+  },
+  {
+    "file": "austlii-search-ready.html",
+    "sourceUrl": "https://www.austlii.edu.au/cgi-bin/sinosrch.cgi?method=auto&query=prepayment&mask_path=au%2Fcases%2Fcth%2FFCAFC",
+    "capturedAt": "2026-09-13",
+    "title": "AustLII: 30 documents found for (prepayment)",
+    "originalHtmlSha256": "190eb1d3fbccb695832385d9c668dc8c432c103365928c2031277c9d0c6c2801",
+    "transformation": "Script and style elements removed; document structure and visible text retained."
+  },
+  {
+    "file": "austlii-vsc-pdf.html",
+    "sourceUrl": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/vic/VSC/2023/637.html",
+    "capturedAt": "2026-09-13",
+    "title": "Alphington Developments Pty Ltd v Amcor Pty Ltd (No 5) [2023] VSC 637 (1 November 2023)",
+    "originalHtmlSha256": "f7d2e62097a9750dc13694829bd7f87c48da83b355603d48c12fb0cf4c7f9314",
+    "transformation": "Script and style elements removed; document structure and visible text retained."
+  },
+  {
+    "file": "austlii-wasca.html",
+    "sourceUrl": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/wa/WASCA/2012/212.html",
+    "capturedAt": "2026-09-13",
+    "title": "TOWN OF PORT HEDLAND -v- REECE WILLIAM HODDER BY NEXT FRIEND ELAINE GEORGINA HODDER [No 2] [2012] WASCA 212 (19 December 2012)",
+    "originalHtmlSha256": "ec1d2a18ae467d08c996125f92f4fce2dabb7aeb3a707b6666b2ef80f634f4ec",
+    "transformation": "Script and style elements removed; document structure and visible text retained."
+  }
+]

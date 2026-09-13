@@ -40,11 +40,14 @@ import type { LooseToolResponse } from "../lib/types.js"
 import * as nsw from "../lib/sources/nsw-caselaw.js"
 import * as hca from "../lib/sources/hcourt.js"
 import * as qld from "../lib/sources/qld-judgments.js"
-import { absoluteUrl, blockTextOf, firstText, links as htmlLinks } from "../lib/sources/html.js"
+import { blockTextOf } from "../lib/sources/html.js"
 import { interleave, renderDocument, renderSearch } from "../lib/sources/render.js"
 import type { SourceDocument, SourceHit, SourceSearchResult } from "../lib/sources/types.js"
 import { truncateResponse } from "../lib/schemas.js"
-import { asidePageFailure, asideStatus, fetchViaAside } from "../lib/sources/aside-browser.js"
+import { asidePageFailure, asideStatus, fetchPageViaAside, type AsidePage } from "../lib/sources/aside-browser.js"
+import { readAsideJudgment, readAsideSearchHits, asideSearchTotal, asideSearchPageMatches } from "../lib/sources/aside-case-pages.js"
+import { ExecutionLimitError } from "../lib/execution-limits.js"
+import { getRequestSignal, throwIfRequestCancelled } from "../lib/session-state.js"
 import { sourceDocumentResponse } from "./source-document.js"
 import { followupEnvelope, makeGap } from "../lib/research-followup.js"
 
@@ -256,6 +259,7 @@ function blockedCourtError(
     `${courtName} judgments`,
     "its publisher (AustLII / judgments.fedcourt.gov.au) blocks non-browser clients, so this server does not request them" + attempted,
     options.links ?? blockedCourtLinks(citation),
+    Boolean(options.asideFailures?.length),
   )
 }
 
@@ -274,10 +278,10 @@ function blockedCourtError(
  */
 export interface AsideBridge {
   asideStatus(): { enabled: boolean; command?: string; reason?: string }
-  fetchViaAside(url: string): Promise<string>
+  fetchViaAside(url: string): Promise<string | AsidePage>
 }
 
-const realAsideBridge: AsideBridge = { asideStatus, fetchViaAside }
+const realAsideBridge: AsideBridge = { asideStatus, fetchViaAside: fetchPageViaAside }
 let asideBridge: AsideBridge | null = null
 
 /** Inject a stub (tests) or `null` to restore the real bridge. */
@@ -339,30 +343,31 @@ const ASIDE_PROVENANCE_NOTE =
   "may be mixed into the body. Cite the paragraph numbers shown on the page, and say in the answer that the " +
   "material was retrieved through the user's browser."
 
-/** Below this, the body is an interstitial or a shell, not a judgment. */
-const MIN_ASIDE_BODY_CHARS = 400
-
 /** At most two pages per blocked answer: this drives a real browser window. */
 const MAX_ASIDE_ATTEMPTS = 2
 
 type AsideFetch = { url: string; html: string } | { failures: string[] }
 
-async function fetchFirstViaAside(urls: string[], validate?: (html: string) => string | undefined): Promise<AsideFetch> {
+async function fetchFirstViaAside(urls: string[], validate?: (html: string, url: string) => string | undefined): Promise<AsideFetch> {
   const failures: string[] = []
   for (const url of urls.slice(0, MAX_ASIDE_ATTEMPTS)) {
     try {
-      const html = await bridge().fetchViaAside(url)
+      throwIfRequestCancelled()
+      const page = await bridge().fetchViaAside(url)
+      throwIfRequestCancelled()
+      const html = typeof page === "string" ? page : page.html
       if (!html || html.trim().length === 0) {
         failures.push(`${url} → the browser returned an empty page`)
         continue
       }
-      const failure = asidePageFailure(html) ?? validate?.(html)
+      const failure = asidePageFailure(html) ?? validate?.(html, typeof page === "string" ? url : page.url)
       if (failure) {
         failures.push(`${url} → ${failure}`)
         continue
       }
-      return { url, html }
+      return { url: typeof page === "string" ? url : page.url, html }
     } catch (error) {
+      if (getRequestSignal()?.aborted || error instanceof ExecutionLimitError || (error instanceof Error && ["AbortError", "AsideCleanupError", "AsideQueueError"].includes(error.name))) throw error
       failures.push(`${url} → ${message(error)}`)
     }
   }
@@ -372,13 +377,6 @@ async function fetchFirstViaAside(urls: string[], validate?: (html: string) => s
 /** The judgment pages for a citation, citator and search links dropped. */
 function judgmentUrls(citation: string): string[] {
   return blockedCourtLinks(citation).filter((url) => !url.includes("sinosrch.cgi") && !url.includes("LawCite"))
-}
-
-function pageTitle(html: string): string | undefined {
-  return (
-    firstText(html, /<h1\b[^>]{0,300}>([\s\S]{0,600}?)<\/h1\s*>/i) ??
-    firstText(html, /<title\b[^>]{0,300}>([\s\S]{0,600}?)<\/title\s*>/i)
-  )
 }
 
 /**
@@ -393,30 +391,25 @@ async function judgmentViaAside(p: {
   if (!asideState().enabled) return undefined
   const urls = judgmentUrls(p.citation)
   if (urls.length === 0) return { failures: ["no judgment URL could be built for this citation"] }
-  const fetched = await fetchFirstViaAside(urls, html => {
-    const text = blockTextOf(html)
-    if (text.length < MIN_ASIDE_BODY_CHARS) {
-      return `the page carried ${text.length} characters of text, too little to be the reasons`
-    }
-    const normalizeCitation = (value: string) => value.replace(/[\s.]/g, "").toUpperCase()
-    if (!normalizeCitation(text).includes(normalizeCitation(p.citation))) {
-      return "the page did not identify the requested citation; it was not accepted as the judgment"
-    }
-    return undefined
+  const fetched = await fetchFirstViaAside(urls, (html, url) => {
+    const page = readAsideJudgment(html, p.citation, url)
+    return "failure" in page ? page.failure : undefined
   })
   if ("failures" in fetched) return fetched
-  const text = blockTextOf(fetched.html)
+  const page = readAsideJudgment(fetched.html, p.citation, fetched.url)
+  if ("failure" in page) return { failures: [page.failure] }
   const doc: SourceDocument = {
-    title: pageTitle(fetched.html) ?? p.citation,
-    citation: p.citation,
+    title: page.title,
+    citation: page.citation,
     url: fetched.url,
     metadata: [
       ["Court", p.courtName],
       ["Retrieved via", VIA_ASIDE_LABEL],
     ],
-    text,
+    text: page.text,
     note: ASIDE_PROVENANCE_NOTE,
-    bodyStatus: "full_text",
+    bodyStatus: page.documents?.length ? "binary_link_only" : "full_text",
+    ...(page.documents?.length ? { documents: page.documents } : {}),
   }
   return {
     response: sourceDocumentResponse(doc, {
@@ -440,26 +433,29 @@ async function searchViaAside(p: {
   label: string
   query: string
   limit: number
+  court?: string
+  jurisdiction?: Jurisdiction
+  page?: number
 }): Promise<{ response: LooseToolResponse } | { failures: string[] } | undefined> {
   if (!asideState().enabled) return undefined
-  const fetched = await fetchFirstViaAside([p.url])
+  const page = p.page ?? 1
+  const pageUrl = new URL(p.url)
+  // AustLII's observed pagination advances by ten, independent of our display limit.
+  // See the recorded search fixture and its publisher-supplied offset=10 link.
+  if (page > 1) pageUrl.searchParams.set("offset", String((page - 1) * 10))
+  const fetched = await fetchFirstViaAside([pageUrl.href])
   if ("failures" in fetched) return fetched
-  const origin = originOf(fetched.url)
-  const seen = new Set<string>()
-  const hits: string[] = []
-  for (const link of htmlLinks(fetched.html)) {
-    if (!/\/au\/cases\//.test(link.href)) continue
-    const url = absoluteUrl(origin, link.href)
-    if (seen.has(url)) continue
-    seen.add(url)
-    hits.push(`${hits.length + 1}. ${link.text || url}\n   ${url}`)
-    if (hits.length >= p.limit) break
-  }
+  if (!asideSearchPageMatches(pageUrl.href, fetched.url)) return { failures: ["The browser redirected to a different search query, scope or result page; those results were not attributed to this request."] }
+  const parsedHits = readAsideSearchHits(fetched.html, fetched.url, p)
+  const hits = parsedHits.slice(0, p.limit).map((hit, i) => `${i + 1}. ${hit.title}\n   ${hit.url}`)
+  const total = asideSearchTotal(fetched.html)
+  const complete = page === 1 && total !== undefined && total === parsedHits.length && hits.length === total
   const lines = [
     `=== ${p.label} — retrieved through the user's browser ===`,
     `Query: ${p.query}`,
     `Retrieved via: ${VIA_ASIDE_LABEL}`,
     `Search page: ${fetched.url}`,
+    `Result page: ${page}; displayed ${hits.length} matching judgment link(s)` + (total !== undefined ? `; publisher-reported total: ${total}` : "; publisher total unavailable"),
     "",
     ASIDE_PROVENANCE_NOTE,
     "",
@@ -471,6 +467,8 @@ async function searchViaAside(p: {
       "These are page links, not `id:` values — `get_case_text(citation=\"…\")` fetches one of them through the " +
       "same browser fallback.",
     )
+  } else if (complete && total === 0) {
+    lines.push("The publisher reports no documents for this query. This is a search result, not evidence that a particular case does not exist.")
   } else {
     // No parseable rows is not "no cases": say so, and hand over what the page
     // did say so the caller can judge it.
@@ -481,12 +479,18 @@ async function searchViaAside(p: {
       blockTextOf(fetched.html).slice(0, 2000),
     )
   }
-  return { response: { content: [{ type: "text", text: truncateResponse(lines.join("\n")) }] } }
-}
-
-function originOf(url: string): string {
-  const match = /^(https?:\/\/[^/]+)/i.exec(url)
-  return match ? match[1] : url
+  const gap = makeGap({
+    kind: "coverage", originTool: "search_cases", target: { query: p.query },
+    ...(p.jurisdiction ? { jurisdiction: p.jurisdiction } : {}),
+    reason: hits.length ? "Only this browser result page was inspected; the wider search has not been exhausted."
+      : "No matching judgment links could be extracted from this page; the search remains unresolved.",
+    sourceUrls: [fetched.url], sourceAccess: "permitted",
+    evidenceNeeded: ["The publisher's matching judgment links and remaining result pages"],
+  })
+  return { response: {
+    content: [{ type: "text", text: truncateResponse(lines.join("\n")) }],
+    ...(!complete ? { structuredContent: { followup: followupEnvelope([gap], { pending: true }) } } : {}),
+  } }
 }
 
 // ── search_cases ──────────────────────────────────────────────────────────
@@ -507,7 +511,7 @@ export const SearchCasesSchema = z.object({
     "results. A string that is not a court at all is rejected as [INVALID_PARAMETER] rather than ignored.",
   ),
   limit: z.number().min(1).max(50).default(10).optional().describe("Maximum hits to return (default 10)."),
-  page: z.number().min(1).default(1).optional().describe("1-based page number (default 1)."),
+  page: z.number().int().min(1).max(1000).default(1).optional().describe("1-based publisher result page (default 1; AustLII pages contain up to ten hits)."),
 })
 
 export type SearchCasesInput = z.infer<typeof SearchCasesSchema>
@@ -633,6 +637,8 @@ export async function searchCases(
         label: `Case law — ${route.courtName}`,
         query: input.query,
         limit,
+        court: route.court,
+        page: input.page,
       })
       if (viaAside && "response" in viaAside) return viaAside.response
       throw blockedCourtError(input.query, route.courtName, {
@@ -646,12 +652,16 @@ export async function searchCases(
       : sourcesFor(input.jurisdiction ? { jurisdiction: input.jurisdiction } : {})
     if (sources.length === 0) {
       const jurisdiction = input.jurisdiction ?? ""
-      const links = [austliiSearchUrl(input.query), lawCiteUrl(input.query)]
+      const canonicalJurisdiction = normaliseJurisdiction(jurisdiction)
+      const segment = canonicalJurisdiction?.toLowerCase()
+      const links = [austliiSearchUrl(input.query, segment ? [`au/cases/${segment}`] : []), lawCiteUrl(input.query)]
       const viaAside = await searchViaAside({
         url: links[0],
         label: `Case law — ${jurisdiction} courts`,
         query: input.query,
         limit,
+        jurisdiction: canonicalJurisdiction,
+        page: input.page,
       })
       if (viaAside && "response" in viaAside) return viaAside.response
       throw new UpstreamBlockedError(
@@ -661,6 +671,7 @@ export async function searchCases(
           ? `; the Aside browser fallback is on and was tried, but the page did not come back (${viaAside.failures.join("; ")})`
           : ""),
         links,
+        Boolean(viaAside?.failures.length),
       )
     }
 

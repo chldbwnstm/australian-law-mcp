@@ -43,6 +43,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.automation.json --noEmit",
     "verify:stdio": "node ./scripts/verify-stdio.mjs",
+    "verify:aside": "node ./scripts/verify-aside.mjs",
     "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "keywords": [

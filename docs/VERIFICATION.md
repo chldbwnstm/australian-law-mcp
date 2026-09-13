@@ -1,5 +1,8 @@
 # Live verification log
 
+The latest Aside hardening and live MCP matrix are recorded in
+[Aside research verification](ASIDE-ROBUSTNESS.md).
+
 ## 2026-09-12 — FCAFC URLs and citation checks, unreleased fixes after v1.0.3
 
 Environment: macOS 26.6.2, Node 22.11.0, local Aside CLI. This records the

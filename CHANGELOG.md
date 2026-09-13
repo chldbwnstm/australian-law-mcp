@@ -8,6 +8,35 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Harden automatic Aside case research with exact heading/citation checks,
+  publisher URL validation, court and jurisdiction filtering, duplicate removal,
+  and AustLII page offsets. Search redirects must preserve the requested query
+  and scope; incomplete results keep a structured coverage gap.
+- Wait through browser challenges and incomplete page loads in a dedicated tab,
+  force `--host local`, validate the final URL, and require an unambiguous JSON
+  snapshot with load and cleanup status. Error pages and CLI diagnostics cannot
+  become judgment reasons; judgments may legitimately quote challenge wording.
+- Serialize browser work per server process with bounded queuing, cancellation,
+  deadlines, response byte accounting and subprocess cleanup. Cancellation,
+  exhausted budgets, queue failures and unconfirmed cleanup stop source retries.
+- Preserve AustLII paragraph numbering and older WA judgment anchors. A matching
+  PDF viewer returns its original PDF link as a document-body gap. Full responses
+  shortened at the renderer or transport retain their citation and source URL.
+- Accept citation pinpoints written as `at [38]`, including dotted court tokens.
+  Distinguish an unsuccessful browser attempt from a source never requested.
+
+### Added
+
+- Recorded publisher fixtures, actual child-process lifecycle tests, concurrent
+  queue tests, adversarial page/protocol tests, and a complete document-to-plan-
+  to-evidence regression path. Normal tests do not open Aside or use the network.
+- `npm run verify:aside`, gated by `LIVE_ASIDE=1 AU_LAW_ASIDE=true`, exercises the
+  built MCP server on a local Mac and saves individual JSON-RPC responses plus a
+  report. See [the verification record](docs/ASIDE-ROBUSTNESS.md) for observed
+  retrievals, PDF-only pages, empty queries and unresolved lookups.
+
+### Earlier unreleased fixes
+
 - Enforce macOS eligibility before probing or launching Aside, including when a
   CLI path is configured. Use macOS path rules in the probe so its simulated
   Mac fixtures also run correctly in Windows CI.

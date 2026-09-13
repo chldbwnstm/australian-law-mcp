@@ -21,6 +21,12 @@ project setup in local Codex or Claude Code sessions on **macOS 15 or later**.
 Windows supports the core law tools; Aside browser follow-up is not available
 there yet.
 
+The current source also strengthens automatic Aside case research: court and
+jurisdiction filters, result-page navigation, exact judgment identity checks,
+and source-linked follow-up when a judgment is too long or available only as a
+PDF. See the [Aside verification report](docs/ASIDE-ROBUSTNESS.md) for tested paths
+and remaining constraints. These latest fixes are not in the v1.0.3 installer.
+
 > **Download the extension, or build it here.** The desktop installer is
 > attached to the
 > [latest release](https://github.com/chldbwnstm/australian-law-mcp/releases/latest)
@@ -606,19 +612,43 @@ This section is not a disclaimer. It is the list of things you would otherwise d
 
 ### Optional: finishing a blocked source in your own browser
 
-Those publishers refuse *this server*. They do not refuse *you*. On a Mac with [Aside](https://docs.aside.com/help/get-started) installed, the server can be allowed to finish a blocked lookup by driving that browser — the one already signed in to the sites you use — and return what the page actually said.
+On a Mac with [Aside](https://docs.aside.com/help/get-started) installed, the server can finish an otherwise blocked case lookup through your local browser when the publisher allows that session to read the page. Automatic fallback is used by `search_cases` and `get_case_text`; the companion workflow coordinates broader research through Aside MCP.
 
 - **Off by default, and it stays off until a person turns it on.** In the Claude desktop app: **Settings → Extensions → Australian Law → “Finish blocked legal sources using the Aside browser”**. On the CLI and Codex hosts, which have no settings UI, set `AU_LAW_ASIDE=1`; see [`.env.example`](.env.example) for both variables.
 - **macOS, with Aside installed, or nothing happens.** There is no Windows build, no bundled browser, no remote fallback. With Aside absent the switch has no effect whatever: blocked sources answer with the same `[UPSTREAM_BLOCKED]` note and deep link as before. Installing the extension does not give a Chat user Federal Court coverage, and turning this on does not give it to one without Aside.
 - **It drives a browser holding your logged-in sessions.** That is exactly why it gets past gates this server cannot, and exactly why it is fenced: the server may only point it at the blocked legal-source domains in the table above — the Federal Court, AustLII, LawCite, the NSW and SA registers, the ACCC, the Competition Tribunal, the Ombudsman. That list is derived from those rows; no question, tool argument or URL in a document can widen it.
 - **What comes back is labelled as browser-retrieved.** A page rendered in your own session is not the same evidence as a document a publisher's endpoint handed over, and the answer says which one it is.
 
+In the current source, calls explicitly select Aside's **local** host. Each server
+process runs one browser task at a time, opens a dedicated tab, waits for the page
+to load, and closes its tab on completion. It rejects challenge pages, error pages,
+unexpected redirects and judgments whose heading identifies a different citation.
+Search rows must match their citation, publisher URL, court and jurisdiction.
+Use `page: 2` for the next AustLII page; its pages contain up to ten results, while
+`limit` controls how many of those are displayed. Partial searches remain pending.
+
+For example, with the fallback enabled:
+
+```text
+Search Federal Court Full Court decisions for "prepayment" with search_cases,
+court "FCAFC", page 1 and limit 3. Then inspect page 2 and retrieve one result
+with get_case_text using its citation. Keep the source links and explain what
+was actually retrieved and what still needs follow-up.
+```
+
+`full: true` still respects the MCP response size limit. Omitted text retains an
+actionable source URL and citation for follow-up. A PDF viewer returns the original
+PDF link and an unresolved document-body task; it does not supply extracted PDF
+reasons. The companion can continue that task where the document is accessible.
+The [verification report](docs/ASIDE-ROBUSTNESS.md) includes an opt-in command for
+repeating the live MCP checks.
+
 **Why it exists.** With the extension installed and the switch off, ask Claude Desktop Chat for recent Federal Court decisions: the server reports the court as blocked, and Chat then answers from its own web search. That answer can read as though it came from here. It did not — nothing in it passed through this server's sources, citation parsing or blocked-source labelling. The switch is what lets the server answer that question itself, and when it is off the honest reading of “blocked” is *this server did not check*, not *the Federal Court has nothing*.
 
 ### What is materially incomplete even where it works
 
 - **No reported citations.** CLR, FCR, NSWLR and every other reported series is reachable only through AustLII/LawCite. `verify_citations` marks a reported citation `⚠`, never `✓` or `✗`.
-- **Victoria, SA, WA, Tasmania, ACT and NT judgments** are not searched. Only NSW, the High Court and Queensland are.
+- **Direct case searches cover NSW, the High Court and Queensland.** On an opted-in Mac, Aside can also search the supported court and jurisdiction scopes through AustLII. Publisher access and document formats determine how much can be retrieved; a partial search is labelled accordingly.
 - **The citator is not complete.** `cite_check` scans what it can reach and reports the count it retrieved alongside the count the source claims — e.g. *"High Court of Australia: 12 mention(s) (source reports 74)"*. It never presents a partial scan as a clean bill of health.
 - **Judgment and determination text is often a PDF.** The FWC, the OAIC and the High Court publish reasons as PDF/DOCX behind an HTML metadata page. You get the metadata and the download link, and a note saying the reasons exist and were not received as text.
 - **Compiled text can lag the law in force.** Where the Register flags unincorporated commenced amendments, every response carries the warning. Cite the amending Act, not just the compilation.

@@ -53,6 +53,15 @@ describe("medium-neutral citations", () => {
     expect(parsed("[2009] TASSC 80, [11]-[14]").pinpoint).toEqual({ paragraphs: ["11", "14"] })
   })
 
+  it.each(["[2020] FCAFC 130 at [38]", "[2020] F.C.A.F.C. 130 AT [38]"])("retains the natural-language pinpoint in %s", input => {
+    expect(parsed(input)).toMatchObject({ court: "FCAFC", number: 130, pinpoint: { paragraphs: ["38"] } })
+    expect(extractCaseCitations(`See ${input} for the reasons.`)[0]).toMatchObject({ ok: true, citation: { pinpoint: { paragraphs: ["38"] } } })
+  })
+
+  it.each(["[2020] FCAFC 130 at", "[2020] FCAFC 130 at the hearing", "[2020] FCAFC 130 at [38] junk"])("does not silently discard an invalid pinpoint tail: %s", input => {
+    expect(parseCaseCitation(input).ok).toBe(false)
+  })
+
   it("warns, rather than refusing, when the year predates MNC adoption", () => {
     const citation = parsed("[1990] HCA 12")
     expect(citation.warnings.join(" ")).toMatch(/1998/)

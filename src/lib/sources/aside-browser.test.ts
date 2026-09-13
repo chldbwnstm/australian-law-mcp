@@ -13,6 +13,7 @@ import {
   ASIDE_MAX_TIMEOUT_MS,
   ASIDE_MAX_URL_LENGTH,
   ASIDE_REQUEST_COST,
+  ASIDE_OUTPUT_ALLOWANCE_BYTES,
   asideChildEnv,
   asideReplScript,
   asideStatus as probeAsideStatus,
@@ -20,6 +21,7 @@ import {
   clampAsideTimeout,
   defaultAsideCommandPath,
   fetchViaAside,
+  extractAsidePayload,
   looksLikeBotChallenge,
   type AsideRunOptions,
   type AsideRunResult,
@@ -61,7 +63,7 @@ interface RunnerCall {
 function framed(page: string): string {
   return (
     "\u{1F52D} Opened a new tab and set it active: tabs[0], page → Some Case [2020] HCA 41 (https://x)\n" +
-    `${ASIDE_BEGIN_MARKER}\n${page}\n${ASIDE_END_MARKER}\n` +
+    `${ASIDE_BEGIN_MARKER}\n${JSON.stringify({ schemaVersion: 1, requestedUrl: FED_COURT, url: FED_COURT, html: page, ready: true, closed: true })}\n${ASIDE_END_MARKER}\n` +
     "[2m[ok | 2522ms][0m\n"
   )
 }
@@ -243,9 +245,7 @@ describe("containment", () => {
 
 describe("the repl snippet", () => {
   it("quotes the URL as a JSON literal", () => {
-    expect(asideReplScript("https://www.accc.gov.au/x")).toContain(
-      'openTab("https://www.accc.gov.au/x")',
-    )
+    expect(asideReplScript("https://www.accc.gov.au/x")).toContain('const target = "https://www.accc.gov.au/x"')
   })
 
   /**
@@ -267,13 +267,16 @@ describe("the repl snippet", () => {
       "openTab",
       "console",
       `return (async () => { ${asideReplScript(hostile)} })()`,
-    ) as (
-      openTab: (url: string) => Promise<{ content: () => Promise<string> }>,
-      console: { log: (line: string) => void },
-    ) => Promise<void>
+    ) as (openTab: (url: string) => Promise<unknown>, console: { log: (line: string) => void }) => Promise<void>
 
     await evaluate(
-      async (url: string) => ({ content: async () => `<html>${url}</html>` }),
+      async () => ({
+        goto: async (url: string) => { expect(url).toBe(hostile) },
+        url: () => hostile,
+        waitForLoadState: async () => {},
+        content: async () => `<html><body>${hostile}</body></html>`,
+        close: async () => {},
+      }),
       { log: (line) => logged.push(line) },
     )
 
@@ -281,7 +284,7 @@ describe("the repl snippet", () => {
     delete (globalThis as Record<string, unknown>).__asideEscapeProbe
     expect(broke).toBe(false)
     // The page is fenced, so the payload is what sits between the markers.
-    expect(logged).toEqual([ASIDE_BEGIN_MARKER, `<html>${hostile}</html>`, ASIDE_END_MARKER])
+    expect(extractAsidePayload(logged.join("\n"))).toBe(`<html><body>${hostile}</body></html>`)
   })
 
   it("reads the page and nothing else", () => {
@@ -295,8 +298,7 @@ describe("the repl snippet", () => {
     expect(script).not.toMatch(/\b(?:local|session)Storage\b/i)
     expect(script).not.toMatch(/\.\s*cookies\s*\(/i)
     expect(script).not.toMatch(/storageState|context\s*\(\s*\)/i)
-    // The only page API it uses.
-    expect(script.match(/page\s*\.\s*\w+/g)).toEqual(["page.content", "page.content"])
+    expect(new Set(script.match(/page\s*\.\s*\w+/g))).toEqual(new Set(["page.goto", "page.waitForLoadState", "page.url", "page.content", "page.close"]))
   })
 })
 
@@ -323,7 +325,7 @@ describe("fetchViaAside", () => {
     await expect(fetchViaAside(FED_COURT, { ...enabledHost, runner })).resolves.toBe("<html>fca</html>")
     expect(calls).toHaveLength(1)
     expect(calls[0].command).toBe(ASIDE_PATH)
-    expect(calls[0].args).toEqual(["repl", asideReplScript(FED_COURT)])
+    expect(calls[0].args).toEqual(["repl", "--host", "local", asideReplScript(FED_COURT)])
   })
 
   it("does not run, and says why, when the fallback is off", async () => {
@@ -350,10 +352,10 @@ describe("fetchViaAside", () => {
   it("keeps its own timeout under Aside's 120s ceiling", async () => {
     const { runner, calls } = stubRunner()
     await fetchViaAside(FED_COURT, { ...enabledHost, runner })
-    expect(calls[0].options.timeoutMs).toBe(ASIDE_DEFAULT_TIMEOUT_MS)
+    expect(calls[0].options.timeoutMs).toBeLessThanOrEqual(ASIDE_DEFAULT_TIMEOUT_MS)
 
     await fetchViaAside(FED_COURT, { ...enabledHost, runner, timeoutMs: 500_000 })
-    expect(calls[1].options.timeoutMs).toBe(ASIDE_MAX_TIMEOUT_MS)
+    expect(calls[1].options.timeoutMs).toBeLessThanOrEqual(ASIDE_MAX_TIMEOUT_MS)
     expect(calls[1].options.timeoutMs).toBeLessThan(120_000)
 
     expect(clampAsideTimeout(undefined)).toBe(ASIDE_DEFAULT_TIMEOUT_MS)
@@ -429,13 +431,13 @@ describe("execution budget", () => {
     await expect(
       requestContext.run({ budget }, () => fetchViaAside(FED_COURT, { ...enabledHost, runner })),
     ).rejects.toThrow(ExecutionLimitError)
-    expect(calls[0].options.maxOutputBytes).toBe(4_096)
+    expect(calls[0].options.maxOutputBytes).toBe(4_096 * 2 + ASIDE_OUTPUT_ALLOWANCE_BYTES)
   })
 
   it("still runs outside a request context, charging nothing", async () => {
     const { runner, calls } = stubRunner()
     await expect(fetchViaAside(FED_COURT, { ...enabledHost, runner })).resolves.toContain("judgment")
-    expect(calls[0].options.maxOutputBytes).toBe(DEFAULT_EXECUTION_LIMITS.maxUpstreamBodyBytes)
+    expect(calls[0].options.maxOutputBytes).toBe(DEFAULT_EXECUTION_LIMITS.maxUpstreamBodyBytes * 2 + ASIDE_OUTPUT_ALLOWANCE_BYTES)
   })
 })
 

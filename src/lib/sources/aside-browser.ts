@@ -5,10 +5,10 @@
  * Eight legal sources are Cloudflare/WAF-gated against server-side clients and
  * are rows marked `blocked` in `upstream-hosts.ts` (Federal Court judgments,
  * AustLII, LawCite, the NSW and SA registers, ACCC, the Competition Tribunal,
- * the Commonwealth Ombudsman). A real local browser walks through those gates
- * because it is a real browser. Aside is one, driven from the command line:
+ * the Commonwealth Ombudsman). Aside can sometimes retrieve a source through
+ * the user's local browser session, driven from the command line:
  *
- *     aside repl "const page = await openTab('https://…'); console.log(await page.content())"
+ *     aside repl --host local "…"
  *
  * That is the whole mechanism. `repl` rather than `exec` on purpose: it is
  * deterministic, there is no agent loop between the URL and the page, and this
@@ -17,30 +17,30 @@
  *
  * ## Containment
  *
- * The browser this spawns holds the user's logged-in sessions — that is why it
- * gets past the gates, and it is the whole risk. A URL handed to
+ * The browser holds the user's sessions. A URL handed to
  * `fetchViaAside` can have come from a tool argument, i.e. from text a model
  * read on some page. So the URL is not a request, it is a claim to be checked:
  *
- *  - https only, no embedded credentials, no unbounded length;
+ *  - https on its standard port, no embedded credentials, no unbounded length;
  *  - the host must be on `BROWSER_FALLBACK_DOMAINS`, which is derived from the
  *    blocked rows of the host table and cannot be widened by a caller;
  *  - the snippet is built with `JSON.stringify`, and the child is spawned with
  *    `shell: false`, so the URL crosses the argv and JS-evaluator boundaries as
  *    data both times;
- *  - only `page.content()` is ever evaluated. No cookie jar, no storage, no
- *    other tab. The child's stderr is routed to /dev/null and never appears in
+ *  - navigation, readiness checks and content reads use one owned tab, closed
+ *    in a finally block. No cookie jar, storage or unrelated tab is inspected.
+ *    The child's stderr is discarded and never appears in
  *    a return value or an error message;
  *  - the call is charged to the request's execution budget at
  *    `ASIDE_REQUEST_COST` upstream attempts, before the child is spawned, so a
- *    fan-out cannot open browser tabs for free.
+ *    fan-out cannot open browser tabs for free. This process serializes calls,
+ *    bounds its queue and includes queue time in each call's deadline.
  *
  * Off unless `AU_LAW_ASIDE` is set (`1`, `true`, `yes` or `on`). `asideStatus()`
  * reports *why* it is off, so a tool can say so instead of silently skipping the
  * fallback.
  */
 
-import { spawn } from "node:child_process"
 import { existsSync } from "node:fs"
 import { homedir } from "node:os"
 import { posix as macPath } from "node:path"
@@ -56,6 +56,8 @@ import {
 } from "../session-state.js"
 import { BROWSER_FALLBACK_DOMAINS, isBrowserFallbackHost } from "../upstream-hosts.js"
 import { blockTextOf } from "./html.js"
+import { runAsideCommand, serialAsideRun } from "./aside-process.js"
+export { asideChildEnv } from "./aside-process.js"
 
 /** Opt-in switch. Off unless set to one of `ENABLED_VALUES`. */
 export const ASIDE_ENABLED_ENV = "AU_LAW_ASIDE"
@@ -86,6 +88,8 @@ export const ASIDE_REQUEST_COST = 8
 
 /** Same ceiling `research-followup.ts` puts on a source URL. */
 export const ASIDE_MAX_URL_LENGTH = 4_000
+/** JSON quotes/newlines and fixed metadata are bounded separately from the HTML body. */
+export const ASIDE_OUTPUT_ALLOWANCE_BYTES = 4096
 
 /** The install path Aside ships to on macOS. Note the spaces in the .app name. */
 export function defaultAsideCommandPath(home: string = homedir()): string {
@@ -277,6 +281,9 @@ export function assertAsideUrl(url: string): string {
       "Pass the plain https:// link with no user:password@ part.",
     ])
   }
+  if (parsed.port && parsed.port !== "443") {
+    throw refuse("a nonstandard HTTPS port.", ["Use the publisher's standard HTTPS address."])
+  }
 
   const hostname = parsed.hostname.toLowerCase().replace(/\.$/, "")
   if (!isBrowserFallbackHost(hostname)) {
@@ -318,7 +325,9 @@ export function assertAsideUrl(url: string): string {
  * stdout — the page, and around it its own reporting:
  *
  *     🔭 Opened a new tab and set it active: tabs[0], page → <title> (<url>)
- *     <the page>
+ *     <our start marker>
+ *     <one JSON line containing the HTML and navigation/cleanup metadata>
+ *     <our end marker>
  *     \x1b[2m[ok | 2522ms]\x1b[0m
  *
  * Both would otherwise be returned as part of the document, and the opening
@@ -334,8 +343,7 @@ export const ASIDE_END_MARKER = "<<<AU-LAW-PAGE-END>>>"
 /**
  * Text that means "this is the gate, not the document".
  *
- * A browser walks through these gates most of the time, which is the whole
- * reason for this bridge — but not always: an outside tester driving Aside at
+ * A browser can pass a gate that refused a server, but not always: a tester driving Aside at
  * AustLII got the interstitial twice, with Ray IDs, where the same URL fetched
  * here returned the judgment. Whatever decides that (session age, reputation,
  * how recently the profile last passed) is Cloudflare's business, so the page
@@ -355,8 +363,19 @@ const CHALLENGE_MARKERS: readonly RegExp[] = [
   /\bray\s*id\b/i,
 ]
 
-export function looksLikeBotChallenge(html: string): boolean {
-  return CHALLENGE_MARKERS.some((pattern) => pattern.test(html))
+export function looksLikeBotChallenge(html: string, patterns: readonly RegExp[] = CHALLENGE_MARKERS): boolean {
+  // Pure and self-contained: the exact same function runs inside the browser.
+  const readable = (value: string) => value
+    .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, " ")
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/<[^>]*>/g, " ").replace(/&nbsp;|&#160;/g, " ").replace(/\s+/g, " ").trim()
+  const headings = [...html.matchAll(/<(title|h1)\b[^>]*>([\s\S]*?)<\/\1\s*>/gi)].map(match => readable(match[2]))
+  if (headings.some(heading => patterns.some(pattern => pattern.test(heading)))) return true
+  if (/<(?:div|form|iframe)\b[^>]*\bid\s*=\s*["'](?:cf-browser-verification|cf-challenge|challenge-form)\b/i.test(html)) return true
+  const text = readable(html)
+  // A judgment may quote these phrases or exhibit the site's JavaScript.
+  if (/\bREASONS\s+FOR\s+(?:JUDGMENT|DECISION)\b/i.test(text)) return false
+  return text.length < 2000 && patterns.some(pattern => pattern.test(text))
 }
 
 /** Classify page-level failures, without matching error text quoted in reasons. */
@@ -382,148 +401,86 @@ export function asidePageFailure(html: string): string | undefined {
 const CHALLENGE_WAIT_MS = 12_000
 const CHALLENGE_POLL_MS = 750
 
+export interface AsidePage {
+  html: string
+  url: string
+}
+
+interface AsideEnvelope extends AsidePage {
+  schemaVersion: 1
+  requestedUrl: string
+  ready: boolean
+  closed: boolean
+}
+
+/** One owned tab, a completed DOM load, and a JSON envelope that cannot collide with page text. */
 export function asideReplScript(url: string): string {
-  const markers = CHALLENGE_MARKERS.map((pattern) => pattern.source)
-  return (
-    `const page = await openTab(${JSON.stringify(url)}); ` +
-    `const gate = ${JSON.stringify(markers)}.map(s => new RegExp(s, "i")); ` +
-    `let html = await page.content(); ` +
-    `const until = Date.now() + ${CHALLENGE_WAIT_MS}; ` +
-    `while (gate.some(r => r.test(html)) && Date.now() < until) { ` +
-    `await new Promise(r => setTimeout(r, ${CHALLENGE_POLL_MS})); ` +
-    `html = await page.content(); } ` +
-    `console.log(${JSON.stringify(ASIDE_BEGIN_MARKER)}); ` +
-    `console.log(html); ` +
-    `console.log(${JSON.stringify(ASIDE_END_MARKER)})`
-  )
+  const target = assertAsideUrl(url)
+  const markers = CHALLENGE_MARKERS.map(pattern => pattern.source)
+  return `
+    const target = ${JSON.stringify(target)};
+    const allowed = ${JSON.stringify([...BROWSER_FALLBACK_DOMAINS])};
+    const checkedUrl = value => {
+      const parsed = new URL(value);
+      const host = parsed.hostname.toLowerCase().replace(/\\.$/, "");
+      if (parsed.protocol !== "https:" || parsed.username || parsed.password || (parsed.port && parsed.port !== "443") || !allowed.some(d => host === d || host.endsWith("." + d))) {
+        throw new Error("The page redirected outside the permitted legal sources; its body was not accepted.");
+      }
+      return parsed.href;
+    };
+    const page = await openTab("about:blank");
+    let snapshot;
+    let closed = false;
+    try {
+      await page.goto(target, { waitUntil: "domcontentloaded", timeout: 25000 });
+      const gate = ${JSON.stringify(markers)}.map(s => new RegExp(s, "i"));
+      const challenge = ${looksLikeBotChallenge.toString()};
+      const until = Date.now() + ${CHALLENGE_WAIT_MS};
+      do {
+        let loaded = false;
+        try { await page.waitForLoadState("domcontentloaded", { timeout: 2000 }); loaded = true; } catch {}
+        const before = checkedUrl(await page.url());
+        const html = await page.content();
+        const after = checkedUrl(await page.url());
+        const ready = loaded && before === after && /<body\\b/i.test(html) && !challenge(html, gate);
+        snapshot = { schemaVersion: 1, requestedUrl: target, url: after, html, ready };
+        if (ready) break;
+        await new Promise(r => setTimeout(r, ${CHALLENGE_POLL_MS}));
+      } while (Date.now() < until);
+    } finally {
+      try { await page.close(); closed = true; } catch {}
+    }
+    if (!snapshot) throw new Error("The browser did not return a page snapshot.");
+    console.log(${JSON.stringify(ASIDE_BEGIN_MARKER)});
+    console.log(JSON.stringify({ ...snapshot, closed }));
+    console.log(${JSON.stringify(ASIDE_END_MARKER)});
+  `
 }
 
-/**
- * The page, or undefined when the run produced no fenced payload.
- *
- * A missing fence is never treated as "the whole of stdout is the page": that
- * is how the CLI's status line ends up inside a judgment.
- */
+/** Fences occupy their own lines; embedded marker text inside JSON is ordinary page data. */
+export function extractAsideEnvelope(stdout: string): AsideEnvelope | undefined {
+  const lines = stdout.split(/\r?\n/)
+  const starts = lines.flatMap((line, index) => line === ASIDE_BEGIN_MARKER ? [index] : [])
+  const ends = lines.flatMap((line, index) => line === ASIDE_END_MARKER ? [index] : [])
+  if (starts.length !== 1 || ends.length !== 1 || ends[0] !== starts[0] + 2) return undefined
+  try {
+    const value: unknown = JSON.parse(lines[starts[0] + 1])
+    if (!value || typeof value !== "object") return undefined
+    const page = value as Partial<AsideEnvelope>
+    if (page.schemaVersion !== 1 || typeof page.requestedUrl !== "string" || typeof page.url !== "string" || typeof page.html !== "string" || typeof page.ready !== "boolean" || typeof page.closed !== "boolean") return undefined
+    return page as AsideEnvelope
+  } catch { return undefined }
+}
+
+/** Compatibility helper: return only the HTML from a complete, unambiguous envelope. */
 export function extractAsidePayload(stdout: string): string | undefined {
-  const start = stdout.indexOf(ASIDE_BEGIN_MARKER)
-  if (start === -1) return undefined
-  const from = start + ASIDE_BEGIN_MARKER.length
-  const end = stdout.indexOf(ASIDE_END_MARKER, from)
-  if (end === -1) return undefined
-  return stdout.slice(from, end).trim()
-}
-
-/**
- * Variables the child is allowed to see.
- *
- * The CLI needs enough of a session to find the user's Aside install; it has
- * no business reading this server's own configuration (upstream credentials a
- * future keyed source would carry, the `AU_LAW_ASIDE*` switches themselves, or
- * whatever else the desktop client put in the server's environment).
- */
-const CHILD_ENV_KEYS = [
-  "HOME", "PATH", "USER", "LOGNAME", "SHELL", "TMPDIR",
-  "LANG", "LC_ALL", "LC_CTYPE", "__CF_USER_TEXT_ENCODING",
-] as const
-
-export function asideChildEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
-  const child: NodeJS.ProcessEnv = {}
-  for (const key of CHILD_ENV_KEYS) {
-    const value = env[key]
-    if (value !== undefined) child[key] = value
-  }
-  return child
+  return extractAsideEnvelope(stdout)?.html
 }
 
 export function clampAsideTimeout(timeoutMs?: number): number {
   if (timeoutMs === undefined || !Number.isFinite(timeoutMs)) return ASIDE_DEFAULT_TIMEOUT_MS
   return Math.min(Math.max(Math.floor(timeoutMs), ASIDE_MIN_TIMEOUT_MS), ASIDE_MAX_TIMEOUT_MS)
 }
-
-/** The real child process. Replaced wholesale in tests — the suite never spawns Aside. */
-const spawnAsideRunner: AsideRunner = (command, args, options) =>
-  new Promise<AsideRunResult>((resolve, reject) => {
-    if (options.signal?.aborted) {
-      reject(requestCancelledError(options.signal.reason))
-      return
-    }
-
-    const child = spawn(command, [...args], {
-      // The snippet is one argv element and no shell parses it.
-      shell: false,
-      // stderr goes nowhere by construction: diagnostics from a browser session
-      // are exactly the kind of output that must not reach a tool response.
-      stdio: ["ignore", "pipe", "ignore"],
-      windowsHide: true,
-      // A browser CLI starts children of its own; kill the group, not just the
-      // parent, or a timeout leaves the work running.
-      detached: process.platform !== "win32",
-      env: asideChildEnv(),
-    })
-
-    const chunks: Buffer[] = []
-    let bytes = 0
-    let timedOut = false
-    let truncated = false
-    let failedToStart = false
-    let cancelled: Error | undefined
-    let hardKill: ReturnType<typeof setTimeout> | undefined
-
-    const kill = (signal: NodeJS.Signals) => {
-      try {
-        if (process.platform !== "win32" && child.pid) process.kill(-child.pid, signal)
-        else child.kill(signal)
-      } catch {
-        /* already gone */
-      }
-    }
-    const stop = () => {
-      kill("SIGTERM")
-      if (!hardKill) hardKill = setTimeout(() => kill("SIGKILL"), 500)
-    }
-
-    const timer = setTimeout(() => {
-      timedOut = true
-      stop()
-    }, options.timeoutMs)
-
-    const onAbort = () => {
-      cancelled = requestCancelledError(options.signal?.reason)
-      stop()
-    }
-    options.signal?.addEventListener("abort", onAbort, { once: true })
-
-    child.stdout?.on("data", (data: Buffer) => {
-      bytes += data.byteLength
-      if (bytes > options.maxOutputBytes) {
-        truncated = true
-        stop()
-        return
-      }
-      chunks.push(data)
-    })
-
-    child.on("error", () => {
-      failedToStart = true
-    })
-
-    child.on("close", (code) => {
-      clearTimeout(timer)
-      if (hardKill) clearTimeout(hardKill)
-      options.signal?.removeEventListener("abort", onAbort)
-      if (cancelled) {
-        reject(cancelled)
-        return
-      }
-      resolve({
-        stdout: Buffer.concat(chunks).toString("utf8"),
-        exitCode: code,
-        timedOut,
-        truncated,
-        failedToStart,
-      })
-    })
-  })
 
 /**
  * Browse one blocked legal source in the user's local Aside browser and return
@@ -533,7 +490,7 @@ const spawnAsideRunner: AsideRunner = (command, args, options) =>
  * a CLI that is missing, a timeout and an empty page are five different facts
  * and a caller has to be able to report the right one.
  */
-export async function fetchViaAside(url: string, opts: FetchViaAsideOptions = {}): Promise<string> {
+export async function fetchPageViaAside(url: string, opts: FetchViaAsideOptions = {}): Promise<AsidePage> {
   // Containment first: before the environment is read, before the budget is
   // charged, before anything is spawned.
   const target = assertAsideUrl(url)
@@ -553,19 +510,21 @@ export async function fetchViaAside(url: string, opts: FetchViaAsideOptions = {}
   const budget = requestContext.getStore()?.budget
   const maxOutputBytes = budget?.limits.maxUpstreamBodyBytes ?? DEFAULT_EXECUTION_LIMITS.maxUpstreamBodyBytes
 
-  // Charged per call and *before* the spawn, the way fetch-with-retry charges
-  // per attempt before the fetch: an exhausted budget must stop a browser from
-  // opening, not be discovered once the page is already on screen.
-  for (let charge = 0; charge < ASIDE_REQUEST_COST; charge += 1) {
-    budget?.consumeUpstreamRequest()
-  }
+  const run = opts.runner ?? runAsideCommand
+  const result = await serialAsideRun(async remainingMs => {
+    if (signal?.aborted) throw requestCancelledError(signal.reason)
+    for (let charge = 0; charge < ASIDE_REQUEST_COST; charge += 1) budget?.consumeUpstreamRequest()
+    return run(status.command!, ["repl", "--host", "local", asideReplScript(target)], {
+      timeoutMs: remainingMs, signal, maxOutputBytes: maxOutputBytes * 2 + ASIDE_OUTPUT_ALLOWANCE_BYTES,
+    })
+  }, { signal, timeoutMs })
+  if (signal?.aborted) throw requestCancelledError(signal.reason)
 
-  const run = opts.runner ?? spawnAsideRunner
-  const result = await run(status.command, ["repl", asideReplScript(target)], {
-    timeoutMs,
-    signal,
-    maxOutputBytes,
-  })
+  const snapshot = extractAsideEnvelope(result.stdout)
+  const size = Buffer.byteLength(snapshot?.html ?? result.stdout, "utf8")
+  if (size > maxOutputBytes) throw new ExecutionLimitError(`Aside returned more than the per-response limit of ${maxOutputBytes} bytes.`)
+  budget?.ensureResponseBodySize(size)
+  budget?.consumeUpstreamBody(size)
 
   const shown = maskSensitiveUrl(target)
   if (result.failedToStart) {
@@ -604,8 +563,7 @@ export async function fetchViaAside(url: string, opts: FetchViaAsideOptions = {}
     )
   }
 
-  const html = extractAsidePayload(result.stdout)
-  if (html === undefined) {
+  if (!snapshot || snapshot.requestedUrl !== target) {
     // Reached when the fence is absent: the run was cut short, or the CLI
     // changed what it prints. Returning stdout anyway would hand back its
     // status line as though it were the document.
@@ -618,6 +576,13 @@ export async function fetchViaAside(url: string, opts: FetchViaAsideOptions = {}
       ],
     )
   }
+  assertAsideUrl(snapshot.url)
+  if (!snapshot.closed) {
+    const error = new LawApiError("Aside could not confirm that its research tab was closed. Inspect that tab before retrying.", ErrorCodes.API_ERROR)
+    error.name = "AsideCleanupError"
+    throw error
+  }
+  const html = snapshot.html.trim()
   if (!html) {
     throw new LawApiError(
       `Aside returned an empty page for ${shown}.`,
@@ -636,11 +601,17 @@ export async function fetchViaAside(url: string, opts: FetchViaAsideOptions = {}
       "the browser fallback",
       `the publisher served ${pageFailure} at ${shown}; the requested source was not retrieved`,
       [target],
+      true,
     )
   }
 
-  const size = Buffer.byteLength(html, "utf8")
-  budget?.ensureResponseBodySize(size)
-  budget?.consumeUpstreamBody(size)
-  return html
+  if (!snapshot.ready) {
+    throw new LawApiError(`Aside did not finish loading the document at ${shown}. The partial page was not accepted.`, ErrorCodes.TIMEOUT)
+  }
+  return { html, url: snapshot.url }
+}
+
+/** HTML-only compatibility entry point; source adapters should retain the observed final URL. */
+export async function fetchViaAside(url: string, opts: FetchViaAsideOptions = {}): Promise<string> {
+  return (await fetchPageViaAside(url, opts)).html
 }

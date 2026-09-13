@@ -78,8 +78,8 @@ const REPORT_VOLUME_CORE =
 const REPORT_YEAR_CORE =
   "\\[((?:1[89]|20)\\d{2})\\]\\s{0,3}(?:(\\d{1,3})\\s{1,3})?([A-Za-z][A-Za-z. ]{0,14}[A-Za-z.])\\s{1,3}(\\d{1,5})"
 
-/** `, 42 [15]`, `, [11]`, `, [11]-[14]`. Trails a citation; always optional. */
-const PINPOINT_TAIL = "(?:\\s?,\\s{0,2}(\\d{1,5})?\\s{0,2}(?:\\[(\\d{1,5})\\](?:\\s{0,2}[-–—]\\s{0,2}\\[(\\d{1,5})\\])?)?)?"
+/** `, 42 [15]`, `, [11]`, `at [11]-[14]`. Trails a citation; always optional. */
+const PINPOINT_TAIL = "(?:(?:\\s?,\\s{0,2}|\\s{1,3}[Aa][Tt]\\s{1,3}(?=\\d|\\[))(\\d{1,5})?\\s{0,2}(?:\\[(\\d{1,5})\\](?:\\s{0,2}[-–—]\\s{0,2}\\[(\\d{1,5})\\])?)?)?"
 
 const MNC_ANCHORED = new RegExp(`^${MNC_CORE}${PINPOINT_TAIL}$`)
 const REPORT_VOLUME_ANCHORED = new RegExp(`^${REPORT_VOLUME_CORE}${PINPOINT_TAIL}$`)
