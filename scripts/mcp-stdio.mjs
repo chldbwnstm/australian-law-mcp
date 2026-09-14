@@ -9,12 +9,17 @@ const HANDSHAKE_TIMEOUT_MS = 30_000
  * answered, so a server that answers out of order fails loudly rather than
  * being papered over by a buffered write.
  */
-export function speakMcp(entryDir, timeoutMs = HANDSHAKE_TIMEOUT_MS, afterListRequest) {
+export function speakMcp(entryDir, timeoutMs = HANDSHAKE_TIMEOUT_MS, afterListRequest, { env: extraEnv = {} } = {}) {
   return new Promise((resolve, reject) => {
+    // Additive over the driver's own environment, never a replacement: on
+    // Windows the child needs SystemRoot, PATH, TEMP and the AppData roots to
+    // start at all. A key set to `undefined` removes an inherited variable.
+    const env = { ...process.env, NO_COLOR: "1", ...extraEnv }
+    for (const key of Object.keys(extraEnv)) if (extraEnv[key] === undefined) delete env[key]
     const child = spawn(process.execPath, ["build/index.js"], {
       cwd: entryDir,
       stdio: ["pipe", "pipe", "pipe"],
-      env: { ...process.env, NO_COLOR: "1" },
+      env,
     })
 
     let stdout = ""

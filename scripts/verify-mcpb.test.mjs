@@ -131,6 +131,27 @@ describe("generated manifest", () => {
     expect(setting.description).toMatch(/legal-source/i)
   })
 
+  // One manifest serves both platforms Claude Desktop ships on, so the switch
+  // is labelled for neither and its description names both. A "(Mac only)"
+  // suffix here is what left every Windows user's switch permanently off.
+  it("labels the Aside switch for both platforms Aside ships on, never for one", () => {
+    const setting = buildManifest(PKG, TOOLS).user_config.aside_followup
+
+    expect(setting.title).toBe("Finish blocked legal sources using the Aside browser")
+    expect(setting.title).not.toMatch(/\b(?:mac|windows|pc)[ -]only\b/i)
+    expect(setting.description).toMatch(/macOS 15/)
+    expect(setting.description).toMatch(/Windows 10\/11 \(x64\)/)
+    expect(setting.description).not.toMatch(/this Mac|Requires macOS with/)
+  })
+
+  it("shows both CLI path examples with the Windows backslashes intact and nothing to expand", () => {
+    const setting = buildManifest(PKG, TOOLS).user_config.aside_command
+
+    expect(setting.description).toContain("/Users/you/.aside/cli/Aside CLI.app/Contents/MacOS/aside")
+    expect(setting.description).toContain("C:\\Users\\you\\AppData\\Local\\Aside\\CLI\\current\\aside.exe")
+    expect(setting.description).toMatch(/not expanded/)
+  })
+
   it("offers an optional Aside CLI path with an empty default, never an absent one", () => {
     const setting = buildManifest(PKG, TOOLS).user_config.aside_command
 
@@ -179,6 +200,11 @@ describe("generated manifest", () => {
       AU_LAW_ASIDE: "true",
       AU_LAW_ASIDE_COMMAND: "/opt/aside",
     })
+    // A Windows path — spaces, backslashes, or a UNC share — passes through the
+    // substitution verbatim: the server, not the app, decides what it accepts.
+    for (const win of ["C:\\Users\\Jane Doe\\AppData\\Local\\Aside\\CLI\\current\\aside.exe", "\\\\fileserver\\tools\\aside.exe"]) {
+      expect(substituteLikeDesktop(manifest, { aside_followup: true, aside_command: win })).toEqual({ AU_LAW_ASIDE: "true", AU_LAW_ASIDE_COMMAND: win })
+    }
   })
 
   it("refuses a setting with no default, which would send the placeholder text to the server", () => {

@@ -1,10 +1,32 @@
 import assert from "node:assert/strict"
 import { execFileSync } from "node:child_process"
-import { mkdirSync, writeFileSync, readFileSync } from "node:fs"
-import { tmpdir } from "node:os"
+import { mkdirSync, realpathSync, writeFileSync, readFileSync } from "node:fs"
+import { release, tmpdir } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { speakMcp } from "./mcp-stdio.mjs"
+
+/**
+ * Which hosts a live run may start on: the two platforms Aside ships a
+ * browser for, and on Windows only x64 — the CLI installer refuses ARM64, so
+ * a run there would spawn nothing and report every case as unresolved, which
+ * reads as a source problem rather than the host problem it is. Pure, so the
+ * offline test can drive it without opening a browser.
+ */
+export function liveAsideHost(platform = process.platform, cpu = process.arch) {
+  if (platform === "darwin") return { ok: true }
+  if (platform === "win32") return cpu === "x64" ? { ok: true } : { ok: false, reason: `Aside for Windows is x64 only; this Node is ${cpu}` }
+  return { ok: false, reason: `Live Aside verification requires local macOS or Windows x64; the Aside browser has no ${platform} build` }
+}
+
+/** The browser must already be running: the CLI never launches it (measured 2026-09-14, it fails with "not connected to the daemon"). */
+function browserRunning() {
+  try {
+    if (process.platform === "win32") return /\bAside\.exe\b/i.test(execFileSync("tasklist", ["/FI", "IMAGENAME eq Aside.exe", "/NH"], { encoding: "utf8", windowsHide: true }))
+    execFileSync("pgrep", ["-x", "Aside"], { stdio: "ignore" })
+    return true
+  } catch { return false }
+}
 
 /** Importable offline: only main() opens public pages through the built MCP server. */
 export function inspectAsideResult(message, expected = {}) {
@@ -49,13 +71,23 @@ export function inspectAsideResult(message, expected = {}) {
 
 export async function main() {
   assert.equal(process.env.LIVE_ASIDE, "1", "Opt in with LIVE_ASIDE=1; this check opens public pages in your local Aside browser")
-  assert.equal(process.platform, "darwin", "Live Aside verification requires local macOS")
+  const host = liveAsideHost()
+  assert.ok(host.ok, host.reason)
   assert.match(process.env.AU_LAW_ASIDE ?? "", /^(1|true|yes|on)$/i, "Set AU_LAW_ASIDE=true")
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
-  const output = path.resolve(process.env.ASIDE_REPORT_DIR ?? path.join(tmpdir(), `au-law-aside-${Date.now()}`))
+  const output = path.resolve(process.env.ASIDE_REPORT_DIR ?? path.join(tmpdir(), `au-law-aside-${process.platform}-${Date.now()}`))
   mkdirSync(output, { recursive: true })
+  // The same resolver the server uses, so the report names the CLI that was
+  // actually driven and its version — what makes a Windows record comparable
+  // to a macOS one.
+  const { asideStatus } = await import(new URL("../build/lib/sources/aside-browser.js", import.meta.url).href)
+  const status = asideStatus()
+  const asideCliVersion = status.command ? (() => { try { return execFileSync(status.command, ["--version"], { encoding: "utf8", windowsHide: true }).trim() } catch { return "unknown" } })() : undefined
   const report = {
-    startedAt: new Date().toISOString(), platform: process.platform,
+    startedAt: new Date().toISOString(), platform: process.platform, arch: process.arch,
+    osRelease: process.platform === "win32" ? release() : undefined,
+    asideCommand: status.command ?? `(not found: ${status.reason})`, asideCliVersion,
+    browserRunningAtStart: browserRunning(),
     commit: execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim(),
     dirty: !!execFileSync("git", ["status", "--porcelain"], { cwd: root, encoding: "utf8" }).trim(),
     version: JSON.parse(readFileSync(path.join(root,"package.json"), "utf8")).version,
@@ -113,6 +145,16 @@ export async function main() {
   return report
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+// Compared through realpath, as build-mcpb.mjs does: a silent no-op exit 0 is
+// the worst outcome for a verification script, and `path.resolve` disagrees
+// with the module URL through a symlinked /tmp on macOS or a junction on Windows.
+function invokedDirectly() {
+  const entry = process.argv[1]
+  if (!entry) return false
+  const self = fileURLToPath(import.meta.url)
+  try { return realpathSync(entry) === realpathSync(self) } catch { return path.resolve(entry) === self }
+}
+
+if (invokedDirectly()) {
   main().catch(error => { console.error(error.message); process.exitCode = 1 })
 }

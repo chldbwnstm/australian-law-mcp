@@ -5,7 +5,7 @@ legal material with links back to its sources.
 
 ## First, get the installer file
 
-Everything below needs one file, `au-law-mcp-1.0.4.mcpb`. There is nowhere to
+Everything below needs one file, `au-law-mcp-1.0.5.mcpb`. There is nowhere to
 download it from: this project has no npm package and the repository has no
 releases. It reaches you one of two ways.
 
@@ -13,7 +13,7 @@ releases. It reaches you one of two ways.
   `.mcpb` is inside it.
 - **You download it** from the
   [latest release](https://github.com/chldbwnstm/australian-law-mcp/releases/latest)
-  — `au-law-mcp-1.0.4.mcpb`, about 4 MB. No terminal, no Node.js.
+  — `au-law-mcp-1.0.5.mcpb`, about 4 MB. No terminal, no Node.js.
 
 - **You build it**, if you would rather not download it. This one does need a
   terminal and Node.js 20.19 or later, once:
@@ -22,7 +22,7 @@ releases. It reaches you one of two ways.
   git clone https://github.com/chldbwnstm/australian-law-mcp
   cd australian-law-mcp
   npm ci --ignore-scripts
-  npm run build:mcpb          # writes release/au-law-mcp-1.0.4.mcpb
+  npm run build:mcpb          # writes release/au-law-mcp-1.0.5.mcpb
   ```
 
   The build refuses to finish unless the packed bundle starts and answers with
@@ -30,7 +30,7 @@ releases. It reaches you one of two ways.
 
 ## Install once
 
-1. Open `au-law-mcp-1.0.4.mcpb`.
+1. Open `au-law-mcp-1.0.5.mcpb`.
 2. Choose **Install** in Claude Desktop.
 3. Restart Claude Desktop, then start a new chat. If Claude asks to use Australian
    Law, review and allow the request.
@@ -57,15 +57,20 @@ Some publishers refuse this extension outright — the Federal Court's judgment
 site and AustLII among them — so questions that depend on them come back saying
 the source was blocked, with a link for you to open yourself.
 
-If you are on a Mac and have [Aside](https://docs.aside.com/help/get-started)
-installed, you can let the extension finish those lookups in your own browser.
-Open **Settings → Extensions → Australian Law** and turn on **“Finish blocked
-legal sources using the Aside browser”**. Leave the path field blank unless you
-moved Aside somewhere unusual.
+If you have [Aside](https://docs.aside.com/help/get-started) installed — on a
+Mac (macOS 15 or later) or a Windows PC (Windows 10/11, x64) — you can let the
+extension finish those lookups in your own browser. Aside's command-line tool
+is a separate install; on Windows it is the `install.ps1` script, which you
+download and run as a file. [INSTALL.md](../INSTALL.md#the-one-setting-the-extension-has)
+has the steps. Open **Settings → Extensions → Australian Law** and turn on
+**“Finish blocked legal sources using the Aside browser”**. Leave the path field
+blank unless you moved Aside somewhere unusual; if you do fill it in on Windows,
+type the full path with the drive letter, such as
+`C:\Users\you\AppData\Local\Aside\CLI\current\aside.exe`.
 
-It is off until you turn it on, it only works on a Mac with Aside installed —
-with Aside absent it does nothing — and it is restricted to the legal sites
-listed in the
+It is off until you turn it on, it only works on a Mac or Windows PC with Aside
+installed — with Aside absent it does nothing — and it is restricted to the
+legal sites listed in the
 [README](../README.md#optional-finishing-a-blocked-source-in-your-own-browser),
 because it is driving the real browser you are signed in to. Read that before
 turning it on. Nothing else in this page needs it.

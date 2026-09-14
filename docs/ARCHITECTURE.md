@@ -8,10 +8,32 @@
 
 Source-preview extension: [Optional browser follow-up with Aside](AI-NATIVE-FOLLOWUP.md)
 adds versioned stateless gaps/planning/checking to the law server and a project-local
-host skill that coordinates sibling law and Aside MCP servers on local macOS 15+.
-The host owns eligibility, budgets, session IDs and evidence checkpoints; the law
-server owns no browser, cookies, model or matter state. Windows browser follow-up
-remains unavailable and standard law tools continue to work there.
+host skill that coordinates sibling law and Aside MCP servers on local macOS 15+ or
+Windows 10/11 (x64). The host owns eligibility, budgets, session IDs and evidence
+checkpoints; the law server owns no browser, cookies, model or matter state. Aside
+ships no Linux browser build, so the fallback is a no-op on Linux and WSL; standard
+law tools continue to work there.
+
+The server-side fallback (`AU_LAW_ASIDE`, the extension switch) runs the Aside CLI on
+macOS and Windows and is a documented no-op elsewhere, with the reason "The Aside
+browser fallback runs on macOS and Windows only; it is unavailable on this platform
+(`<platform>`)". It finds the CLI in one order on both platforms: `AU_LAW_ASIDE_COMMAND`
+if set (an absolute path in the host's own form — on Windows a drive-letter path such as
+`C:\Users\you\AppData\Local\Aside\CLI\current\aside.exe` or a UNC path; surrounding
+quotes are tolerated; `%LOCALAPPDATA%` and `~` are never expanded), then the standard
+location (`~/.aside/cli/Aside CLI.app/Contents/MacOS/aside`;
+`%ASIDE_CLI_INSTALL_DIR%\current\aside.exe` if that variable is set, else
+`%LOCALAPPDATA%\Aside\CLI\current\aside.exe`), then `aside` on PATH (`aside.exe` in each
+`;`-separated entry on Windows; a `.cmd` shim is not accepted because Node cannot spawn
+one without a shell). A configured path that does not exist is reported as "points at
+`<path>`, which does not exist" — never as "Aside is not installed". The spawned CLI gets
+a whitelisted environment — the POSIX keys; on Windows `SystemRoot`, `windir`,
+`SystemDrive`, `ProgramData`, `ProgramFiles`, `ProgramFiles(x86)`, `APPDATA`,
+`LOCALAPPDATA`, `USERPROFILE`, `HOMEDRIVE`, `HOMEPATH`, `TEMP`, `TMP`, `PATH`, `PATHEXT`,
+`COMSPEC`, `USERNAME`, `LANG` — and never the server's own configuration
+or secrets. Timeouts and cancellation kill the Unix process group; on Windows the CLI's
+process tree is killed with `taskkill /T /F /PID` while the CLI is alive, then
+`TerminateProcess` as the fallback.
 
 ## Layering (ported 1:1 from the reference)
 

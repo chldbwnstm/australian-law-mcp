@@ -58,7 +58,7 @@ const USAGE = `au-law-mcp ${VERSION}
                                           start the stateless Streamable HTTP server
   au-law-mcp setup [--npx]                register this server in your MCP client configs
   au-law-mcp setup-followup [--client codex|claude-code|both] [--project DIR] [--aside-command PATH]
-                                          opt in to the local macOS Aside companion
+                                          opt in to the local Aside companion (macOS 15+ or Windows 10/11 x64)
   au-law-mcp --version | --help
 
 Options:

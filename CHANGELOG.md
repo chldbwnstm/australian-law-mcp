@@ -4,7 +4,131 @@ All notable changes to this project are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.5] - 2026-09-14
+
+Aside shipped its Windows build on 14 September 2026 (browser 1.0.914.1, CLI
+1.26.906.1630). This change makes the browser fallback and the `au-law-followup`
+companion run on Windows on the same terms as macOS, and makes the desktop
+extension's switch mean the same thing on both.
+
+### Added
+
+- **The Aside browser fallback runs on Windows 10/11 (x64).** The server's
+  platform gate accepts `win32` alongside `darwin`; Linux and WSL (which reports
+  `linux`) keep the fallback as a documented no-op, because Aside ships no
+  browser there. On Windows the CLI is resolved in the same order as on macOS —
+  `AU_LAW_ASIDE_COMMAND`, then the installer's location
+  (`%ASIDE_CLI_INSTALL_DIR%\current\aside.exe` if that variable is set, else
+  `%LOCALAPPDATA%\Aside\CLI\current\aside.exe`, the junction `install.ps1`
+  keeps at the active version), then `aside.exe` in each `;`-separated PATH
+  entry, unwrapped from the quotes such an entry may carry and only a real
+  `.exe`, since Node cannot spawn a `.cmd` shim without a shell. A relative PATH
+  entry is skipped on both platforms: a command that resolves against the
+  working directory is not one to spawn. A configured path is accepted in the
+  host's own form (a drive-letter or UNC path, surrounding quotes tolerated);
+  `%LOCALAPPDATA%` and `~` are refused with a message saying so, because neither
+  this server nor Claude Desktop expands them.
+- **The `au-law-followup` companion is eligible on Windows.** `plan_research_followup`,
+  `setup-followup` and the installed helper's `probe` accept a local `win32`
+  host whose `os.release()` major is 10 or more (Windows 10 and 11 — Windows 11
+  reports `10.0.<build>`) with Aside MCP connected and `repl` listed; the OS
+  floor table is a single export in `src/lib/research-followup.ts`, and the
+  helper's copy — it is installed into user projects and cannot import the
+  package — is held in lock-step by a test. On Windows `setup-followup` reads the
+  version from `os.release()`, the NT version; macOS still reads
+  `sw_vers -productVersion`, because `os.release()` there is the Darwin kernel
+  version. Its `--aside-command` default now resolves the CLI in the server's own
+  order on both platforms — the standard install location first, then `aside` on
+  PATH — so the command it records is the one the extension switch would drive,
+  and a Windows desktop app that has not seen `install.ps1`'s user-PATH edit
+  still finds it. A recorded path that does not exist on the host now running the
+  probe is re-derived for that host, so a matter checkpoint moved between a Mac
+  and a Windows PC probes the local CLI instead of the other platform's. Every
+  helper command that reads JSON from stdin also accepts `--input FILE`, for
+  a stock Windows PowerShell 5.1 that re-encodes a piped payload.
+- **The desktop extension's switch works on Windows.** The MCPB manifest's
+  switch is titled "Finish blocked legal sources using the Aside browser" with
+  no "(Mac only)" suffix, its description names both platforms, and the CLI
+  path field shows both example paths. `npm run verify:mcpb` (run by
+  `build:mcpb`) now starts the unpacked bundle with the switch on and a
+  deliberately missing CLI path, and requires the `[UPSTREAM_BLOCKED]` note
+  that names that path — proving the switch reaches the server, on whichever
+  platform builds the bundle, without a browser.
+- `npm run verify:aside` runs on Windows x64 as well as macOS, records the CLI
+  path and version, the NT release and whether the browser was running, and
+  refuses ARM64 Windows (Aside's installer does). `npm run verify:stdio` plans
+  follow-up for a macOS and a Windows probe and keeps a Linux probe on standard
+  research.
+
+### Changed
+
+- The CLI child's environment is whitelisted per platform: the POSIX keys as
+  before; on Windows the system root, the AppData and profile roots, TEMP/TMP,
+  PATH, PATHEXT, COMSPEC and USERNAME, matched case-insensitively because a
+  Windows `process.env` is. Never this server's own configuration.
+- Cancellation and timeouts on Windows kill the CLI's process tree with
+  `taskkill /T /F` while the CLI is alive, then fall back to `TerminateProcess`;
+  measured on 14 September 2026 the CLI's only child during a `repl` call is its
+  console host and the browser is never its child (with the browser closed the
+  CLI exits rather than launching it), so the tree kill cannot reach the
+  user's browser. The Unix process-group kill is unchanged.
+- The envelope reader strips a leading byte-order mark before looking for the
+  fence, and the framing test records the Windows CLI's opening line.
+- Recorded fixtures under `src/**/__fixtures__/` are marked `-text` in
+  `.gitattributes`, so a Windows checkout tests the recorded bytes rather than
+  a CRLF-rewritten copy. An existing clone made with `core.autocrlf=true` holds
+  the rewritten copies: run `git checkout -- src` once after pulling, or the
+  next `git add -A` commits them back.
+- A configured CLI path is unwrapped from surrounding quotes on both platforms
+  (a path pasted from Explorer's "Copy as path", or shown by a shell, arrives
+  with them), and on Windows a `.cmd`, `.bat` or `.ps1` wrapper is refused up
+  front with the reason naming `aside.exe`, rather than accepted and then
+  failing to spawn. A synchronous spawn refusal — which is how Node reports a
+  batch file without a shell — is now reported as a CLI that could not be
+  started, like any other, instead of surfacing as a bare `spawn EINVAL`.
+- A relative `ASIDE_CLI_INSTALL_DIR` or `LOCALAPPDATA` is treated as unset
+  rather than producing a "standard" path that resolves against the working
+  directory, and relative `PATH` entries are skipped on both platforms.
+- **The bot-verification detector reads the challenge's markup, not its
+  wording.** Cloudflare serves its challenge page in the viewer's own language,
+  and the English headings the detector matched are absent from a localised one.
+  It now also matches the challenge-orchestration markup (`_cf_chl_opt`,
+  `cf-chl-widget`) that is identical in every language, and a real localised
+  challenge page is recorded as a fixture so the rule is tested against one.
+
+- Docs: README, INSTALL, `.env.example`, TRY-IT, DEVELOPMENT, API, ARCHITECTURE,
+  VERIFICATION, the follow-up design and validation notes, NOTICE and the
+  companion skill describe macOS 15+ and Windows 10/11 (x64) parity, the Windows
+  install (`install.ps1`, run as a file), PowerShell forms of the registration
+  and verification commands, and the Linux/WSL no-op. Superseded: the 1.0.4 note
+  that enforced macOS eligibility before probing Aside.
+
+### Fixed
+
+- The companion helper concatenates piped stdin as bytes and decodes it once,
+  and strips a leading byte-order mark. A multi-byte character that straddled
+  two pipe chunks — in a saved plan, or in recorded evidence carrying a quoted
+  passage — was previously replaced. It also refuses `%USERPROFILE%` as a matter
+  root, not only `/` and the home directory, and retries an atomic checkpoint
+  write that Windows briefly refuses rather than failing after Aside work has
+  already been charged.
+
+### Verified
+
+A live Windows run is recorded in
+[the Aside verification note](docs/ASIDE-ROBUSTNESS.md#windows-run) with its
+[machine-readable report](docs/ASIDE-LIVE-REPORT-WINDOWS.json): 22 MCP calls on
+Windows 11 24H2 returning nine judgments and ten scoped searches, one PDF linked
+with its body pending, one empty query and one unavailable address kept
+unresolved.
+
+The ten search calls succeeded only after a person passed Cloudflare's
+interactive check once in the browser: AustLII's search endpoint served that
+challenge to the freshly installed profile, and a later run two hours on was
+challenged again while the judgment retrievals in it still succeeded. The server
+reported every challenged call as a bot-verification page, never as an empty
+result, and nothing in it attempts to satisfy such a check. Judgment pages were
+not challenged in either run.
 
 ## [1.0.4] - 2026-09-13
 

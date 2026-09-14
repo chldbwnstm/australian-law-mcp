@@ -43,7 +43,7 @@
 
 import { existsSync } from "node:fs"
 import { homedir } from "node:os"
-import { posix as macPath } from "node:path"
+import { posix as posixPath, win32 as win32Path } from "node:path"
 
 import { ErrorCodes, LawApiError, UpstreamBlockedError } from "../errors.js"
 import { DEFAULT_EXECUTION_LIMITS, ExecutionLimitError } from "../execution-limits.js"
@@ -91,9 +91,50 @@ export const ASIDE_MAX_URL_LENGTH = 4_000
 /** JSON quotes/newlines and fixed metadata are bounded separately from the HTML body. */
 export const ASIDE_OUTPUT_ALLOWANCE_BYTES = 4096
 
-/** The install path Aside ships to on macOS. Note the spaces in the .app name. */
-export function defaultAsideCommandPath(home: string = homedir()): string {
-  return macPath.join(home, ".aside", "cli", "Aside CLI.app", "Contents", "MacOS", "aside")
+/**
+ * Path arithmetic for the host being *described*, never the machine running
+ * the suite: a simulated Mac is probed with POSIX rules on a Windows CI
+ * runner, and a simulated Windows PC with Windows rules on a Mac.
+ */
+function pathFor(platform: NodeJS.Platform) {
+  return platform === "win32" ? win32Path : posixPath
+}
+
+/**
+ * Is this a path a config may carry as the CLI? Absolute in the host's own
+ * form: on Windows a drive-letter or UNC path — `path.win32.isAbsolute` also
+ * accepts a drive-less `\foo`, which resolves against whatever the current
+ * drive happens to be. Shared with the installer (`followup-setup.ts`); the
+ * companion helper carries a copy held in lock-step by a test.
+ */
+export function isAbsoluteCommandPath(candidate: string, platform: NodeJS.Platform): boolean {
+  return pathFor(platform).isAbsolute(candidate) && (platform !== "win32" || /^(?:[A-Za-z]:[\\/]|\\\\)/.test(candidate))
+}
+
+/**
+ * The install path Aside ships to.
+ *
+ * macOS: `~/.aside/cli/Aside CLI.app/Contents/MacOS/aside` — note the spaces
+ * in the .app name. Windows (measured against `install.ps1`, 2026-09-14): the
+ * installer places `versions\<v>\aside.exe` under `%LOCALAPPDATA%\Aside\CLI`,
+ * or under `ASIDE_CLI_INSTALL_DIR` when that is set, and keeps a `current`
+ * junction at the active version — so `current\aside.exe` is the stable path,
+ * and the directory the installer appends to the user's PATH.
+ */
+export function defaultAsideCommandPath(
+  home: string = homedir(),
+  platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  if (platform === "win32") {
+    // A relative value in either variable would make the "standard" path
+    // depend on the working directory; such a value is treated as unset.
+    const absolute = (value: string | undefined) => { const trimmed = (value ?? "").trim(); return isAbsoluteCommandPath(trimmed, "win32") ? trimmed : "" }
+    const installDir = absolute(env.ASIDE_CLI_INSTALL_DIR)
+    const localAppData = absolute(env.LOCALAPPDATA) || win32Path.join(home, "AppData", "Local")
+    return win32Path.join(installDir || win32Path.join(localAppData, "Aside", "CLI"), "current", "aside.exe")
+  }
+  return posixPath.join(home, ".aside", "cli", "Aside CLI.app", "Contents", "MacOS", "aside")
 }
 
 export interface AsideStatus {
@@ -108,7 +149,12 @@ export interface AsideStatus {
 /** Seams. Defaults are the real environment, filesystem and child process. */
 export interface AsideEnvironment {
   env?: NodeJS.ProcessEnv
-  /** Host platform; the Aside integration is supported only on macOS. */
+  /**
+   * Host platform. `darwin` and `win32` can run the fallback — Aside ships a
+   * browser and a CLI for both (Windows x64 from 1.0.914.1). Everything else,
+   * Linux and WSL (which reports `linux`) included, is refused by
+   * `asideStatus`: there is no local Aside browser there to drive.
+   */
   platform?: NodeJS.Platform
   /** Filesystem probe. Injected so a test can describe a host without an Aside install. */
   exists?: (path: string) => boolean
@@ -156,11 +202,24 @@ export interface FetchViaAsideOptions extends AsideEnvironment {
   runner?: AsideRunner
 }
 
-function findOnPath(name: string, env: NodeJS.ProcessEnv, exists: (path: string) => boolean): string | undefined {
-  // This probe runs only for a macOS host, including simulated hosts in CI.
-  for (const directory of (env.PATH ?? "").split(macPath.delimiter)) {
-    if (!directory) continue
-    const candidate = macPath.join(directory, name)
+/**
+ * Look for the CLI on PATH the way the host's own shell would.
+ *
+ * Windows entries are `;`-separated and may be quoted, and the executable is
+ * `aside.exe`. Only a real `.exe` is accepted there: Node refuses to spawn a
+ * `.cmd`/`.bat` shim without a shell (the CVE-2024-27980 fix), and this
+ * bridge never uses one — so a shim would be found and then fail to start,
+ * which is worse than being reported as not found.
+ */
+function findOnPath(name: string, env: NodeJS.ProcessEnv, exists: (path: string) => boolean, platform: NodeJS.Platform): string | undefined {
+  const paths = pathFor(platform)
+  const pathValue = (platform === "win32" ? env.PATH ?? env.Path : env.PATH) ?? ""
+  for (const entry of pathValue.split(paths.delimiter)) {
+    const directory = platform === "win32" ? entry.trim().replace(/^"(.*)"$/, "$1") : entry
+    // A relative entry (`.`, `bin`) would make the command this server spawns
+    // depend on whatever directory a desktop app started it in.
+    if (!directory || !paths.isAbsolute(directory)) continue
+    const candidate = paths.join(directory, platform === "win32" ? `${name}.exe` : name)
     if (exists(candidate)) return candidate
   }
   return undefined
@@ -203,38 +262,67 @@ export function asideStatus(options: AsideEnvironment = {}): AsideStatus {
     }
   }
 
-  if ((options.platform ?? process.platform) !== "darwin") {
-    return { enabled: false, reason: "The Aside browser fallback requires macOS. It is unavailable on this platform." }
+  const platform = options.platform ?? process.platform
+  if (platform !== "darwin" && platform !== "win32") {
+    return {
+      enabled: false,
+      reason:
+        `The Aside browser fallback runs on macOS and Windows only; it is unavailable on this platform (${platform}). ` +
+        "Aside ships no browser for it, so there is nothing local to drive.",
+    }
   }
-
-  const configured = (env[ASIDE_COMMAND_ENV] ?? "").trim()
+  // A user pastes the path with the quotes Explorer's "Copy as path" adds, or
+  // that a shell showed them; on either platform a CLI path is never itself quoted.
+  const configured = (env[ASIDE_COMMAND_ENV] ?? "").trim().replace(/^"(.*)"$/, "$1").trim()
   if (configured) {
-    if (!macPath.isAbsolute(configured)) {
+    if (!isAbsoluteCommandPath(configured, platform)) {
       return {
         enabled: false,
-        reason: `${ASIDE_COMMAND_ENV} must be an absolute path to the Aside CLI; it is set to ${JSON.stringify(configured)}.`,
+        reason:
+          `${ASIDE_COMMAND_ENV} must be an absolute path to the Aside CLI; it is set to ${JSON.stringify(configured)}.` +
+          (platform === "win32"
+            ? " On Windows that is a drive-letter path such as C:\\Users\\you\\AppData\\Local\\Aside\\CLI\\current\\aside.exe; %LOCALAPPDATA% and ~ are not expanded."
+            : ""),
+      }
+    }
+    // Node refuses to spawn a .cmd/.bat without a shell, and this bridge never
+    // uses one: a wrapper would be found and then fail to start, which is a
+    // worse answer than being told now.
+    if (platform === "win32" && /\.(?:cmd|bat|ps1)$/i.test(configured)) {
+      return {
+        enabled: false,
+        reason:
+          `${ASIDE_COMMAND_ENV} points at ${configured}, a script wrapper; give the path of aside.exe itself ` +
+          "(normally %LOCALAPPDATA%\\Aside\\CLI\\current\\aside.exe). A .cmd, .bat or .ps1 wrapper cannot be started without a shell.",
       }
     }
     if (!exists(configured)) {
       return {
         enabled: false,
-        reason: `${ASIDE_COMMAND_ENV} points at ${configured}, which does not exist. Use the path shown in Aside's Developer settings.`,
+        reason:
+          `${ASIDE_COMMAND_ENV} points at ${configured}, which does not exist. ` +
+          (platform === "win32"
+            ? `The Windows CLI installs to ${defaultAsideCommandPath(options.home, platform, env)}; leave ${ASIDE_COMMAND_ENV} blank to let this server look there.`
+            : "Use the path shown in Aside's Developer settings."),
       }
     }
     return { enabled: true, command: configured }
   }
 
-  const standard = defaultAsideCommandPath(options.home)
+  const standard = defaultAsideCommandPath(options.home, platform, env)
   if (exists(standard)) return { enabled: true, command: standard }
 
-  const onPath = findOnPath("aside", env, exists)
+  const onPath = findOnPath("aside", env, exists, platform)
   if (onPath) return { enabled: true, command: onPath }
 
   return {
     enabled: false,
     reason:
       `${ASIDE_ENABLED_ENV} is on but the Aside CLI was not found at ${standard} or anywhere on PATH. ` +
-      `Install Aside, or set ${ASIDE_COMMAND_ENV} to the absolute path in its Developer settings.`,
+      (platform === "win32"
+        ? "Install the Aside CLI for Windows x64 (download https://releases.aside.com/install.ps1 and run it as a file), " +
+          `restart the app that started this server so it sees the updated PATH, or set ${ASIDE_COMMAND_ENV} to the absolute path of aside.exe.`
+        : `Install Aside, or set ${ASIDE_COMMAND_ENV} to the absolute path in its Developer settings.`),
   }
 }
 
@@ -375,6 +463,12 @@ export function looksLikeBotChallenge(html: string, patterns: readonly RegExp[] 
   const text = readable(html)
   // A judgment may quote these phrases or exhibit the site's JavaScript.
   if (/\bREASONS\s+FOR\s+(?:JUDGMENT|DECISION)\b/i.test(text)) return false
+  // Cloudflare localises the page — a Korean Windows profile is served
+  // "잠시만 기다리십시오…" (recorded 2026-09-14, austlii-challenge-ko.html) — but
+  // the challenge orchestration tokens in its markup are the same in every
+  // language. Checked after the reasons guard, so a judgment page that happens
+  // to embed a Turnstile widget is still a judgment.
+  if (/\b_cf_chl_opt\b|\bcf-chl-widget\b/.test(html)) return true
   return text.length < 2000 && patterns.some(pattern => pattern.test(text))
 }
 
@@ -459,7 +553,9 @@ export function asideReplScript(url: string): string {
 
 /** Fences occupy their own lines; embedded marker text inside JSON is ordinary page data. */
 export function extractAsideEnvelope(stdout: string): AsideEnvelope | undefined {
-  const lines = stdout.split(/\r?\n/)
+  // A byte-order mark would glue itself to the fence if the CLI ever printed
+  // the fence first; CRLF is already tolerated by the split.
+  const lines = stdout.replace(/^\uFEFF/, "").split(/\r?\n/)
   const starts = lines.flatMap((line, index) => line === ASIDE_BEGIN_MARKER ? [index] : [])
   const ends = lines.flatMap((line, index) => line === ASIDE_END_MARKER ? [index] : [])
   if (starts.length !== 1 || ends.length !== 1 || ends[0] !== starts[0] + 2) return undefined
@@ -531,7 +627,15 @@ export async function fetchPageViaAside(url: string, opts: FetchViaAsideOptions 
     throw new LawApiError(
       `The Aside CLI at ${status.command} could not be started.`,
       ErrorCodes.API_ERROR,
-      [`Check the path in ${ASIDE_COMMAND_ENV}, and that Aside is installed and runnable.`],
+      [
+        `Check the path in ${ASIDE_COMMAND_ENV}, and that Aside is installed and runnable.`,
+        ...((opts.platform ?? process.platform) === "win32"
+          ? [
+              "On Windows the command must be aside.exe itself (normally %LOCALAPPDATA%\\Aside\\CLI\\current\\aside.exe): " +
+                "a .cmd wrapper cannot be started without a shell, and a dangling \"current\" junction after a CLI update looks the same — re-run install.ps1.",
+            ]
+          : []),
+      ],
     )
   }
   if (result.timedOut) {

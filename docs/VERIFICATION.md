@@ -5,9 +5,9 @@ The latest Aside hardening and live MCP matrix are recorded in
 
 ## 2026-09-12 — FCAFC URLs and citation checks, unreleased fixes after v1.0.3
 
-Environment: macOS 26.6.2, Node 22.11.0, local Aside CLI. This records the
-working-tree fixes listed under **Unreleased** in `CHANGELOG.md`, not the
-v1.0.3 installer. Browser availability depends on the user's session.
+Environment: macOS 26.6.2, Node 22.11.0, local Aside CLI. This records the fixes
+that went out in v1.0.4, tested from the working tree before that release.
+Browser availability depends on the user's session.
 
 | Check | Observed result |
 |---|---|
@@ -44,11 +44,17 @@ penalises qualifiers absent from the draft. The final live MCP run selected
 `sch 2 s 18` and still marked the full legal proposition as unverified.
 
 Windows CI also exposed three existing Aside probe tests that interpreted Mac
-paths using the runner's Windows path rules. The probe now uses explicit macOS
-path rules and rejects non-macOS hosts before inspecting a CLI path. Tests
-cover Windows and Linux refusal even when a command is explicitly configured.
+paths using the runner's Windows path rules. At 1.0.4 the probe was given
+explicit macOS path rules and rejected non-macOS hosts before inspecting a CLI
+path. The Windows-parity change that followed (CHANGELOG, 1.0.5) keeps the
+rule that path arithmetic follows the *described* host, not the machine running
+the suite — a simulated Mac uses POSIX rules on a Windows runner and a simulated
+Windows PC uses Windows rules on a Mac — and now admits Windows while still
+refusing Linux even when a command is explicitly configured.
 
-To repeat the public MCP calls from a built checkout on a Mac with Aside:
+To repeat the public MCP calls from a built checkout on a Mac or a Windows
+(x64) PC with Aside running (the block below is POSIX shell; on Windows run it
+from Git Bash):
 
 ```sh
 npm run build

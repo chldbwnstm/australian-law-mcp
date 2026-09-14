@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
+import { asideReplScript } from "./aside-browser.js"
 import { runAsideCommand, serialAsideRun } from "./aside-process.js"
 
 const folders: string[] = []
@@ -48,6 +49,17 @@ describe("real child-process lifecycle (no Aside or network)", () => {
     expect(result.stdout).toBe("")
   })
 
+  // Node refuses a .cmd/.bat without a shell synchronously (EINVAL, the
+  // CVE-2024-27980 fix) rather than through the 'error' event; the bridge
+  // reports it the same way as any other CLI that could not be started.
+  it.runIf(process.platform === "win32")("reports a .cmd wrapper on Windows as a CLI that could not be started", async () => {
+    const wrapper = join(await folder(), "aside.cmd")
+    await writeFile(wrapper, "@echo off\r\necho should-not-run\r\n")
+    const result = await runAsideCommand(wrapper, ["repl"], options)
+    expect(result.failedToStart).toBe(true)
+    expect(result.stdout).toBe("")
+  })
+
   it("keeps a nonzero exit distinct from a timeout and discards stderr", async () => {
     const result = await runAsideCommand(process.execPath, ["-e", "process.stderr.write('private diagnostics');process.stdout.write('output');process.exitCode=7"], options)
     expect(result.exitCode).toBe(7)
@@ -76,6 +88,52 @@ describe("real child-process lifecycle (no Aside or network)", () => {
     try { await waitForFile(ready) } finally { controller.abort() }
     expect(await outcome).toMatchObject({ name: "AbortError" })
   }, 10000)
+
+  /**
+   * The 3 KB multi-line snippet, with its JSON-quoted URL, backslashes and
+   * quotes, must reach the CLI unchanged: on Windows the argv boundary is a
+   * command line the receiver re-parses, and a receiver that split `\"`
+   * differently would corrupt exactly the quoting the containment argument
+   * rests on. A Node receiver stands in for the CLI here; the live run
+   * confirms the real one.
+   */
+  it("delivers the real repl snippet byte for byte across the argv boundary", async () => {
+    const echo = join(await folder(), "echo argv.cjs")
+    await writeFile(echo, "process.stdout.write(process.argv[2])")
+    const script = asideReplScript("https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/cth/FCAFC/2020/130.html")
+    const result = await runAsideCommand(process.execPath, [echo, script], { ...options, maxOutputBytes: 1 << 20 })
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout).toBe(script)
+  })
+
+  // Windows has no process groups: the tree is walked with taskkill while the
+  // root is alive. A test that only watched the direct child would pass today
+  // and prove nothing about a helper it left behind.
+  it.runIf(process.platform === "win32")("kills the grandchild together with its parent on Windows", async () => {
+    const ready = join(await folder(), "grandchild")
+    const grandchild = `require('node:fs').writeFileSync(${JSON.stringify(ready)},String(process.pid));setInterval(()=>{},1000)`
+    const parent = `require('node:child_process').spawn(process.execPath,['-e',${JSON.stringify(grandchild)}],{stdio:'ignore'});setInterval(()=>{},1000)`
+    const controller = new AbortController()
+    const work = runAsideCommand(process.execPath, ["-e", parent], { ...options, signal: controller.signal })
+    const outcome = work.catch(error => error)
+    let pid: number | undefined
+    try {
+      pid = Number(await waitForFile(ready))
+      controller.abort()
+      expect(await outcome).toMatchObject({ name: "AbortError" })
+      const deadline = Date.now() + 3000
+      let running = true
+      while (Date.now() < deadline && running) {
+        try { process.kill(pid, 0) } catch { running = false }
+        if (running) await pause(50)
+      }
+      expect(running).toBe(false)
+    } finally {
+      controller.abort()
+      await outcome
+      if (pid) { try { process.kill(pid) } catch {} }
+    }
+  }, 15000)
 
   it.skipIf(process.platform === "win32")("kills a TERM-resistant grandchild even if its parent exits first", async () => {
     const ready = join(await folder(), "grandchild")

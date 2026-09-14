@@ -11,23 +11,39 @@ const gap = makeGap({
 const policy = { mode: "missing_sources" as const, browser: "aside" as const, maxPages: 10, maxDocuments: 3, maxElapsedSeconds: 300, useAuthorizedAccounts: false }
 
 describe("follow-up tools", () => {
-  it("creates no executable browser task on Windows even when policy asks for Aside", async () => {
-    const result = await planResearchFollowup(client, { gaps: [gap], policy, scope: { matter: "test", jurisdictions: [] }, eligibility: { probe: "local_companion", execution: "local", platform: "win32", osVersion: "11", asideConnected: true, asideTools: ["repl"] } })
-    expect(result.structuredContent?.followup.tasks).toBeUndefined()
-    expect(result.structuredContent?.followup.gaps).toHaveLength(1)
-    expect(result.content[0].text).toContain("only on macOS")
+  const mac = { probe: "local_companion" as const, execution: "local" as const, platform: "darwin" as const, osVersion: "15.1", asideConnected: true, asideTools: ["repl" as const, "exec" as const] }
+  const windows = { ...mac, platform: "win32" as const, osVersion: "10.0.26200" }
+
+  it("creates the same bounded browser task on an eligible local Windows host as on a Mac", async () => {
+    for (const eligibility of [mac, windows]) {
+      const result = await planResearchFollowup(client, { gaps: [gap], policy, scope: { matter: "test", jurisdictions: ["Cth"] }, eligibility })
+      expect(result.structuredContent?.followup.tasks).toEqual([expect.objectContaining({ route: "aside_repl", state: "waiting_for_user", gapIds: [gap.id] })])
+    }
+    const result = await planResearchFollowup(client, { gaps: [gap], policy, scope: { matter: "test", jurisdictions: ["Cth"] }, eligibility: windows })
+    expect(result.content[0].text).not.toMatch(/macOS/)
   })
 
-  it("uses the observed repl and bounded matter budget on an eligible Mac", async () => {
-    const result = await planResearchFollowup(client, { gaps: [gap], policy, scope: { matter: "test", jurisdictions: ["Cth"] }, eligibility: { probe: "local_companion", execution: "local", platform: "darwin", osVersion: "15.1", asideConnected: true, asideTools: ["repl", "exec"] } })
-    expect(result.structuredContent?.followup.tasks).toEqual([expect.objectContaining({ route: "aside_repl", state: "waiting_for_user", gapIds: [gap.id] })])
+  // The honesty guarantee that parity must not cost: an ineligible Windows host
+  // — pre-10, remote, or without a connected Aside — retains every gap and link.
+  it("creates no executable browser task on an ineligible Windows or Linux host, and keeps the gap", async () => {
+    for (const [eligibility, reason] of [
+      [{ ...windows, osVersion: "6.3.9600" }, "Windows 10"],
+      [{ ...windows, execution: "remote" as const }, "local client"],
+      [{ ...windows, asideConnected: false, asideTools: [] }, "not connected"],
+      [{ ...windows, platform: "linux" as const, osVersion: "6.8" }, "only on macOS and Windows"],
+    ] as const) {
+      const result = await planResearchFollowup(client, { gaps: [gap], policy, scope: { matter: "test", jurisdictions: [] }, eligibility })
+      expect(result.structuredContent?.followup.tasks).toBeUndefined()
+      expect(result.structuredContent?.followup.gaps).toHaveLength(1)
+      expect(result.content[0].text).toContain(reason)
+    }
   })
 
-  it("keeps host-model companion tasks unavailable on Windows and remote hosts", async () => {
+  it("keeps host-model companion tasks unavailable on ineligible Windows and remote hosts", async () => {
     const interpretation = makeGap({ ...gap, kind: "legal_interpretation", sourceAccess: "unknown", reason: "host assessment needed" })
     for (const eligibility of [
-      { probe: "local_companion" as const, execution: "local" as const, platform: "win32" as const, osVersion: "11", asideConnected: true, asideTools: ["repl" as const] },
-      { probe: "local_companion" as const, execution: "remote" as const, platform: "darwin" as const, osVersion: "15.1", asideConnected: true, asideTools: ["repl" as const] },
+      { ...windows, osVersion: "6.3.9600" },
+      { ...mac, execution: "remote" as const },
     ]) {
       const result = await planResearchFollowup(client, { gaps: [interpretation], policy, scope: { matter: "test", jurisdictions: [] }, eligibility })
       expect(result.structuredContent?.followup.tasks).toBeUndefined()
@@ -35,10 +51,12 @@ describe("follow-up tools", () => {
     }
   })
 
-  it("plans host analysis without browser access prompts on an eligible local Mac", async () => {
+  it("plans host analysis without browser access prompts on an eligible local Mac or Windows PC", async () => {
     const interpretation = makeGap({ ...gap, kind: "legal_interpretation", sourceAccess: "unknown", reason: "host assessment needed" })
-    const result = await planResearchFollowup(client, { gaps: [interpretation], policy, scope: { matter: "test", jurisdictions: [] }, eligibility: { probe: "local_companion", execution: "local", platform: "darwin", osVersion: "15.1", asideConnected: true, asideTools: ["repl"] } })
-    expect(result.structuredContent?.followup.tasks).toEqual([expect.objectContaining({ route: "host_model", state: "planned" })])
+    for (const eligibility of [{ ...mac, asideTools: ["repl" as const] }, { ...windows, asideTools: ["repl" as const] }]) {
+      const result = await planResearchFollowup(client, { gaps: [interpretation], policy, scope: { matter: "test", jurisdictions: [] }, eligibility })
+      expect(result.structuredContent?.followup.tasks).toEqual([expect.objectContaining({ route: "host_model", state: "planned" })])
+    }
   })
 
   it("rejects a same-name or mismatched citation and missing body/locator", async () => {

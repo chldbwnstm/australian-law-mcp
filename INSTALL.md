@@ -26,7 +26,7 @@ file.
 
 ### Get the file
 
-Download `au-law-mcp-1.0.4.mcpb` (about 4 MB) from the
+Download `au-law-mcp-1.0.5.mcpb` (about 4 MB) from the
 [latest release](https://github.com/chldbwnstm/australian-law-mcp/releases/latest).
 That is the whole step — no clone, no terminal, no Node.
 
@@ -38,7 +38,7 @@ To build it yourself instead:
 git clone https://github.com/chldbwnstm/australian-law-mcp
 cd australian-law-mcp
 npm ci --ignore-scripts
-npm run build:mcpb          # → release/au-law-mcp-1.0.4.mcpb
+npm run build:mcpb          # → release/au-law-mcp-1.0.5.mcpb
 ```
 
 The build unpacks the bundle, starts the server inside it and checks that it
@@ -64,16 +64,37 @@ Open **Settings → Extensions → Australian Law**. There is a switch,
 **Aside CLI path** beside it.
 
 It is **off**, and leaving it off is the supported default. Turned on, on a Mac
-with [Aside](https://docs.aside.com/help/get-started) installed, the server may
-finish a lookup a publisher blocks it from making — the Federal Court's
-judgment site, AustLII — by driving that browser and the sessions it is already
-signed in to. It is confined to those blocked legal-source domains, and it does
-nothing at all on a machine without Aside. The trade is set out in the
+(macOS 15 or later) or a Windows PC (Windows 10/11, x64) with
+[Aside](https://docs.aside.com/help/get-started) and its command-line tool
+installed, the server may finish a lookup a publisher blocks it from making —
+the Federal Court's judgment site, AustLII — by driving that browser and the
+sessions it is already signed in to. It is confined to those blocked
+legal-source domains, and it does nothing at all on a machine without Aside.
+Aside ships no Linux browser build, so on Linux and WSL the switch is a no-op.
+The trade is set out in the
 [README](README.md#optional-finishing-a-blocked-source-in-your-own-browser);
 read it before switching this on for someone else.
 
-Fill in the path only if Aside is not at
-`~/.aside/cli/Aside CLI.app/Contents/MacOS/aside`; blank means "find it".
+The command-line tool is a separate install on both platforms. On macOS:
+`curl -fsSL https://releases.aside.com/install.sh | bash`. On Windows, install
+the browser from <https://aside.com/api/download/windows> (x64; the installer
+is signed by AT YOUR SIDE INC), then download
+<https://releases.aside.com/install.ps1> and run it as a file — it refuses to
+run piped. It places `aside.exe` at `%LOCALAPPDATA%\Aside\CLI\current\aside.exe`
+and adds that folder to your user PATH; apps started before it ran — Claude
+Desktop, an open terminal — must be restarted to see the PATH change, although
+the server finds that standard location without it.
+
+Fill in the path only if Aside is at neither the standard location —
+`~/.aside/cli/Aside CLI.app/Contents/MacOS/aside` on macOS;
+`%LOCALAPPDATA%\Aside\CLI\current\aside.exe` on Windows, or
+`%ASIDE_CLI_INSTALL_DIR%\current\aside.exe` if you set that variable when
+installing — nor on PATH; blank means "find it". If you do fill it in, type the
+full path in your OS's own form, with the drive letter on Windows:
+`C:\Users\you\AppData\Local\Aside\CLI\current\aside.exe`. Neither the extension
+nor the server expands `%LOCALAPPDATA%` or `~`, and a path that does not exist
+is reported as exactly that — "points at …, which does not exist" — never as
+Aside being uninstalled.
 
 The CLI and Codex hosts (Routes 2 and 3) have no settings UI. There the same two
 settings are the environment variables `AU_LAW_ASIDE` and
@@ -90,6 +111,12 @@ npm run verify:stdio
 claude mcp add --transport stdio --scope user australian-law -- "$(command -v node)" "$PWD/build/index.js"
 ```
 
+On Windows run the same steps from PowerShell; the last line becomes:
+
+```powershell
+claude mcp add --transport stdio --scope user australian-law -- "$((Get-Command node).Source)" "$PWD\build\index.js"
+```
+
 Keep the checkout somewhere permanent — the registered entry points at
 `build/index.js` by absolute path. User scope makes it available across projects.
 No legal-data API key is needed.
@@ -101,6 +128,10 @@ registration even if you have already installed the extension.
 
 ```bash
 codex mcp add australian-law -- "$(command -v node)" "$PWD/build/index.js"
+```
+
+```powershell
+codex mcp add australian-law -- "$((Get-Command node).Source)" "$PWD\build\index.js"
 ```
 
 Run it from the same built checkout as route 2, and respect `CODEX_HOME` if you
@@ -138,7 +169,7 @@ The desktop bundle is a download; everything else starts from a checkout:
 
 | Route | Status |
 |---|---|
-| `au-law-mcp-1.0.4.mcpb` from [Releases](https://github.com/chldbwnstm/australian-law-mcp/releases/latest), installed through **Settings → Extensions** | **Works.** Download it, or rebuild it with `npm run build:mcpb`. Route 1. |
+| `au-law-mcp-1.0.5.mcpb` from [Releases](https://github.com/chldbwnstm/australian-law-mcp/releases/latest), installed through **Settings → Extensions** | **Works.** Download it, or rebuild it with `npm run build:mcpb`. Route 1. |
 | Clone, `npm ci --ignore-scripts`, `npm run build`, register `build/index.js` with `claude mcp add` or `codex mcp add` | **Works.** Routes 2 and 3. |
 | `npx -y au-law-mcp` | **Does not resolve.** `registry.npmjs.org/au-law-mcp` answers 404 — the package has never been published. A client config naming it fails with "server disconnected", so do not write it into anyone's configuration. |
 
@@ -186,7 +217,8 @@ above starts either from the released bundle or from a checkout.
    environment instead of the user's local desktop host.
 7. Before registering with any Claude host, check both locations:
 
-   - `~/.claude.json` → `mcpServers["australian-law"]`
+   - `~/.claude.json` (`%USERPROFILE%\.claude.json` on Windows) →
+     `mcpServers["australian-law"]`
    - `~/Library/Application Support/Claude/extensions-installations.json` →
      `extensions["local.mcpb.chldbwnstm.au-law-mcp"]` (macOS; other platforms: the
      app's data directory)
@@ -238,33 +270,53 @@ sources whose publisher refuses this server — and they are different tools:
 | | Extension switch (`AU_LAW_ASIDE`) | `au-law-followup` skill |
 |---|---|---|
 | Lives in | the server, so every host has it, **including desktop Chat** | a project skill in this checkout |
-| Hosts | Claude Desktop (Chat and Code), CLI, Codex | local macOS Codex or Claude Code opened on the checkout — Chat loads extensions only and never loads a project skill |
+| Hosts | Claude Desktop (Chat and Code), CLI, Codex | local macOS or Windows Codex or Claude Code opened on the checkout — Chat loads extensions only and never loads a project skill |
 | Scope | one blocked lookup, finished inside the answer being written | a research session: per-matter opt-in, page/document/minute budgets, saved evidence, checkpoints, stop and resume |
 | Turned on by | a switch in **Settings → Extensions** | `setup-followup`, then a per-matter mode |
 
 Install the skill when someone needs the budgets and the evidence trail. Leave
-the switch to cover the ordinary case. Installing both on one Mac is fine — they
-are separate paths and neither reconfigures the other.
+the switch to cover the ordinary case. Installing both on one machine is fine —
+they are separate paths and neither reconfigures the other.
 
 Only offer this after the ordinary law server works and only in a local macOS
-15.0+ Claude Code or Codex session. Windows, WSL, Linux, older macOS, remote and
-unknown execution hosts remain on standard research; do not install Aside there
-or substitute another browser.
+15.0+ or Windows 10/11 (x64) Claude Code or Codex session. WSL, Linux, older
+macOS, remote and unknown execution hosts remain on standard research — Aside
+ships no Linux browser build, and WSL reports itself as linux — so do not
+install Aside there or substitute another browser. Aside for Windows is x64
+only: on an ARM64 machine its CLI installer refuses, Aside is never connected,
+and the probe says so.
 
-On an eligible Mac, obtain the concrete Aside executable path from Aside's
-Developer settings, then run the built source checkout's opt-in installer:
+On an eligible Mac or Windows PC, obtain the concrete Aside executable path from
+Aside's Developer settings — on Windows, after Aside's `install.ps1`, it is
+`C:\Users\you\AppData\Local\Aside\CLI\current\aside.exe`, typed with the drive
+letter because `%LOCALAPPDATA%` and `~` are not expanded — then run the built
+source checkout's opt-in installer:
 
 ```text
 <absolute-node> <absolute-build/index.js> setup-followup --client codex|claude-code|both --project <project> --aside-command <absolute-aside>
 ```
 
-The installer adds only a missing `aside` sibling MCP entry, preserves existing
-settings, installs the host skill inside the project, and records the executable
-path for desktop processes with a restricted PATH. Restart the client. In the
-new local session, invoke `au-law-followup`, run its probe, initialise a dedicated
-matter folder, and say “Use Aside to finish missing source checks for this
-matter.” The skill performs a fresh handshake before dispatch/resume and keeps
-policy, task state, Aside session IDs and evidence in that matter folder.
+`--aside-command` may be omitted on either platform: the installer then looks
+first at the standard install location — `~/.aside/cli/Aside CLI.app/Contents/MacOS/aside`
+on macOS, the path above on Windows — and then for `aside` (`aside.exe` on
+Windows) on PATH, the same order the server itself uses, so the command it
+records is the one the extension switch would drive. The installer adds only a
+missing `aside` sibling MCP entry, preserves existing
+settings, installs the host skill inside the project, and records the absolute
+executable path in `.au-law-followup-host.json` for desktop processes with a
+restricted PATH. That path is written verbatim into `.mcp.json` (JSON, so each
+backslash is doubled on disk) and `.codex/config.toml` (a TOML basic string,
+backslashes escaped the same way) — both are correct as written and need no
+editing. The 0600 mode the installer sets on the host file has no effect on
+Windows, where NTFS inherits the folder's permissions. Restart the client. In
+the new local session, invoke `au-law-followup`, run its probe, initialise a
+dedicated matter folder, and say “Use Aside to finish missing source checks for
+this matter.” The skill performs a fresh handshake before dispatch/resume and
+keeps policy, task state, Aside session IDs and evidence in that matter folder.
+A matter checkpoint made on one host can be resumed on another, but browser
+tasks run only if the fresh probe on the resuming host is eligible, and never
+with the other platform's recorded executable path — a Mac `.app` path does not
+exist on Windows — because the probe re-derives the executable.
 
 The preview uses only Aside's observed `repl(title, code)` and
 `exec(prompt, session_id?)` tools. It never uses `memory_search`, claims a running

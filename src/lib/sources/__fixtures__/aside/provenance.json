@@ -38,5 +38,13 @@
     "title": "TOWN OF PORT HEDLAND -v- REECE WILLIAM HODDER BY NEXT FRIEND ELAINE GEORGINA HODDER [No 2] [2012] WASCA 212 (19 December 2012)",
     "originalHtmlSha256": "ec1d2a18ae467d08c996125f92f4fce2dabb7aeb3a707b6666b2ef80f634f4ec",
     "transformation": "Script and style elements removed; document structure and visible text retained."
+  },
+  {
+    "file": "austlii-challenge-ko.html",
+    "sourceUrl": "https://www.austlii.edu.au/cgi-bin/sinosrch.cgi?method=auto&query=prepayment&mask_path=au/cases/cth/FCAFC",
+    "capturedAt": "2026-09-14",
+    "title": "잠시만 기다리십시오…",
+    "originalHtmlSha256": "d525c1bb401b2f629e5ae706e7ae9cef0340c1cbb0c99fec4f13537b675931bf",
+    "transformation": "None: the Cloudflare Turnstile challenge page as served to the Windows Aside browser (1.0.914.1, CLI 1.26.906.1630) on a Korean-locale PC, via `aside repl --host local` page.content(). Recorded so the challenge detector is tested against a localised page, not an English one."
   }
 ]

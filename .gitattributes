@@ -1,2 +1,4 @@
 # Keep hashbang scripts compatible with module transforms on Windows.
 *.mjs text eol=lf
+# Recorded upstream responses are compared byte for byte: no line-ending conversion on any OS.
+src/**/__fixtures__/** -text

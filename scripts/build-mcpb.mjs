@@ -110,14 +110,15 @@ const USER_SETTINGS = [
     env: "AU_LAW_ASIDE",
     option: {
       type: "boolean",
-      title: "Finish blocked legal sources using the Aside browser (Mac only)",
+      title: "Finish blocked legal sources using the Aside browser",
       description:
         "Off by default. Some publishers refuse this server outright — the Federal Court's judgment " +
         "site and AustLII among them — and those searches come back as a blocked source with a link, " +
         "not as results. Turn this on and the server may finish those lookups by driving Aside, the " +
-        "browser app on this Mac, using the legal sites you are already signed in to. Because that is " +
+        "browser app on this computer, using the legal sites you are already signed in to. Because that is " +
         "a real browser holding your sessions, the server may only send it to legal-source addresses. " +
-        "Requires macOS with Aside installed; with Aside absent this setting does nothing.",
+        "Requires macOS 15 or later, or Windows 10/11 (x64), with Aside and its command line tool installed; " +
+        "with Aside absent this setting does nothing.",
       required: false,
       default: false,
     },
@@ -130,9 +131,11 @@ const USER_SETTINGS = [
       title: "Aside CLI path (optional)",
       description:
         "Leave blank unless Aside is installed somewhere other than the standard location, which the " +
-        "server finds on its own. If you moved it, give the full path to the Aside command line tool, " +
-        "e.g. /Users/you/.aside/cli/Aside CLI.app/Contents/MacOS/aside. Ignored while the setting " +
-        "above is off.",
+        "server finds on its own (macOS: ~/.aside/cli/Aside CLI.app/Contents/MacOS/aside; Windows: " +
+        "the Aside\\CLI\\current\\aside.exe folder under your Local AppData). If you moved it, give the " +
+        "full path to the Aside command line tool, e.g. /Users/you/.aside/cli/Aside CLI.app/Contents/MacOS/aside " +
+        "or C:\\Users\\you\\AppData\\Local\\Aside\\CLI\\current\\aside.exe — typed in full, since " +
+        "%LOCALAPPDATA% and ~ are not expanded. Ignored while the setting above is off.",
       required: false,
       default: "",
     },

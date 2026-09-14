@@ -3,53 +3,150 @@ import { spawn, spawnSync } from "node:child_process"
 import { createInterface } from "node:readline"
 import { mkdir, readFile, rename, writeFile, appendFile } from "node:fs/promises"
 import { existsSync, realpathSync } from "node:fs"
-import { basename, dirname, isAbsolute, join, resolve } from "node:path"
+import { basename, dirname, isAbsolute, join, posix, resolve, win32 } from "node:path"
 import { fileURLToPath } from "node:url"
-import { homedir } from "node:os"
+import { homedir, release } from "node:os"
 
 const VERSION = "1.0"
 const STATE_DIR = ".au-law-followup"
 const MAX_STDIN = 64 * 1024
 
+/**
+ * Where Aside ships a browser, and the OS floor on each. This is a copy of
+ * ASIDE_HOST_FLOORS in src/lib/research-followup.ts: this file is installed
+ * into user projects and cannot import the package, so the table is repeated
+ * here and src/followup-companion.test.ts holds the two in lock-step. Windows
+ * 11 reports NT major 10 (os.release() "10.0.<build>"), so the floor is 10.
+ */
+export const ASIDE_HOST_FLOORS = { darwin: { name: "macOS", minMajor: 15 }, win32: { name: "Windows", minMajor: 10 } }
+
 function die(message) { process.stderr.write(`${message}\n`); process.exitCode = 1 }
 function json(value) { process.stdout.write(`${JSON.stringify(value, null, 2)}\n`) }
-function executable(name) {
-  for (const dir of (process.env.PATH ?? "").split(":")) {
-    const candidate = join(dir, name)
-    if (existsSync(candidate)) return candidate
+
+/** The path each Aside installer ships the CLI to — the same rule as the server's defaultAsideCommandPath. */
+export function standardAsideCommand(platform = process.platform, env = process.env, home = homedir()) {
+  if (platform === "win32") {
+    // A relative value in either variable is treated as unset, as the server does.
+    const absolute = (value) => { const trimmed = (value ?? "").trim(); return isAcceptableCommandPath(trimmed, "win32") ? trimmed : "" }
+    const installDir = absolute(env.ASIDE_CLI_INSTALL_DIR)
+    const localAppData = absolute(env.LOCALAPPDATA) || win32.join(home, "AppData", "Local")
+    return win32.join(installDir || win32.join(localAppData, "Aside", "CLI"), "current", "aside.exe")
   }
+  return posix.join(home, ".aside", "cli", "Aside CLI.app", "Contents", "MacOS", "aside")
+}
+
+/**
+ * Is this a path a config may carry as the CLI? A copy of the server's
+ * isAbsoluteCommandPath: absolute in the host's own form, and on Windows a
+ * drive-letter or UNC path (path.win32.isAbsolute also accepts a drive-less
+ * `\foo`, which resolves against whatever the current drive happens to be).
+ */
+export function isAcceptableCommandPath(candidate, platform = process.platform) {
+  const paths = platform === "win32" ? win32 : posix
+  return paths.isAbsolute(candidate) && (platform !== "win32" || /^(?:[A-Za-z]:[\\/]|\\\\)/.test(candidate))
+}
+
+/**
+ * Resolve a bare CLI name in the same order as the server: the installer's
+ * standard location first, then PATH (`;`-separated and `aside.exe` on Windows
+ * — a real .exe only, since Node cannot spawn a .cmd shim without a shell;
+ * absolute entries only, so the answer never depends on the working
+ * directory). Same order so the probe drives the command the server would.
+ * The standard location also covers a Windows desktop app or a terminal
+ * opened before install.ps1 edited the user PATH.
+ */
+export function findAsideExecutable(name = "aside", platform = process.platform, env = process.env, exists = existsSync, home = homedir()) {
+  if (/^aside(?:\.exe)?$/i.test(name)) {
+    const standard = standardAsideCommand(platform, env, home)
+    if (exists(standard)) return standard
+  }
+  const paths = platform === "win32" ? win32 : posix
+  const file = platform === "win32" && !/\.exe$/i.test(name) ? `${name}.exe` : name
+  for (const entry of ((platform === "win32" ? env.PATH ?? env.Path : env.PATH) ?? "").split(paths.delimiter)) {
+    const dir = platform === "win32" ? entry.trim().replace(/^"(.*)"$/, "$1") : entry
+    if (!dir || !paths.isAbsolute(dir)) continue
+    const candidate = paths.join(dir, file)
+    if (exists(candidate)) return candidate
+  }
+  return undefined
 }
 function localExecution() {
   return !(process.env.SSH_CONNECTION || process.env.SSH_TTY || process.env.WSL_DISTRO_NAME || process.env.CODESPACES || process.env.REMOTE_CONTAINERS)
 }
+/** sw_vers on macOS (os.release() there is the Darwin kernel); os.release() on Windows is the NT version, "10.0.26200" on Windows 11 24H2. */
 function osVersion() {
-  if (process.platform !== "darwin") return process.release?.name ?? "unknown"
-  return spawnSync("/usr/bin/sw_vers", ["-productVersion"], { encoding: "utf8", timeout: 3000 }).stdout.trim() || "unknown"
+  if (process.platform === "darwin") return spawnSync("/usr/bin/sw_vers", ["-productVersion"], { encoding: "utf8", timeout: 3000 }).stdout?.trim() || "unknown"
+  if (process.platform === "win32") return release()
+  return "unknown"
 }
+/** Same decision as the server's isEligibleLocalAside, from the same floor table; pure so a test can drive it. */
+export function hostEligibility({ platform, osVersion: version, execution, aside }) {
+  const floor = ASIDE_HOST_FLOORS[platform]
+  const major = Number(/^(\d+)(?:\.\d+){0,3}$/.exec(String(version).trim())?.[1] ?? NaN)
+  const eligible = Boolean(floor) && execution === "local" && major >= floor.minMajor && aside.connected && aside.tools.includes("repl")
+  const reason = eligible ? `Local ${floor.name} ${floor.minMajor}+ and Aside repl confirmed`
+    : !floor ? `Aside follow-up is not available on ${platform}; only local macOS 15+ and 64-bit Windows 10/11 are eligible`
+    : execution !== "local" ? "Aside follow-up requires local client execution"
+    : !(major >= floor.minMajor) ? `Aside follow-up requires ${floor.name} ${floor.minMajor} or later (this host reported ${version})`
+    : aside.reason ?? (!aside.connected ? "Aside MCP is not connected" : "The connected Aside MCP does not expose its required repl tool")
+  return { eligible, reason }
+}
+const samePath = (a, b) => process.platform === "win32" ? a.toLowerCase() === b.toLowerCase() : a === b
 function safeMatter(value) {
   const folder = resolve(value)
-  if (!isAbsolute(folder) || folder === "/" || folder === homedir() || dirname(folder) === folder) throw new Error("Choose a dedicated matter folder, not the filesystem or home root.")
+  const roots = [homedir(), ...(process.env.USERPROFILE ? [resolve(process.env.USERPROFILE)] : [])]
+  if (!isAbsolute(folder) || dirname(folder) === folder || roots.some((root) => samePath(folder, root))) throw new Error("Choose a dedicated matter folder, not the filesystem or home root.")
   return folder
 }
 async function atomic(path, value) {
   await mkdir(dirname(path), { recursive: true })
   const temp = join(dirname(path), `.${basename(path)}.${process.pid}.tmp`)
   await writeFile(temp, `${JSON.stringify(value, null, 2)}\n`, { encoding: "utf8", mode: 0o600 })
-  await rename(temp, path)
+  // Windows can refuse to replace a file that an indexer or a sync client has
+  // open for a moment; a bounded retry beats charging Aside work and then
+  // failing to record it.
+  for (let attempt = 0; ; attempt += 1) {
+    try { await rename(temp, path); return }
+    catch (error) {
+      if (process.platform !== "win32" || attempt >= 3 || !["EPERM", "EBUSY", "EACCES"].includes(error?.code)) throw error
+      await new Promise((r) => setTimeout(r, 50 * (attempt + 1)))
+    }
+  }
 }
 async function readJson(path) { return JSON.parse(await readFile(path, "utf8")) }
+/** JSON from stdin, or from `--input FILE`: a stock Windows PowerShell 5.1 pipe re-encodes non-ASCII text, a file read as UTF-8 does not. */
 async function stdinJson() {
-  let body = ""
-  for await (const chunk of process.stdin) {
-    body += chunk
-    if (Buffer.byteLength(body) > MAX_STDIN) throw new Error(`stdin exceeds ${MAX_STDIN} bytes`)
+  const input = option("--input")
+  if (input) {
+    const body = await readFile(resolve(input), "utf8")
+    if (Buffer.byteLength(body) > MAX_STDIN) throw new Error(`--input exceeds ${MAX_STDIN} bytes`)
+    return JSON.parse(body.replace(/^\uFEFF/, ""))
   }
-  return JSON.parse(body)
+  // Concatenated as bytes and decoded once: a pipe chunk is not a character
+  // boundary, and `body += chunk` would corrupt any multi-byte character that
+  // straddles two chunks — a quoted passage is exactly where that shows up.
+  const chunks = []
+  let bytes = 0
+  for await (const chunk of process.stdin) {
+    chunks.push(chunk)
+    bytes += chunk.length
+    if (bytes > MAX_STDIN) throw new Error(`stdin exceeds ${MAX_STDIN} bytes`)
+  }
+  return JSON.parse(Buffer.concat(chunks).toString("utf8").replace(/^\uFEFF/, ""))
 }
 
 async function asideProbe(command) {
   return new Promise((resolveProbe) => {
-    const child = spawn(command, ["mcp", "--host", "local"], { stdio: ["pipe", "pipe", "pipe"] })
+    let child
+    try {
+      child = spawn(command, ["mcp", "--host", "local"], { stdio: ["pipe", "pipe", "pipe"], windowsHide: true, shell: false })
+    } catch (error) {
+      // Node refuses some spawns synchronously rather than through the 'error'
+      // event — a .cmd/.bat without a shell on Windows, a file that is not an
+      // executable. The probe still answers with JSON the agent can read.
+      resolveProbe({ connected: false, tools: [], reason: `Aside MCP could not be started (${error?.message ?? error})` })
+      return
+    }
     const timer = setTimeout(() => finish({ connected: false, tools: [], reason: "Aside MCP handshake timed out" }), 12000)
     timer.unref?.()
     let finished = false
@@ -60,6 +157,8 @@ async function asideProbe(command) {
       child.kill()
       resolveProbe(result)
     }
+    // Killing the CLI mid-write would otherwise surface as an unhandled EPIPE.
+    child.stdin.on("error", () => {})
     createInterface({ input: child.stdout, crlfDelay: Infinity }).on("line", (line) => {
       try {
         const message = JSON.parse(line)
@@ -84,17 +183,36 @@ async function buildProbe() {
   const platform = ["darwin", "win32", "linux"].includes(process.platform) ? process.platform : "unknown"
   const execution = localExecution() ? "local" : "remote"
   const version = osVersion()
-  let configured
+  // An explicit command (--aside-command, AU_LAW_ASIDE_COMMAND) is taken as
+  // given and never resolved against the working directory: a relative path
+  // would make the probe depend on where the agent happened to run it.
+  let explicit
   const commandIndex = process.argv.indexOf("--aside-command")
-  if (commandIndex >= 0) configured = process.argv[commandIndex + 1]
-  if (!configured && process.env.AU_LAW_ASIDE_COMMAND) configured = process.env.AU_LAW_ASIDE_COMMAND
-  if (!configured && existsSync(resolve(".au-law-followup-host.json"))) configured = (await readJson(resolve(".au-law-followup-host.json"))).asideCommand
-  const asideCommand = configured ? resolve(configured) : executable("aside")
-  const aside = platform === "darwin" && execution === "local" && asideCommand && existsSync(asideCommand) ? await asideProbe(asideCommand) : { connected: false, tools: [], reason: "Aside was not probed on an ineligible or unavailable host" }
-  const versionMatch = /^(\d+)(?:\.\d+){0,2}$/.exec(version)
-  const major = versionMatch ? Number(versionMatch[1]) : NaN
-  const eligible = platform === "darwin" && execution === "local" && major >= 15 && aside.connected && aside.tools.includes("repl")
-  return { schemaVersion: VERSION, probe: "local_companion", execution, platform, osVersion: version, asideConnected: aside.connected, asideTools: aside.tools, eligible, reason: eligible ? "Local macOS 15+ and Aside repl confirmed" : aside.reason ?? "Local platform or required Aside capability is ineligible", asideCommand, asideSchemas: aside.schemas }
+  if (commandIndex >= 0) explicit = process.argv[commandIndex + 1]
+  if (!explicit && process.env.AU_LAW_ASIDE_COMMAND) explicit = process.env.AU_LAW_ASIDE_COMMAND
+  // The same unwrapping the server does: a path pasted from Explorer's "Copy
+  // as path", or shown by a shell, arrives with its quotes attached.
+  if (explicit) explicit = explicit.trim().replace(/^"(.*)"$/, "$1").trim()
+  // The path setup recorded was right for the host that ran setup. A matter
+  // checkpoint travels between hosts, so a recorded path that is not here
+  // (a Mac .app path on a Windows PC, or the reverse) is re-derived for this
+  // platform rather than reported as missing.
+  let recorded
+  if (!explicit && existsSync(resolve(".au-law-followup-host.json"))) recorded = (await readJson(resolve(".au-law-followup-host.json"))).asideCommand
+  const asideCommand = explicit
+    ? (isAcceptableCommandPath(explicit, platform) ? explicit : undefined)
+    : recorded && isAcceptableCommandPath(recorded, platform) && existsSync(recorded) ? recorded : findAsideExecutable("aside")
+  const supported = platform in ASIDE_HOST_FLOORS
+  const aside = explicit && !isAcceptableCommandPath(explicit, platform)
+    ? { connected: false, tools: [], reason: `--aside-command / AU_LAW_ASIDE_COMMAND must be an absolute path in this host's own form (got ${JSON.stringify(explicit)}); on Windows a drive-letter path, e.g. C:\\Users\\<you>\\AppData\\Local\\Aside\\CLI\\current\\aside.exe` }
+    : supported && execution === "local" && asideCommand && existsSync(asideCommand)
+      ? await asideProbe(asideCommand)
+      : { connected: false, tools: [], reason: !supported ? `Aside was not probed: Aside ships no browser for ${platform}`
+        : execution !== "local" ? "Aside was not probed from a remote, WSL or container session"
+        : asideCommand ? `Aside was not probed: ${asideCommand} does not exist`
+        : `Aside was not probed: the CLI was not found at ${standardAsideCommand(platform)} or on PATH${recorded ? ` (the recorded ${recorded} is not on this host)` : ""}` }
+  const { eligible, reason } = hostEligibility({ platform, osVersion: version, execution, aside })
+  return { schemaVersion: VERSION, probe: "local_companion", execution, platform, osVersion: version, asideConnected: aside.connected, asideTools: aside.tools, eligible, reason, asideCommand, asideSchemas: aside.schemas }
 }
 async function probe() { json(await buildProbe()) }
 
@@ -316,5 +434,5 @@ if (isMainModule()) try {
   else if (command === "set-session" && folder && rest[0] && rest[1]) await setSession(folder, rest[0], rest[1])
   else if (command === "mark-disconnected" && folder && rest[0]) await markDisconnected(folder, rest[0])
   else if (command === "reconcile" && folder && rest[0]) await reconcile(folder, rest[0])
-  else die("Usage: followup.mjs probe [--aside-command PATH] | init <matter> [--mode missing_sources|extended] | status|set-policy|save-plan|record-evidence|record-assessment|checkpoint|stop|resume-matter <matter> | begin-task|resume-task|finish-task|set-session|mark-disconnected|reconcile <matter> <task-id> [options]")
+  else die("Usage: followup.mjs probe [--aside-command PATH] | init <matter> [--mode missing_sources|extended] | status|set-policy|save-plan|record-evidence|record-assessment|checkpoint|stop|resume-matter <matter> | begin-task|resume-task|finish-task|set-session|mark-disconnected|reconcile <matter> <task-id> [options]. Commands that read JSON from stdin also accept --input FILE.")
 } catch (error) { die(error instanceof Error ? error.message : String(error)) }

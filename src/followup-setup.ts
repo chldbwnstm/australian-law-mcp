@@ -1,5 +1,6 @@
 /**
- * Opt-in project-local installation for the macOS Aside companion workflow.
+ * Opt-in project-local installation for the local Aside companion workflow
+ * (macOS 15+ and 64-bit Windows 10/11).
  *
  * This command writes files. That is the whole reason its argument handling is
  * as strict as it is: `--help` is answered before anything is detected,
@@ -10,10 +11,12 @@
  */
 import { existsSync } from "node:fs"
 import { cp, mkdir, readFile, writeFile } from "node:fs/promises"
-import { platform } from "node:os"
-import { dirname, join, resolve } from "node:path"
+import { homedir, platform, release } from "node:os"
+import { dirname, join, posix, resolve, win32 } from "node:path"
 import { spawnSync } from "node:child_process"
 import { fileURLToPath } from "node:url"
+import { asideHostFloor, osMajor } from "./lib/research-followup.js"
+import { defaultAsideCommandPath } from "./lib/sources/aside-browser.js"
 
 export interface FollowupHost { platform: string; osVersion: string; local: boolean }
 
@@ -22,7 +25,7 @@ export interface FollowupHost { platform: string; osVersion: string; local: bool
  * writing, so the list of files cannot drift away from the install it
  * describes — a reader has to be able to predict what running it will do.
  */
-export const FOLLOWUP_USAGE = `au-law-mcp setup-followup — opt in to the local macOS Aside companion (preview)
+export const FOLLOWUP_USAGE = `au-law-mcp setup-followup — opt in to the local Aside companion (preview): macOS 15+ or 64-bit Windows 10/11
 
   au-law-mcp setup-followup --project DIR [--client codex|claude-code|both] [--aside-command PATH]
   au-law-mcp setup-followup --yes [...]      install into the current directory
@@ -34,10 +37,13 @@ Options:
                         the default is never taken in silence: with no --project
                         you must pass --yes.
   --client WHICH        codex, claude-code or both. Default: both.
-  --aside-command PATH  absolute path to the Aside executable, as shown in Aside's
-                        Developer settings. Default: the first "aside" on PATH.
-                        The path is recorded for desktop processes with a
-                        restricted PATH.
+  --aside-command PATH  absolute path to the Aside CLI executable, as shown in
+                        Aside's Developer settings. Default: the standard install
+                        location — macOS ~/.aside/cli/Aside CLI.app/Contents/MacOS/aside,
+                        Windows %LOCALAPPDATA%\\Aside\\CLI\\current\\aside.exe — then
+                        the first "aside" on PATH ("aside.exe" on Windows); the same
+                        order the server uses. The path is recorded for desktop
+                        processes with a restricted PATH.
   --yes, -y             accept the current directory as the project folder.
   --help, -h            print this and exit 0. Nothing is read, written or spawned.
 
@@ -45,7 +51,9 @@ An unrecognised flag is an error, not a no-op: "--dry-run" and "--projekt ./x"
 stop the command instead of installing with the defaults.
 
 What an install writes, all of it inside the project folder:
-  .au-law-followup-host.json          always. The Aside executable path, mode 0600
+  .au-law-followup-host.json          always. The Aside executable path; mode 0600 on
+                                      macOS, the project folder's inherited
+                                      permissions on Windows
   .mcp.json                           --client claude-code or both. Adds an "aside"
                                       MCP entry if there is not one already; every
                                       other server and setting is kept
@@ -58,19 +66,47 @@ What an install writes, all of it inside the project folder:
                                       overwritten if it is already there
 
 Nothing outside the project folder is touched: no home directory, no global client
-config. An eligible host is local macOS 15.0 or later; anything else is refused,
-and the core law server is unaffected either way.
+config. An eligible host is local macOS 15.0 or later, or local 64-bit Windows
+10/11; Linux, WSL, SSH sessions, Codespaces and dev containers are refused, and
+the core law server is unaffected either way.
 
 Afterwards: restart the client, then run the au-law-followup skill's probe before
 first use.`
 
+/** Same platforms and floors as the planner's `isEligibleLocalAside`; both read `ASIDE_HOST_FLOORS`. */
 export function followupHostEligibility(host: FollowupHost): { eligible: boolean; reason: string } {
   if (!host.local) return { eligible: false, reason: "Aside follow-up cannot be installed for a remote client execution host." }
-  if (host.platform !== "darwin") return { eligible: false, reason: "Aside follow-up is currently supported only on local macOS 15+. Standard law-server setup is unchanged." }
-  const match = /^(\d+)(?:\.\d+){0,2}$/.exec(host.osVersion)
-  const major = match ? Number(match[1]) : NaN
-  if (!Number.isFinite(major) || major < 15) return { eligible: false, reason: "Aside follow-up requires macOS 15.0 or later." }
-  return { eligible: true, reason: "Eligible local macOS host." }
+  const floor = asideHostFloor(host.platform)
+  if (!floor) {
+    return {
+      eligible: false,
+      reason: `Aside follow-up is supported only on local macOS 15+ and 64-bit Windows 10/11; this host reported ${host.platform}. Standard law-server setup is unchanged.`,
+    }
+  }
+  const major = osMajor(host.osVersion)
+  if (!Number.isFinite(major) || major < floor.minMajor) return { eligible: false, reason: `Aside follow-up requires ${floor.requirement}.` }
+  return { eligible: true, reason: `Eligible local ${floor.name} host.` }
+}
+
+/**
+ * The host this process is running on, as the eligibility check sees it.
+ *
+ * `sw_vers` on macOS, because `os.release()` there is the Darwin kernel
+ * version; `os.release()` on Windows, because it is the NT version
+ * (`10.0.26200` on Windows 11 24H2) and needs no shell-out. Anything else
+ * reports "unknown" and is refused by the platform check before the version
+ * is ever read.
+ */
+export function detectFollowupHost(env: NodeJS.ProcessEnv = process.env): FollowupHost {
+  const os = platform()
+  const osVersion = os === "darwin"
+    ? (spawnSync("/usr/bin/sw_vers", ["-productVersion"], { encoding: "utf8" }).stdout ?? "").trim() || "unknown"
+    : os === "win32" ? release() : "unknown"
+  return {
+    platform: os,
+    osVersion,
+    local: !(env.SSH_CONNECTION || env.SSH_TTY || env.WSL_DISTRO_NAME || env.CODESPACES || env.REMOTE_CONTAINERS),
+  }
 }
 
 export function mergeClaudeAside(config: Record<string, unknown>, asideCommand: string): Record<string, unknown> {
@@ -153,11 +189,38 @@ export function parseFollowupArgs(args: readonly string[]): FollowupOptions {
   }
 }
 
-function findExecutable(name: string): string | undefined {
+/**
+ * Resolve the Aside CLI in the same order as the server's `asideStatus`: a
+ * path is taken as given; a bare `aside` is looked for at the installer's
+ * standard location first (`defaultAsideCommandPath`, the same function),
+ * then on PATH (`;`-separated and `aside.exe` on Windows — only a real .exe,
+ * since Node cannot spawn a .cmd shim without a shell). Same order so the
+ * command this records is the one the extension switch would drive. The
+ * standard location comes first for a second reason on Windows: `install.ps1`
+ * edits only the *user* PATH, which a terminal opened before the install, and
+ * every desktop app, cannot see until restarted. Relative PATH entries are
+ * skipped on both platforms — a command that resolves against the current
+ * directory is not one to record in a config.
+ */
+export function findExecutable(
+  name: string,
+  env: NodeJS.ProcessEnv = process.env,
+  exists: (path: string) => boolean = existsSync,
+  host: NodeJS.Platform = process.platform,
+  home: string = homedir(),
+): string | undefined {
   if (name.includes("/") || name.includes("\\")) return resolve(name)
-  for (const directory of (process.env.PATH ?? "").split(":")) {
-    const candidate = join(directory, name)
-    if (existsSync(candidate)) return candidate
+  if (/^aside(?:\.exe)?$/i.test(name)) {
+    const standard = defaultAsideCommandPath(home, host, env)
+    if (exists(standard)) return standard
+  }
+  const paths = host === "win32" ? win32 : posix
+  const file = host === "win32" && !/\.exe$/i.test(name) ? `${name}.exe` : name
+  for (const entry of ((host === "win32" ? env.PATH ?? env.Path : env.PATH) ?? "").split(paths.delimiter)) {
+    const directory = host === "win32" ? entry.trim().replace(/^"(.*)"$/, "$1") : entry
+    if (!directory || !paths.isAbsolute(directory)) continue
+    const candidate = paths.join(directory, file)
+    if (exists(candidate)) return candidate
   }
   return undefined
 }
@@ -179,11 +242,7 @@ export async function runFollowupSetup(
 
   const options = parseFollowupArgs(args)
 
-  const host: FollowupHost = hostOverride ?? {
-    platform: platform(),
-    osVersion: platform() === "darwin" ? spawnSync("/usr/bin/sw_vers", ["-productVersion"], { encoding: "utf8" }).stdout.trim() : "unknown",
-    local: !(process.env.SSH_CONNECTION || process.env.SSH_TTY || process.env.WSL_DISTRO_NAME || process.env.CODESPACES || process.env.REMOTE_CONTAINERS),
-  }
+  const host: FollowupHost = hostOverride ?? detectFollowupHost()
   const eligibility = followupHostEligibility(host)
   if (!eligibility.eligible) throw new Error(eligibility.reason)
 
@@ -202,7 +261,19 @@ export async function runFollowupSetup(
 
   const asideCommand = findExecutable(options.asideCommand)
   if (!asideCommand || !existsSync(asideCommand)) {
-    throw new Error(`Aside executable not found (${options.asideCommand}). Pass the path shown in Aside Developer settings with --aside-command.`)
+    // A local-file absence established by existsSync may be reported as one —
+    // but it names exactly the places that were looked in, never "Aside is not
+    // installed": a path with a separator was checked as given and nowhere else.
+    const looked = /[\\/]/.test(options.asideCommand)
+      ? `at ${resolve(options.asideCommand)}`
+      : `at ${defaultAsideCommandPath(homedir(), process.platform)} or on PATH`
+    throw new Error(
+      `Aside CLI not found (${options.asideCommand}): nothing ${looked}. ` +
+        (process.platform === "win32"
+          ? "Install it by downloading https://releases.aside.com/install.ps1 and running it as a file (Windows x64), "
+          : "Install it with `curl -fsSL https://releases.aside.com/install.sh | bash`, ") +
+        "or pass the path shown in Aside's Developer settings with --aside-command.",
+    )
   }
   const sourceSkill = resolve(dirname(fileURLToPath(import.meta.url)), "../companion/au-law-followup")
   if (!existsSync(sourceSkill)) throw new Error("The packaged companion skill is missing. Reinstall au-law-mcp from a complete package.")

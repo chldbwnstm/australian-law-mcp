@@ -136,8 +136,6 @@ Analysis tools add four verdict labels of their own:
 }
 ```
 
-### Caching
-
 ### Structured research continuation
 
 Source, body, coverage, treatment, commencement, interpretation, truncation and
@@ -156,6 +154,35 @@ locators and coverage and never fetches, authenticates, or makes a legal verdict
 Browser execution and persistence belong to the project-local `au-law-followup`
 host skill. The law server remains stateless and cannot infer that its own host
 OS is the user's client OS.
+
+An eligibility result produces browser tasks only when every one of these
+holds: `execution` is `local` — the companion reports otherwise when
+`SSH_CONNECTION`, `SSH_TTY`, `WSL_DISTRO_NAME`, `CODESPACES` or
+`REMOTE_CONTAINERS` is set; `platform` is `darwin` with `osVersion` major ≥ 15,
+or `win32` with `osVersion` major ≥ 10 (Windows 10 and 11 — Windows 11 reports
+`10.0.<build>`, e.g. `10.0.26200`); `asideConnected` is true; and `asideTools`
+includes `repl`. `linux` (which is what WSL reports) and `unknown` never produce
+browser tasks. There is no architecture field: Aside for Windows is x64 only,
+and on ARM64 its CLI installer refuses, so Aside is simply not connected and the
+probe says so. The refusal reasons, verbatim:
+
+| Reason |
+|---|
+| `Browser follow-up requires local client execution.` |
+| `Aside browser follow-up is available only on macOS and Windows; this host reported linux.` |
+| `Aside browser follow-up requires macOS 15.0 or later.` |
+| `Aside browser follow-up requires Windows 10 or later.` |
+| `Aside MCP is not connected in this local host session.` |
+| `The connected Aside MCP does not expose its required repl tool.` |
+
+An eligible probe reads `Local macOS 15+ and Aside repl capability confirmed by
+the companion probe.` or `Local Windows 10+ and Aside repl capability confirmed
+by the companion probe.` A checkpoint made on one host can be read on another,
+but browser tasks run only if the fresh probe on the resuming host is eligible,
+and never with the other platform's recorded executable path — the probe
+re-derives it.
+
+### Caching
 
 | Kind | TTL |
 |---|---|
@@ -190,6 +217,40 @@ footprint on the public sources it reads.
 > 4.1 MiB. Setting `MCP_MAX_UPSTREAM_BODY_BYTES` below ~5 MiB makes `get_law_text`
 > fail on the largest Acts with `[EXTERNAL_API_ERROR]`, which a caller reads as
 > "not found".
+
+### Browser fallback
+
+`AU_LAW_ASIDE=1` (or `true`, `yes`, `on`, in any case; read as a value, so `false` and `""` are off) lets
+a lookup that a blocked host refuses be finished through the user's own Aside
+browser, on macOS 15+ or Windows 10/11 (x64). On any other platform — Linux,
+and WSL, which reports linux — the switch is a no-op, because Aside ships no
+Linux browser build, and the answer stays the `[UPSTREAM_BLOCKED]` note with
+the reason "The Aside browser fallback runs on macOS and Windows only; it is
+unavailable on this platform (`<platform>`)." The CLI is looked up in this order
+on both platforms:
+
+1. `AU_LAW_ASIDE_COMMAND`, if set — an absolute path in the host's own form:
+   `/Users/you/.aside/cli/Aside CLI.app/Contents/MacOS/aside`;
+   `C:\Users\you\AppData\Local\Aside\CLI\current\aside.exe` or a UNC path.
+   Surrounding quotes are tolerated; `%LOCALAPPDATA%` and `~` are not expanded,
+   by the server or by the desktop extension. A configured path that does not
+   exist is reported as "points at `<path>`, which does not exist" — never as
+   Aside being uninstalled.
+2. The standard location: `~/.aside/cli/Aside CLI.app/Contents/MacOS/aside` on
+   macOS; on Windows `%ASIDE_CLI_INSTALL_DIR%\current\aside.exe` if that
+   variable is set, else `%LOCALAPPDATA%\Aside\CLI\current\aside.exe`.
+3. `aside` on `PATH` — on Windows, `aside.exe` in each `;`-separated entry. A
+   `.cmd` shim is not accepted, because Node cannot spawn one without a shell.
+
+The server runs `aside repl --host local` with a whitelisted environment — the
+usual POSIX keys, and on Windows `SystemRoot`, `windir`, `SystemDrive`,
+`ProgramData`, `ProgramFiles`, `ProgramFiles(x86)`, `APPDATA`, `LOCALAPPDATA`,
+`USERPROFILE`, `HOMEDRIVE`, `HOMEPATH`, `TEMP`, `TMP`, `PATH`, `PATHEXT`,
+`COMSPEC`, `USERNAME` and `LANG` — never this server's own
+configuration or secrets. On timeout or cancellation the CLI's process group is
+killed on Unix; on Windows its process tree is killed with `taskkill /T /F /PID`
+while the CLI is alive, then `TerminateProcess` as the fallback. The fallback is
+confined to the blocked legal-source domains.
 
 ---
 

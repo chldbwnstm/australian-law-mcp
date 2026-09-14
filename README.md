@@ -17,20 +17,20 @@ evidence separate from its interpretation and recording what still needs checkin
 Evidence and progress are saved for the matter so you can resume the work later.
 
 The Aside workflow is an **optional preview in this repository**, available after
-project setup in local Codex or Claude Code sessions on **macOS 15 or later**.
-Windows supports the core law tools; Aside browser follow-up is not available
-there yet.
+project setup in local Codex or Claude Code sessions on **macOS 15 or later, or
+Windows 10/11 (x64)**. Linux and WSL get the core law tools only: Aside ships no
+Linux browser build, so the browser follow-up is a no-op there.
 
-The current source also strengthens automatic Aside case research: court and
-jurisdiction filters, result-page navigation, exact judgment identity checks,
-and source-linked follow-up when a judgment is too long or available only as a
-PDF. See the [Aside verification report](docs/ASIDE-ROBUSTNESS.md) for tested paths
-and remaining constraints. These latest fixes are not in the v1.0.3 installer.
+Automatic Aside case research applies court and jurisdiction filters, navigates
+result pages, checks judgment identity exactly, and returns source-linked
+follow-up when a judgment is too long or available only as a PDF. See the
+[Aside verification report](docs/ASIDE-ROBUSTNESS.md) for the paths tested on
+each platform and the constraints that remain.
 
 > **Download the extension, or build it here.** The desktop installer is
 > attached to the
 > [latest release](https://github.com/chldbwnstm/australian-law-mcp/releases/latest)
-> — `au-law-mcp-1.0.4.mcpb` (~4 MB), which the Claude desktop app installs by
+> — `au-law-mcp-1.0.5.mcpb` (~4 MB), which the Claude desktop app installs by
 > double-click. There is still no npm package (`npx -y au-law-mcp` answers
 > **404**), so a CLI, IDE or Codex client is registered from a checkout:
 > `npm ci --ignore-scripts && npm run build` gives it something to register, by
@@ -47,7 +47,7 @@ and remaining constraints. These latest fixes are not in the v1.0.3 installer.
 > **No legal-data API key is needed for the core law tools.** They use public
 > sources and work with Codex, Claude Desktop, Claude Code, Cursor, Windsurf,
 > VS Code, Zed, Gemini CLI, and other MCP clients. Aside browser research uses
-> the separate macOS setup below.
+> the separate Aside setup below (macOS 15+ or Windows 10/11 x64).
 
 ## Install
 
@@ -81,7 +81,7 @@ and remaining constraints. These latest fixes are not in the v1.0.3 installer.
 
 ### 2a. Claude desktop app — install the extension
 
-Download `au-law-mcp-1.0.4.mcpb` (~4 MB) from the
+Download `au-law-mcp-1.0.5.mcpb` (~4 MB) from the
 [latest release](https://github.com/chldbwnstm/australian-law-mcp/releases/latest),
 or open the copy someone sent you — it is the same file. No clone, no terminal,
 no Node.js.
@@ -95,7 +95,7 @@ To rebuild it from source instead:
 git clone https://github.com/chldbwnstm/australian-law-mcp
 cd australian-law-mcp
 npm ci --ignore-scripts
-npm run build:mcpb          # → release/au-law-mcp-1.0.4.mcpb
+npm run build:mcpb          # → release/au-law-mcp-1.0.5.mcpb
 ```
 
 That build unpacks the bundle, starts the server inside it and checks its tool
@@ -133,25 +133,28 @@ Consumer Act 2010**. Open the source link to see the original provision.
 If the app says the tools are unavailable, send: **“Please check and fix my
 Australian Law connection, then try again.”**
 
-### Optional: let the extension finish blocked sources (Mac, off by default)
+### Optional: let the extension finish blocked sources (Mac or Windows, off by default)
 
 Some publishers refuse this server outright, so questions about Federal Court
 judgments or anything AustLII-hosted come back as a blocked source and a link.
-On a Mac with [Aside](https://docs.aside.com/help/get-started) installed, you
+On a Mac (macOS 15+) or a Windows PC (Windows 10/11, x64) with
+[Aside](https://docs.aside.com/help/get-started) and its CLI installed, you
 can let the server finish those lookups in your own browser instead. In the
 Claude desktop app it is a switch on the extension itself —
 **Settings → Extensions → Australian Law → “Finish blocked legal sources using
 the Aside browser”** — so there is no file to edit and nothing to install into
 a project. Read
 [what that switch does and does not do](#optional-finishing-a-blocked-source-in-your-own-browser)
-before turning it on; with Aside absent it does nothing at all.
+before turning it on; with Aside absent it does nothing at all, and on Linux
+and WSL it is a documented no-op because Aside ships no Linux browser build.
 
-### Optional: add Aside browser research (macOS only)
+### Optional: add Aside browser research (macOS or Windows)
 
-**On macOS 15 or later, your AI can also use Aside to follow up source links,
-read accessible judgments and PDFs, and save its research progress.** This is a
-preview in the current source version. Windows users can use the standard law
-tools; Aside follow-up is not available on Windows yet.
+**On macOS 15 or later, or Windows 10/11 (x64), your AI can also use Aside to
+follow up source links, read accessible judgments and PDFs, and save its
+research progress.** This is a preview in the current source version. Linux and
+WSL users can use the standard law tools; Aside ships no Linux browser build, so
+Aside follow-up is a no-op there.
 
 This is the other half of the same gap, not a duplicate of the switch above.
 The switch lets the *server* finish one blocked lookup inside a single answer,
@@ -161,13 +164,20 @@ stop and resume — and it runs only in a local Codex or Claude Code session
 opened on a checkout, because Chat loads extensions and never loads a project
 skill.
 
-1. [Install Aside](https://docs.aside.com/help/get-started) and open it.
+1. [Install Aside](https://docs.aside.com/help/get-started) and open it. The
+   Aside CLI is needed as well: on macOS,
+   `curl -fsSL https://releases.aside.com/install.sh | bash`; on Windows,
+   download https://releases.aside.com/install.ps1 and run it as a file — it
+   refuses to run piped — which puts `aside.exe` under
+   `%LOCALAPPDATA%\Aside\CLI\current` and adds that folder to your user
+   `PATH`, so restart any app or terminal that was open before it ran.
 2. Open your project folder in a local Codex or Claude Code session, then send:
 
    ```text
    Add the Aside browser research preview to this project. Follow INSTALL.md
    in the Australian Law repository, using its current source version.
-   Check that my Mac is supported, find Aside, and handle the setup for me.
+   Check that my computer is supported (macOS 15 or later, or Windows 10/11
+   x64), find Aside, and handle the setup for me.
    Add only the Aside entry and the project skill; leave my existing Australian
    Law registration exactly as it is. Tell me if I need to restart the app, and
    verify both the law tools and Aside connection before saying it is ready.
@@ -189,8 +199,8 @@ troubleshooting, see [INSTALL.md](INSTALL.md).
 
 Copy a question into your AI app and ask it to use Australian Law. Replace the dates
 and provisions with those relevant to your matter; ask for source links and any
-limits on what was checked. The Aside examples require the optional Mac setup
-above and enable additional research for the selected matter.
+limits on what was checked. The Aside examples require the optional Aside setup
+above (macOS or Windows) and enable additional research for the selected matter.
 
 | Work on your desk | Example question |
 |---|---|
@@ -205,9 +215,10 @@ above and enable additional research for the selected matter.
 
 ---
 
-## Optional browser follow-up with Aside — source preview, macOS only
+## Optional browser follow-up with Aside — source preview, macOS and Windows
 
-**Available in this source tree on local macOS 15.0+ after project setup.**
+**Available in this source tree on local macOS 15.0+ or Windows 10/11 (x64)
+after project setup.**
 In Codex desktop or Claude Code desktop, your AI can use **Aside MCP** to retrieve
 missing originals, read judgment PDFs, investigate later citing decisions, and
 save evidence and progress for the matter. The AI starts with Australian Law MCP
@@ -219,20 +230,22 @@ runtime dependencies, not the `companion/` skill — so installing the desktop
 extension alone does not enable it. It needs a checkout and a local Codex or
 Claude Code session.
 
-| Feature | macOS | Windows |
-|---|---|---|
-| Existing Australian Law MCP tools | Supported | Supported |
-| Optional browser follow-up through Aside MCP | Preview in this source tree for local macOS 15.0+ with Aside installed and connected | Unavailable; deferred until Aside supports Windows and this integration is validated there |
+| Feature | macOS | Windows | Linux / WSL / remote |
+|---|---|---|---|
+| Existing Australian Law MCP tools | Supported | Supported | Supported |
+| Optional browser follow-up through Aside MCP | Preview in this source tree for local macOS 15.0+ with Aside and its CLI installed and connected | Preview in this source tree for local Windows 10/11 (x64) with Aside (1.0.914.1 or later, the first Windows build) and its CLI installed and connected | No-op: Aside ships no Linux browser build, and WSL and remote sessions are not local |
 
-Windows users can continue using the existing law tools and open remaining source
-links themselves. The companion also requires local execution: WSL, Linux, remote
-sessions and older macOS versions are unsupported. Windows browser follow-up will
-remain unavailable until Aside supports Windows and this integration is validated
-there; no alternative browser or remote-Mac workaround is included.
+Linux and WSL users can continue using the existing law tools and open remaining
+source links themselves. The companion also requires local execution: its
+eligibility probe refuses remote sessions (SSH, Codespaces, dev containers), WSL,
+macOS before 15.0 and Windows before 10, and Aside's Windows build is x64 only —
+on Windows on ARM64 the CLI installer refuses, so the probe finds no Aside CLI and
+reports Aside MCP as not connected. No alternative browser or remote-machine
+workaround is included.
 
 ### Enable Aside once for your project
 
-Follow the [simple Aside setup above](#optional-add-aside-browser-research-macos-only).
+Follow the [simple Aside setup above](#optional-add-aside-browser-research-macos-or-windows).
 Use the same project folder after setup so the AI can find its research skill
 and saved progress. Detailed commands and connection checks are in
 [INSTALL.md](INSTALL.md#optional-aside-follow-up-preview).
@@ -305,7 +318,11 @@ results and restricted sources; do not present this as a complete citator check.
 ### Check progress, stop or resume
 
 Keep the same project and matter folder when continuing, including after an app
-restart. Replace the path below with the matter you started:
+restart. A checkpoint written on one machine can be resumed on another, a Mac and
+a Windows PC included, but browser tasks run only if the resuming host's fresh
+eligibility probe passes, and that probe finds the Aside executable for its own
+platform itself — the other platform's recorded CLI path is never used. Replace
+the path below with the matter you started:
 
 | Action | Copy into the AI chat |
 |---|---|
@@ -320,7 +337,7 @@ session for rechecking. Login, MFA, CAPTCHA or access decisions may still need
 your input. Retrieving a document does not certify its authenticity or legal
 effect.
 
-The macOS lawyer pilot and broader source/reconnection checks remain outstanding,
+The macOS and Windows lawyer pilots and broader source/reconnection checks remain outstanding,
 and some legacy source tools do not yet emit structured follow-up gaps. See the
 [validation record and remaining limits](docs/AI-NATIVE-FOLLOWUP-VALIDATION.md),
 [installation instructions](INSTALL.md#optional-aside-follow-up-preview), and
@@ -612,10 +629,10 @@ This section is not a disclaimer. It is the list of things you would otherwise d
 
 ### Optional: finishing a blocked source in your own browser
 
-On a Mac with [Aside](https://docs.aside.com/help/get-started) installed, the server can finish an otherwise blocked case lookup through your local browser when the publisher allows that session to read the page. Automatic fallback is used by `search_cases` and `get_case_text`; the companion workflow coordinates broader research through Aside MCP.
+On a Mac or a Windows PC with [Aside](https://docs.aside.com/help/get-started) installed, the server can finish an otherwise blocked case lookup through your local browser when the publisher allows that session to read the page. Automatic fallback is used by `search_cases` and `get_case_text`; the companion workflow coordinates broader research through Aside MCP.
 
-- **Off by default, and it stays off until a person turns it on.** In the Claude desktop app: **Settings → Extensions → Australian Law → “Finish blocked legal sources using the Aside browser”**. On the CLI and Codex hosts, which have no settings UI, set `AU_LAW_ASIDE=1`; see [`.env.example`](.env.example) for both variables.
-- **macOS, with Aside installed, or nothing happens.** There is no Windows build, no bundled browser, no remote fallback. With Aside absent the switch has no effect whatever: blocked sources answer with the same `[UPSTREAM_BLOCKED]` note and deep link as before. Installing the extension does not give a Chat user Federal Court coverage, and turning this on does not give it to one without Aside.
+- **Off by default, and it stays off until a person turns it on.** In the Claude desktop app: **Settings → Extensions → Australian Law → “Finish blocked legal sources using the Aside browser”**. On the CLI and Codex hosts, which have no settings UI, set `AU_LAW_ASIDE=1` (`$env:AU_LAW_ASIDE='1'` in PowerShell); see [`.env.example`](.env.example) for both variables.
+- **macOS 15+ or Windows 10/11 (x64), with Aside installed, or nothing happens.** There is no bundled browser and no remote fallback, and Aside ships no Linux browser build, so on Linux and WSL the switch is a documented no-op. The server looks for the Aside CLI at `AU_LAW_ASIDE_COMMAND` if that is set, then at the standard location — `~/.aside/cli/Aside CLI.app/Contents/MacOS/aside` on macOS, `%LOCALAPPDATA%\Aside\CLI\current\aside.exe` on Windows (or `%ASIDE_CLI_INSTALL_DIR%\current\aside.exe` when that variable is set) — then as `aside` on `PATH` (`aside.exe` on Windows; a `.cmd` shim is not accepted). A configured path that does not exist is reported as pointing at that path, never as “Aside is not installed”. With Aside absent the switch has no effect whatever: blocked sources answer with the same `[UPSTREAM_BLOCKED]` note and deep link as before. Installing the extension does not give a Chat user Federal Court coverage, and turning this on does not give it to one without Aside.
 - **It drives a browser holding your logged-in sessions.** That is exactly why it gets past gates this server cannot, and exactly why it is fenced: the server may only point it at the blocked legal-source domains in the table above — the Federal Court, AustLII, LawCite, the NSW and SA registers, the ACCC, the Competition Tribunal, the Ombudsman. That list is derived from those rows; no question, tool argument or URL in a document can widen it.
 - **What comes back is labelled as browser-retrieved.** A page rendered in your own session is not the same evidence as a document a publisher's endpoint handed over, and the answer says which one it is.
 
@@ -640,15 +657,16 @@ was actually retrieved and what still needs follow-up.
 actionable source URL and citation for follow-up. A PDF viewer returns the original
 PDF link and an unresolved document-body task; it does not supply extracted PDF
 reasons. The companion can continue that task where the document is accessible.
-The [verification report](docs/ASIDE-ROBUSTNESS.md) includes an opt-in command for
-repeating the live MCP checks.
+The [verification report](docs/ASIDE-ROBUSTNESS.md) includes an opt-in command
+(`npm run verify:aside`, on macOS or Windows x64) for repeating the live MCP
+checks.
 
 **Why it exists.** With the extension installed and the switch off, ask Claude Desktop Chat for recent Federal Court decisions: the server reports the court as blocked, and Chat then answers from its own web search. That answer can read as though it came from here. It did not — nothing in it passed through this server's sources, citation parsing or blocked-source labelling. The switch is what lets the server answer that question itself, and when it is off the honest reading of “blocked” is *this server did not check*, not *the Federal Court has nothing*.
 
 ### What is materially incomplete even where it works
 
 - **No reported citations.** CLR, FCR, NSWLR and every other reported series is reachable only through AustLII/LawCite. `verify_citations` marks a reported citation `⚠`, never `✓` or `✗`.
-- **Direct case searches cover NSW, the High Court and Queensland.** On an opted-in Mac, Aside can also search the supported court and jurisdiction scopes through AustLII. Publisher access and document formats determine how much can be retrieved; a partial search is labelled accordingly.
+- **Direct case searches cover NSW, the High Court and Queensland.** On an opted-in Mac or Windows PC, Aside can also search the supported court and jurisdiction scopes through AustLII. Publisher access and document formats determine how much can be retrieved; a partial search is labelled accordingly.
 - **The citator is not complete.** `cite_check` scans what it can reach and reports the count it retrieved alongside the count the source claims — e.g. *"High Court of Australia: 12 mention(s) (source reports 74)"*. It never presents a partial scan as a clean bill of health.
 - **Judgment and determination text is often a PDF.** The FWC, the OAIC and the High Court publish reasons as PDF/DOCX behind an HTML metadata page. You get the metadata and the download link, and a note saying the reasons exist and were not received as text.
 - **Compiled text can lag the law in force.** Where the Register flags unincorporated commenced amendments, every response carries the warning. Cite the amending Act, not just the compilation.
@@ -679,8 +697,8 @@ Two settings apply in every mode, including the stdio server the desktop app lau
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `AU_LAW_ASIDE` | No | off | Allows the [browser fallback](#optional-finishing-a-blocked-source-in-your-own-browser) for sources the publisher blocks. Off unless set to `1` or `true` — read as a value, never as presence, because the desktop extension always sets it, to `"true"` or `"false"`. macOS with Aside installed; a no-op otherwise. |
-| `AU_LAW_ASIDE_COMMAND` | No | the standard install path | Full path to the Aside CLI, for an installation the server cannot find on its own. Empty means unset. Ignored while `AU_LAW_ASIDE` is off. |
+| `AU_LAW_ASIDE` | No | off | Allows the [browser fallback](#optional-finishing-a-blocked-source-in-your-own-browser) for sources the publisher blocks. Off unless set to `1`, `true`, `yes` or `on` (any case) — read as a value, never as presence, because the desktop extension always sets it, to `"true"` or `"false"`. macOS 15+ or Windows 10/11 (x64) with Aside installed; a documented no-op elsewhere, Linux and WSL included, because Aside ships no Linux browser build. |
+| `AU_LAW_ASIDE_COMMAND` | No | the standard install path for the host OS | Absolute path to the Aside CLI, in the host's own form — `/Users/you/.aside/cli/Aside CLI.app/Contents/MacOS/aside` on macOS, `C:\Users\you\AppData\Local\Aside\CLI\current\aside.exe` or a UNC path on Windows. Surrounding quotes are tolerated; `~` and `%LOCALAPPDATA%` are not expanded, by the server or by the desktop extension. A path that does not exist is reported as such, never as Aside missing. Empty means unset. Ignored while `AU_LAW_ASIDE` is off. |
 
 Everything below applies only when the server is started as an HTTP service (`--mode http`). The stdio server that Claude Desktop launches needs none of them.
 

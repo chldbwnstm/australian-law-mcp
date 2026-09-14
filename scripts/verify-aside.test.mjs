@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { inspectAsideResult } from "./verify-aside.mjs"
+import { inspectAsideResult, liveAsideHost } from "./verify-aside.mjs"
 
 const source = "https://www.judgments.fedcourt.gov.au/judgments/Judgments/fca/full/2020/2020fcafc0130"
 const citation = "[2020] FCAFC 130"
@@ -8,6 +8,13 @@ const judgment = `=== TPG ${citation} ===\nCitation: ${citation}\nSource: ${sour
 
 describe("live Aside report validation (offline)", () => {
   it("does not open a browser on import", () => expect(typeof inspectAsideResult).toBe("function"))
+  it("starts a live run only on macOS or Windows x64, where an Aside browser can be running", () => {
+    expect(liveAsideHost("darwin", "arm64").ok).toBe(true)
+    expect(liveAsideHost("darwin", "x64").ok).toBe(true)
+    expect(liveAsideHost("win32", "x64").ok).toBe(true)
+    expect(liveAsideHost("win32", "arm64")).toMatchObject({ ok: false, reason: expect.stringContaining("x64 only") })
+    expect(liveAsideHost("linux", "x64")).toMatchObject({ ok: false, reason: expect.stringContaining("no linux build") })
+  })
   it("recognizes successful exact retrieval", () => expect(inspectAsideResult(message(judgment), { citation }).status).toBe("retrieved"))
   it("rejects wrong citation and error-page reasons", () => {
     expect(() => inspectAsideResult(message(judgment), { citation: "[2020] FCAFC 13" })).toThrow("Exact judgment identity")

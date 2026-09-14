@@ -62,6 +62,12 @@ async function main() {
 
     check("manifest version matches package.json", manifest.version === pkg.version, manifest.version)
     check("entry point is build/index.js", manifest.server.entry_point === "build/index.js")
+    // Exact, not `includes`: an accidental "linux" would advertise the Aside
+    // switch on a platform Aside ships no browser for.
+    const platforms = [...(manifest.compatibility?.platforms ?? [])].sort()
+    check("manifest declares exactly darwin and win32", JSON.stringify(platforms) === JSON.stringify(["darwin", "win32"]), platforms.join(", "))
+    const switchTitle = manifest.user_config?.aside_followup?.title ?? ""
+    check("the Aside switch is not labelled for one platform", !/\b(?:mac|windows|pc)[ -]only\b/i.test(switchTitle), switchTitle)
 
     const { stdout, stderr, responses } = await speakMcp(extracted)
 
@@ -105,6 +111,27 @@ async function main() {
 
     const trace = stderr.split("\n").find((line) => /^\s+at\s|\bUnhandled|\bError:/.test(line))
     check("stderr carries no stack trace", !trace, trace?.trim().slice(0, 120))
+
+    // The extension switch, end to end and offline. With the fallback on and
+    // the CLI path pointing nowhere, a Federal Court lookup — a source the
+    // server never fetches itself — must come back as the blocked-source note
+    // that names the configured path, on whichever platform this runs. A
+    // server that still gated on macOS would answer "requires macOS" here on
+    // Windows, and the switch a Windows user sees would be a control that does
+    // nothing. No browser is involved: the path does not exist.
+    const missingCli = path.join(workDir, WIN ? "no-such\\aside.exe" : "no-such/aside")
+    const probe = await speakMcp(
+      extracted,
+      undefined,
+      { method: "tools/call", params: { name: "get_case_text", arguments: { citation: "[2020] FCAFC 130" } } },
+      { env: { AU_LAW_ASIDE: "true", AU_LAW_ASIDE_COMMAND: missingCli } },
+    )
+    const answer = (probe.responses.get(3)?.result?.content ?? []).filter((part) => part.type === "text").map((part) => part.text).join("\n")
+    check(
+      "switch on + missing CLI answers the blocked-source note naming that path, not a platform refusal",
+      /\[UPSTREAM_BLOCKED\]/.test(answer) && answer.includes(missingCli) && !/requires macOS|macOS and Windows only/i.test(answer),
+      answer.replace(/\s+/g, " ").slice(0, 200),
+    )
   } finally {
     await rm(workDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
   }

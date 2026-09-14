@@ -39,9 +39,13 @@ describe("client detection", () => {
 })
 
 describe("optional Aside companion setup", () => {
-  it("keeps Windows and remote hosts on standard research", () => {
-    expect(followupHostEligibility({ platform: "win32", osVersion: "11", local: true }).eligible).toBe(false)
+  it("admits local macOS 15+ and Windows 10/11, and keeps Linux, remote and older hosts on standard research", () => {
+    expect(followupHostEligibility({ platform: "win32", osVersion: "10.0.26200", local: true }).eligible).toBe(true)
+    expect(followupHostEligibility({ platform: "darwin", osVersion: "15.0", local: true }).eligible).toBe(true)
+    expect(followupHostEligibility({ platform: "win32", osVersion: "6.3.9600", local: true }).eligible).toBe(false)
+    expect(followupHostEligibility({ platform: "linux", osVersion: "6.8", local: true }).eligible).toBe(false)
     expect(followupHostEligibility({ platform: "darwin", osVersion: "15.0", local: false }).eligible).toBe(false)
+    expect(followupHostEligibility({ platform: "win32", osVersion: "10.0.26200", local: false }).eligible).toBe(false)
   })
 
   it("preserves unrelated Claude and Codex settings and reuses existing Aside entries", () => {

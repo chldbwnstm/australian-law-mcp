@@ -296,6 +296,20 @@ describe("the Aside browser fallback — off", () => {
     expect(text).toContain("Browser fallback (off)")
   })
 
+  // The reason reaches the user as plain text. A Windows path in it keeps its
+  // single backslashes: escaping it "for JSON" here would show C:\\Users\\….
+  it("shows a Windows reason verbatim, single backslashes and all", async () => {
+    const windowsPath = "C:\\Users\\tester\\AppData\\Local\\Aside\\CLI\\current\\aside.exe"
+    setAsideBridge({
+      asideStatus: () => ({ enabled: false, reason: `AU_LAW_ASIDE is on but the Aside CLI was not found at ${windowsPath} or anywhere on PATH.` }),
+      fetchViaAside: async () => { throw new Error("must not run") },
+    })
+    const text = (await getCaseText(noNetworkClient, { citation: "[2019] FCA 12" })).content[0].text
+    expect(text).toContain(windowsPath)
+    expect(text).not.toContain("C:\\\\Users")
+    expect(text).toContain("[UPSTREAM_BLOCKED]")
+  })
+
   it("adds it to a blocked jurisdiction too", async () => {
     const text = (await searchCases(noNetworkClient, { query: "negligence", jurisdiction: "Vic" })).content[0].text
     expect(text).toContain("Browser fallback (off)")

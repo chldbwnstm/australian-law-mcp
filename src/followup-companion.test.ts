@@ -4,11 +4,141 @@ import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { pathToFileURL } from "node:url"
 import { afterEach, describe, expect, it } from "vitest"
-import { beginTask, checkpoint, finishTask, initMatter, markDisconnected, resumeMatter, setSession } from "../companion/au-law-followup/scripts/followup.mjs"
+import { ASIDE_HOST_FLOORS as HELPER_FLOORS, beginTask, checkpoint, findAsideExecutable, finishTask, hostEligibility, initMatter, isAcceptableCommandPath, markDisconnected, resumeMatter, setSession, standardAsideCommand } from "../companion/au-law-followup/scripts/followup.mjs"
+import { ASIDE_HOST_FLOORS, isEligibleLocalAside } from "./lib/research-followup.js"
+import { defaultAsideCommandPath, isAbsoluteCommandPath } from "./lib/sources/aside-browser.js"
 
 const roots: string[] = []
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }) })
 const script = resolve("companion/au-law-followup/scripts/followup.mjs")
+
+/**
+ * The helper is copied into user projects and cannot import this package, so
+ * its eligibility rule and CLI resolver are copies of the server's. These
+ * tests are what keep the copies honest: same table, same paths, same verdicts.
+ */
+describe("companion host eligibility — the installed copy of the server's rule", () => {
+  it("keeps its floor table in lock-step with the server's", () => {
+    const shape = (table: Record<string, { name: string; minMajor: number }>) =>
+      Object.fromEntries(Object.entries(table).map(([platform, floor]) => [platform, { name: floor.name, minMajor: floor.minMajor }]))
+    expect(shape(HELPER_FLOORS)).toEqual(shape(ASIDE_HOST_FLOORS as never))
+  })
+
+  it("keeps its standard CLI path in lock-step with the server's", () => {
+    const env = { LOCALAPPDATA: "C:\\Users\\tester\\AppData\\Local" }
+    expect(standardAsideCommand("win32", env, "C:\\Users\\tester")).toBe(defaultAsideCommandPath("C:\\Users\\tester", "win32", env))
+    const custom = { ...env, ASIDE_CLI_INSTALL_DIR: "D:\\Tools\\AsideCLI" }
+    expect(standardAsideCommand("win32", custom, "C:\\Users\\tester")).toBe(defaultAsideCommandPath("C:\\Users\\tester", "win32", custom))
+    expect(standardAsideCommand("win32", {}, "C:\\Users\\tester")).toBe(defaultAsideCommandPath("C:\\Users\\tester", "win32", {}))
+    expect(standardAsideCommand("darwin", {}, "/Users/tester")).toBe(defaultAsideCommandPath("/Users/tester", "darwin", {}))
+  })
+
+  const connected = { connected: true, tools: ["repl", "exec"] }
+  it.each([
+    ["win32", "10.0.26200", "local", connected],
+    ["win32", "10.0.19045", "local", connected],
+    ["darwin", "15.1", "local", connected],
+    ["win32", "6.3.9600", "local", connected],
+    ["win32", "10.0.26200", "remote", connected],
+    ["linux", "6.8", "local", connected],
+    ["unknown", "unknown", "local", connected],
+    ["darwin", "14.7", "local", connected],
+    ["win32", "10.0.26200", "local", { connected: false, tools: [] }],
+    ["win32", "10.0.26200", "local", { connected: true, tools: ["exec"] }],
+  ] as const)("decides %s %s (%s) the same way as the server", (platform, osVersion, execution, aside) => {
+    const helper = hostEligibility({ platform, osVersion, execution, aside })
+    const server = isEligibleLocalAside({ probe: "local_companion", execution, platform: platform as never, osVersion, asideConnected: aside.connected, asideTools: [...aside.tools] as never })
+    expect(helper.eligible).toBe(server.eligible)
+    expect(typeof helper.reason).toBe("string")
+    expect(helper.reason.length).toBeGreaterThan(0)
+  })
+
+  it("resolves aside.exe in the server's order — the installer's location, then PATH with relative entries skipped", () => {
+    const env = { PATH: `.;"C:\\Program Files\\Tools";C:\\Tools`, LOCALAPPDATA: "C:\\Users\\tester\\AppData\\Local" }
+    const standard = "C:\\Users\\tester\\AppData\\Local\\Aside\\CLI\\current\\aside.exe"
+    const probed: string[] = []
+    expect(findAsideExecutable("aside", "win32", env, (path: string) => { probed.push(path); return path === "C:\\Tools\\aside.exe" }, "C:\\Users\\tester")).toBe("C:\\Tools\\aside.exe")
+    expect(probed[0]).toBe(standard)
+    expect(probed).toContain("C:\\Program Files\\Tools\\aside.exe")
+    expect(probed.every((path) => /^[A-Za-z]:\\/.test(path))).toBe(true)
+    expect(findAsideExecutable("aside", "win32", env, (path: string) => path === standard || path === "C:\\Tools\\aside.exe", "C:\\Users\\tester")).toBe(standard)
+    expect(findAsideExecutable("aside", "win32", env, () => false, "C:\\Users\\tester")).toBeUndefined()
+    expect(findAsideExecutable("aside", "darwin", { PATH: ".:/usr/local/bin:/usr/bin" }, (path: string) => path === "/usr/bin/aside", "/Users/tester")).toBe("/usr/bin/aside")
+    expect(findAsideExecutable("aside", "darwin", { PATH: "." }, (path: string) => path === "aside", "/Users/tester")).toBeUndefined()
+  })
+
+  it("accepts exactly the configured paths the server accepts, on both platforms", () => {
+    const candidates = [
+      "/Applications/Aside.app/Contents/MacOS/aside", "aside", "C:\\Users\\tester\\aside.exe", "C:/Users/tester/aside.exe",
+      "\\\\fileserver\\tools\\aside.exe", "\\Aside\\CLI\\current\\aside.exe", "/Users/tester/aside", "%LOCALAPPDATA%\\Aside\\CLI\\current\\aside.exe", "~\\aside.exe", "",
+    ]
+    for (const platform of ["darwin", "win32"] as const) {
+      for (const candidate of candidates) {
+        expect(isAcceptableCommandPath(candidate, platform), `${platform} ${candidate}`).toBe(isAbsoluteCommandPath(candidate, platform))
+      }
+    }
+    // and the standard path ignores relative overrides the same way the server does
+    const relative = { LOCALAPPDATA: "AppData\\Local", ASIDE_CLI_INSTALL_DIR: "tools" }
+    expect(standardAsideCommand("win32", relative, "C:\\Users\\tester")).toBe(defaultAsideCommandPath("C:\\Users\\tester", "win32", relative))
+  })
+
+  // The probe spawns the CLI. These cases must be decided before that, and
+  // must produce JSON the agent can read rather than a non-zero exit.
+  it.each([
+    ["a drive-less Windows path the server would refuse", "\\Aside\\CLI\\current\\aside.exe"],
+    ["an unexpanded %LOCALAPPDATA%", "%LOCALAPPDATA%\\Aside\\CLI\\current\\aside.exe"],
+    ["a bare name", "aside"],
+    ["a relative path", "./aside"],
+  ])("refuses %s as --aside-command without spawning anything", (_name, configured) => {
+    const output = execFileSync(process.execPath, [script, "probe", "--aside-command", configured], { encoding: "utf8", env: { ...process.env, AU_LAW_ASIDE_COMMAND: undefined } })
+    const probe = JSON.parse(output)
+    expect(probe).toMatchObject({ eligible: false, asideConnected: false })
+    expect(probe.reason).toContain("absolute path")
+    expect(probe.asideCommand).toBeUndefined()
+  })
+
+  it("answers with JSON, not a crash, when the configured command cannot be started at all", () => {
+    const root = mkdtempSync(join(tmpdir(), "au-law-followup-badcli-")); roots.push(root)
+    // A file that exists and is absolute, but is not something Node can spawn:
+    // on Windows a .cmd without a shell throws synchronously (EINVAL).
+    const wrapper = join(root, process.platform === "win32" ? "aside.cmd" : "aside")
+    writeFileSync(wrapper, process.platform === "win32" ? "@echo off\r\n" : "#!/bin/sh\nexit 9\n", { mode: 0o644 })
+    const output = execFileSync(process.execPath, [script, "probe", "--aside-command", wrapper], { encoding: "utf8" })
+    const probe = JSON.parse(output)
+    expect(probe.eligible).toBe(false)
+    expect(probe.asideConnected).toBe(false)
+    expect(typeof probe.reason).toBe("string")
+  })
+
+  it("reads a JSON payload from --input as UTF-8, for a shell that re-encodes a pipe", () => {
+    const root = mkdtempSync(join(tmpdir(), "au-law-followup-input-")); roots.push(root)
+    execFileSync(process.execPath, [script, "init", root, "--mode", "missing_sources"])
+    const payload = join(root, "plan.json")
+    const task = { id: "t1", gapIds: ["g1"], dependsOn: [], action: "read_source", route: "aside_repl", expectedEvidence: ["passage — “§ 18” café ⚖️"], state: "planned" }
+    writeFileSync(payload, "\uFEFF" + JSON.stringify({ schemaVersion: "1.0", tasks: [task], gaps: [] }), "utf8")
+    const saved = JSON.parse(execFileSync(process.execPath, [script, "save-plan", root, "--input", payload], { encoding: "utf8" }))
+    expect(saved).toEqual({ savedTasks: 1, totalTasks: 1 })
+    expect(JSON.parse(readFileSync(join(root, ".au-law-followup/checkpoint.json"), "utf8")).tasks[0].expectedEvidence).toEqual(task.expectedEvidence)
+  })
+
+  it("dispatches on a Windows-shaped probe exactly as on a Mac, recording the Windows host on the task", async () => {
+    const root = mkdtempSync(join(tmpdir(), "au-law-followup-win-")); roots.push(root)
+    await initMatter(root, "missing_sources")
+    const checkpointPath = join(root, ".au-law-followup/checkpoint.json")
+    const initial = JSON.parse(readFileSync(checkpointPath, "utf8"))
+    initial.tasks = [{ id: "one", gapIds: ["g1"], dependsOn: [], action: "read_source", route: "aside_repl", expectedEvidence: ["body"], state: "planned" }]
+    initial.gaps = [{ id: "g1", sourceAccess: "permitted" }]
+    writeFileSync(checkpointPath, JSON.stringify(initial))
+    const windowsProbe = async () => ({ eligible: true, reason: "test", platform: "win32", osVersion: "10.0.26200", asideTools: ["repl"] })
+    const savedArgv = process.argv
+    try {
+      process.argv = ["node", "test", "--pages", "1", "--documents", "0"]
+      await beginTask(root, "one", false, windowsProbe)
+      const state = JSON.parse(readFileSync(checkpointPath, "utf8"))
+      expect(state.tasks[0]).toEqual(expect.objectContaining({ state: "running", eligibility: expect.objectContaining({ platform: "win32", osVersion: "10.0.26200" }) }))
+    } finally { process.argv = savedArgv }
+  })
+})
 
 describe("companion checkpoints", () => {
   it("has no CLI side effects when imported", () => {

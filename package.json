@@ -1,6 +1,6 @@
 {
   "name": "au-law-mcp",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "MCP server for Australian law — legislation, case law and delegated instruments from keyless public sources, exposed as MCP tools and a natural-language CLI",
   "type": "module",
   "main": "build/index.js",
@@ -43,6 +43,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.automation.json --noEmit",
     "verify:stdio": "node ./scripts/verify-stdio.mjs",
+    "verify:mcpb": "node ./scripts/verify-mcpb.mjs",
     "verify:aside": "node ./scripts/verify-aside.mjs",
     "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },

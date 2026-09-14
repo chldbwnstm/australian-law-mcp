@@ -1,10 +1,12 @@
-# Optional browser follow-up with Aside — macOS only
+# Optional browser follow-up with Aside — macOS and Windows
 
-Status: implemented as an unreleased source preview on 2026-09-10. The law server
-now emits and preserves versioned structured gaps, exposes stateless planning and
-supplied-evidence checking, and packages a project-local host skill with macOS/Aside
-eligibility, matter budgets and resumable checkpoints. The handshake and public-page
-smoke result are recorded below; the lawyer pilot and verified Aside `exec`
+Status: implemented as an unreleased source preview on 2026-09-10; local Windows
+10/11 (x64) hosts are eligible on the same terms since Aside 1.0.914.1 shipped
+its Windows build (2026-09-14). The law server emits and preserves versioned
+structured gaps, exposes stateless planning and supplied-evidence checking, and
+packages a project-local host skill with macOS/Windows/Aside eligibility, matter
+budgets and resumable checkpoints. The macOS handshake and public-page smoke
+result are recorded below; the lawyer pilots and verified Aside `exec`
 cancellation semantics remain release gates.
 
 ## Product decision
@@ -21,14 +23,15 @@ existing client settings or buttons.
 
 | Option | Behavior | Scope |
 |---|---|---|
-| Standard research | Use the law tools and show remaining gaps | Existing default on macOS and Windows; no browser dependency |
-| Complete missing sources with Aside | Use law tools first, then retrieve missing originals through Aside | Recommended opt-in on macOS 15.0+ only |
-| Extended research with Aside | Also search unsupported jurisdictions and later citing decisions, and draft an evidence-based interpretation | macOS 15.0+ only; optional larger research budget |
+| Standard research | Use the law tools and show remaining gaps | Existing default on macOS, Windows and Linux; no browser dependency |
+| Complete missing sources with Aside | Use law tools first, then retrieve missing originals through Aside | Recommended opt-in on macOS 15.0+ and Windows 10/11 (x64) |
+| Extended research with Aside | Also search unsupported jurisdictions and later citing decisions, and draft an evidence-based interpretation | macOS 15.0+ or Windows 10/11 (x64); optional larger research budget |
 
-The initial feature uses **Aside MCP exclusively**. Windows browser follow-up is
-deferred until Aside supports Windows and the integration passes its Windows
-acceptance checks. Do not add a Playwright, Chrome/Edge, Ego Lite, remote Mac, or
-other browser fallback. Existing law tools remain available on Windows. This is
+The feature uses **Aside MCP exclusively**. Aside ships a Windows (x64) build from
+1.0.914.1, so a local Windows 10/11 (x64) session is eligible on the same terms
+as macOS 15.0+. Do not add a Playwright, Chrome/Edge, Ego Lite, remote Mac, or
+other browser fallback. Aside ships no Linux browser build, so the fallback is a
+no-op on Linux and WSL; the existing law tools remain available there. This is
 the chosen product scope, not a limitation of MCP as a protocol.
 
 Once a user selects browser follow-up for a matter, remember it for that matter.
@@ -47,9 +50,25 @@ Aside documents a local MCP command, `aside mcp`, and recommends using the
 concrete CLI executable path when available. Its REPL supports direct inspection,
 screenshots, and downloads. [Aside developer documentation](https://docs.aside.com/help/developers)
 
-The documented platform requirement is macOS 15.0 or later. Target local macOS
-sessions for the first release; keep standard research available on other
+The documented platform requirements are macOS 15.0 or later and, from Aside
+1.0.914.1, Windows 10/11 on x64; there is no ARM64 or Linux build. Target local
+macOS and Windows sessions; keep standard research available on other
 platforms. [Aside setup requirements](https://docs.aside.com/help/get-started)
+
+The macOS CLI is installed by `curl -fsSL https://releases.aside.com/install.sh | bash`
+to `~/.aside/cli/Aside CLI.app/Contents/MacOS/aside` (and `~/.local/bin/aside`).
+The Windows CLI is installed by downloading
+`https://releases.aside.com/install.ps1` and running it as a file (it refuses to
+run piped, and it refuses on ARM64). It installs
+`%LOCALAPPDATA%\Aside\CLI\versions\<ver>\aside.exe` behind the junction
+`%LOCALAPPDATA%\Aside\CLI\current\aside.exe` and appends
+`%LOCALAPPDATA%\Aside\CLI\current` to the user PATH; an app started before that
+(Claude Desktop, an open terminal) must be restarted to see it. Setting
+`ASIDE_CLI_INSTALL_DIR` moves the install, in which case the CLI is
+`<dir>\current\aside.exe`. On both platforms `aside repl --host local` needs no
+CLI sign-in while the app is running; `exec` with Aside's built-in models needs
+a signed-in account. The Windows CLI prints the same stdout framing as the
+macOS one (the page, then a dim `[ok | Nms]` trailer, LF line endings).
 
 Local inspection on 2026-09-10 returned browser version `1.0.825.1` and MCP server
 version `1.26.902.1732`. `initialize` and `tools/list` succeeded using
@@ -75,7 +94,7 @@ These are release gates, not capabilities to invent in a wrapper.
 flowchart TD
     U[User in Claude Code or Codex] --> H[Host agent and research workflow]
     H <-->|Search, provisions, structured gaps| L[Australian Law MCP]
-    H <-->|repl or bounded exec task| A[Aside MCP on the user's Mac]
+    H <-->|repl or bounded exec task| A[Aside MCP on the user's Mac or Windows PC]
     A <--> B[Aside browser and permitted website sessions]
     H <--> E[Local matter evidence files]
     H --> V[Evidence checks and cited analysis]
@@ -107,36 +126,71 @@ checking should remain available without that upload.
 ## User experience
 
 At setup, check the local client execution environment before detecting Aside.
-Only local macOS 15.0+ sessions are eligible for the browser options. Windows,
-WSL, Linux, older macOS, and unknown or remote execution environments retain
-standard research. Do not use the law server's operating system for this check:
-a hosted law server can still serve an eligible local Mac client.
+Only local macOS 15.0+ and local Windows 10/11 (x64) sessions are eligible for
+the browser options. Linux, WSL, older macOS, older Windows, and unknown or
+remote execution environments retain standard research. Do not use the law
+server's operating system for this check: a hosted law server can still serve an
+eligible local client.
 
-On an eligible Mac, detect whether the law tools and Aside tools are connected.
-If Aside is absent, offer the optional connection and preserve standard research.
-If installed, reuse the existing configuration rather than registering duplicates.
-Detect capabilities from the current tool list, then perform a benign public-page
-smoke check as part of installation validation before declaring the feature ready.
+The eligibility rule — applied by `plan_research_followup` to the companion's
+probe, by `setup-followup` before it writes anything, and by the
+`au-law-followup` skill's own probe — accepts a host only when every one of
+these holds:
 
-On Windows, show this message when browser follow-up is requested:
+- Execution is local: refused when `SSH_CONNECTION`, `SSH_TTY`,
+  `WSL_DISTRO_NAME`, `CODESPACES` or `REMOTE_CONTAINERS` is set.
+- The platform is `darwin` with an OS major version of 15 or more, or `win32`
+  with an `os.release()` major of 10 or more. That covers Windows 10 and 11:
+  Windows 11 reports `10.0.<build>` (for example `10.0.26200`), so the rule is
+  never written as "Windows 11 or later".
+- Aside MCP is connected and its tool list includes `repl`.
 
-> Aside browser follow-up is currently available only on macOS. Windows support
-> is deferred until Aside supports Windows and this integration is validated
-> there. I'll continue with the Australian Law tools and list the source links
-> that still need checking.
+Windows on ARM64 is not refused by a platform rule: `install.ps1` refuses there
+(x64 only), so the CLI is not found, Aside MCP is not connected, and the probe
+says so.
 
-Do not prompt Windows users to install Aside, create Aside configuration entries,
-or call another connected browser as a substitute. Preserve unresolved gaps.
-Report the platform limitation once per matter unless the user asks again.
+On an eligible Mac or Windows PC, detect whether the law tools and Aside tools
+are connected. If Aside is absent, offer the optional connection and preserve
+standard research. If installed, reuse the existing configuration rather than
+registering duplicates. Detect capabilities from the current tool list, then
+perform a benign public-page smoke check as part of installation validation
+before declaring the feature ready.
+
+On an ineligible host, the planner's reason is the message shown when browser
+follow-up is requested. `plan_research_followup` decides eligibility from the
+probe fields it is given and states one of these fixed strings (the installed
+helper's own `probe` output carries a shorter `reason` of its own, from the
+same floor table, for the agent's eyes before planning):
+
+- `Browser follow-up requires local client execution.`
+- `Aside browser follow-up is available only on macOS and Windows; this host reported linux.`
+  (the platform name is the one the host reported)
+- `Aside browser follow-up requires macOS 15.0 or later.`
+- `Aside browser follow-up requires Windows 10 or later.`
+- `Aside MCP is not connected in this local host session.`
+- `The connected Aside MCP does not expose its required repl tool.`
+
+Follow the reason with the continuation: "I'll continue with the Australian Law
+tools and list the source links that still need checking." An eligible probe
+reports `Local macOS 15+ and Aside repl capability confirmed by the companion
+probe.` or `Local Windows 10+ and Aside repl capability confirmed by the
+companion probe.`
+
+Do not prompt Linux or WSL users to install Aside, create Aside configuration
+entries, or call another connected browser as a substitute. Preserve unresolved
+gaps. Report the platform limitation once per matter unless the user asks again.
 
 The companion workflow's local capability check runs before planning browser
 tasks and again before dispatch or resume. It must establish the local platform,
 OS version, local Aside connection, and required tools; an LLM assertion or a
 client-supplied `browser: "aside"` value cannot enable the feature. A checkpoint
-created on a Mac can still be read on Windows, but its browser tasks cannot run.
-If the environment cannot be established, keep those tasks unresolved while
-allowing the existing law tools to run. These are design requirements for the
-companion executor; the law server cannot enforce another MCP server's usage.
+made on one host can be read on another, but its browser tasks run only if the
+fresh probe on the resuming host is eligible, and never with the other
+platform's recorded `asideCommand` (a Mac `.app` path does not exist on
+Windows): the probe re-derives the executable. If the environment cannot be
+established, keep those tasks unresolved while allowing the existing law tools
+to run. These are design requirements for the companion executor; the law
+server cannot enforce another MCP server's usage.
 
 Illustrative conversation:
 
@@ -249,7 +303,7 @@ interface ResearchGap {
 
 interface FollowupPolicy {
   mode: "off" | "missing_sources" | "extended";
-  browser: "aside";           // Sole browser provider; eligible local Mac only
+  browser: "aside";           // Sole browser provider; eligible local Mac or Windows PC only
   maxPages: number;
   maxDocuments: number;
   maxElapsedSeconds: number;
@@ -360,11 +414,16 @@ provide its session reference. Do not silently respawn it or claim it was stoppe
 ## Connection templates
 
 These configure the browser server alongside the user's existing Australian Law
-server in an eligible **local macOS 15.0+ session only**. Setup must pass the
-platform check before offering or writing either configuration; neither is a
-Windows installation recipe. They are templates, not changes made by this design.
-Use the executable
-path reported by Aside Developer settings when a desktop process lacks shell PATH.
+server in an eligible **local macOS 15.0+ or Windows 10/11 (x64) session**.
+Setup must pass the platform check before offering or writing either
+configuration. They are templates, not changes made by this design. Use the
+executable path reported by Aside Developer settings when a desktop process
+lacks shell PATH; on Windows, an app started before `install.ps1` appended
+`%LOCALAPPDATA%\Aside\CLI\current` to the user PATH has not seen it, which is
+why `setup-followup` records the absolute path (resolved in the server's own
+order: `%ASIDE_CLI_INSTALL_DIR%\current\aside.exe` if that variable is set, else
+`%LOCALAPPDATA%\Aside\CLI\current\aside.exe`, then `aside.exe` on PATH) in
+`.au-law-followup-host.json`.
 The local-host argument was verified in the installed CLI and handshake.
 
 Codex `config.toml`:
@@ -372,6 +431,18 @@ Codex `config.toml`:
 ```toml
 [mcp_servers.aside]
 command = "aside"
+args = ["mcp", "--host", "local"]
+enabled_tools = ["repl", "exec"]
+tool_timeout_sec = 150
+```
+
+The same entry with the Windows executable written out. Every backslash is
+doubled because this is a TOML basic string, where a single backslash starts an
+escape; `setup-followup` writes this escaped form:
+
+```toml
+[mcp_servers.aside]
+command = "C:\\Users\\you\\AppData\\Local\\Aside\\CLI\\current\\aside.exe"
 args = ["mcp", "--host", "local"]
 enabled_tools = ["repl", "exec"]
 tool_timeout_sec = 150
@@ -390,6 +461,21 @@ Claude Code project `.mcp.json`:
 }
 ```
 
+With the Windows executable written out. Backslashes are doubled because JSON
+strings escape them; `setup-followup` writes the file through `JSON.stringify`,
+so the doubled form on disk is correct and reads back as a single backslash:
+
+```json
+{
+  "mcpServers": {
+    "aside": {
+      "command": "C:\\Users\\you\\AppData\\Local\\Aside\\CLI\\current\\aside.exe",
+      "args": ["mcp", "--host", "local"]
+    }
+  }
+}
+```
+
 Preserve existing server entries and user permission settings when an installer
 eventually applies these. Use the current client-supported permission controls
 to limit tools; do not invent a Claude JSON equivalent of Codex's tool allowlist.
@@ -397,21 +483,28 @@ The timeout accommodates one REPL call and is not an indefinite `exec` allowance
 Aside account selection, full task result schemas, and app reconnection behavior
 must be checked on the pilot versions.
 
-Windows support is deferred. Revisit it only after Aside provides a supported
-Windows browser and MCP runtime. Before enabling it, verify installation, the
-MCP handshake, source retrieval, downloads and paths, permission handling, and
-resume/cancellation in the supported Windows clients. An Aside Windows release
-alone must not automatically enable an untested integration. No alternative
-browser provider or remote Mac setup is part of this implementation plan.
+Windows support follows Aside 1.0.914.1, which ships the Windows (x64) browser
+and CLI. The eligibility rule, budgets, checkpoints and evidence rules are the
+same on both platforms; only the executable lookup, the child environment and
+process cleanup are platform-specific. Of the checks this paragraph has always
+demanded, installation, the MCP handshake, source retrieval and executable-path
+handling are recorded for Windows in
+[AI-NATIVE-FOLLOWUP-VALIDATION.md](AI-NATIVE-FOLLOWUP-VALIDATION.md) and
+[ASIDE-ROBUSTNESS.md](ASIDE-ROBUSTNESS.md); document downloads, permission
+handling and client resume/cancellation remain on the pilot list for that
+platform. What is recorded is recorded from real
+Windows runs, never written in advance. Aside ships no Linux browser build, so
+the fallback is a no-op on Linux and WSL. No alternative browser provider or
+remote Mac setup is part of this implementation.
 
 ## Implementation sequence
 
 | Phase | Changes | Acceptance gate |
 |---|---|---|
-| 1. Structured continuation | Add gap/policy schemas, source gap emitters, planning tool, macOS eligibility checks, text fallback, and propagation through aggregates/transports | Existing behavior retained on macOS and Windows; unsupported clients receive no executable browser tasks; blocked or timed-out branches retain their gaps |
-| 2. Aside original retrieval | Package the macOS host workflow, Aside-only connection diagnostics, REPL route, local evidence manifest, and evidence checker | Real original retrieved on a Mac, identity matched, exact passage cited, inaccessible source still reported honestly |
+| 1. Structured continuation | Add gap/policy schemas, source gap emitters, planning tool, macOS/Windows eligibility checks, text fallback, and propagation through aggregates/transports | Existing behavior retained on macOS, Windows and Linux; ineligible hosts receive no executable browser tasks; blocked or timed-out branches retain their gaps |
+| 2. Aside original retrieval | Package the macOS and Windows host workflow, Aside-only connection diagnostics, REPL route, local evidence manifest, and evidence checker | Real original retrieved on both a Mac and a Windows PC, identity matched, exact passage cited, inaccessible source still reported honestly |
 | 3. Extended research | Bounded `exec`, continuation, PDF extraction/OCR, later-case search and supported analysis | Real completion/cancellation behavior verified; coverage and unresolved issues survive restart |
-| 4. macOS pilot | Lawyer pilot in local Claude Code and Codex sessions with Aside; Windows standard-research regression checks | Measured accuracy and interaction reduction on macOS; Windows retains existing tools without browser follow-up |
+| 4. macOS and Windows pilots | Lawyer pilots in local Claude Code and Codex sessions with Aside on both platforms; Linux/WSL standard-research regression checks | Measured accuracy and interaction reduction on macOS and Windows; Linux and WSL retain existing tools without browser follow-up |
 
 Implementation touchpoints:
 
@@ -425,24 +518,30 @@ Implementation touchpoints:
 - `src/tool-registry.ts`, `src/lib/tool-profiles.ts`, CLI response handling, and
   transport validation: preserve envelopes and keep the advertised list compact.
 - `src/index.ts`: concise initialization instructions for browser continuation.
-- `src/setup.ts` and installation docs: optional macOS-only Aside connection setup;
-  preserve Windows law-server installation without adding browser configuration.
+- `src/followup-setup.ts` (`setup-followup`) and installation docs: optional Aside
+  connection setup on macOS and Windows; preserve Linux and WSL law-server
+  installation without adding browser configuration.
 - Companion workflow packages for Codex and Claude Code: host tool routing,
-  local macOS eligibility checks at setup/dispatch/resume, Aside-only execution,
-  budgets, local checkpoints, and evidence reporting. No new LLM dependency in
-  the law server. Reject any browser provider other than `aside` in the schema.
+  local macOS/Windows eligibility checks at setup/dispatch/resume, Aside-only
+  execution, budgets, local checkpoints, and evidence reporting. No new LLM
+  dependency in the law server. Reject any browser provider other than `aside`
+  in the schema.
 
 ## Validation before claiming support
 
 Test meaningful failure cases as well as successful retrieval:
 
 - Browser off or missing: existing results work and the continuation is optional.
-- Windows or WSL: existing law tools work, no Aside install/configuration is
+- Windows 10/11 (x64) with Aside: the same acceptance as macOS — retrieval,
+  identity match, exact passage, honest refusal.
+- Linux or WSL: existing law tools work, no Aside install/configuration is
   offered, no browser is called, and remaining source links are returned.
-- Older macOS, unknown platform, or remote execution: browser tasks remain
-  unavailable without blocking standard research.
-- Mac checkpoint resumed on Windows, or a manually supplied follow-up policy:
-  recheck eligibility and do not execute browser tasks or choose another provider.
+- Older macOS, older Windows, unknown platform, or remote execution: browser
+  tasks remain unavailable without blocking standard research.
+- A checkpoint resumed on a different host, or a manually supplied follow-up
+  policy: re-probe the resuming host; run browser tasks only if it is eligible,
+  never with the other platform's recorded `asideCommand`, and never with
+  another provider.
 - Aside connected: discover actual schemas; use only available capabilities.
 - NSW law or another server-blocked source: actual browser outcome is captured;
   access refusal never becomes absence or an automation success claim.
@@ -477,6 +576,28 @@ URL `https://www.legislation.gov.au/`, then closed that tab. A separately bounde
 `exec` made the same benign public read and returned, after about 13 seconds, one
 response containing a session id, the word `Done`, and the same title and URL.
 
+### Implementation smoke observed on Windows 2026-09-14
+
+On local Windows 11 24H2 (`os.release()` `10.0.26200`, x64) with Aside browser
+`1.0.914.1` and CLI `1.26.906.1630`, `setup-followup` installed the project-local
+companion without an explicit `--aside-command`: it resolved the CLI at
+`%LOCALAPPDATA%\Aside\CLI\current\aside.exe` itself and recorded that absolute
+path. The installed helper's `probe` completed Aside's `initialize` and
+`tools/list` over stdio and reported `eligible: true`, `platform: "win32"`,
+`execution: "local"`, exposing the same observed schemas as the macOS smoke —
+`repl(title, code)`, `exec(prompt, session_id?)` and `memory_search`, which this
+workflow does not use. The same probe accepted the path with the quotes
+Explorer's "Copy as path" adds, and refused a drive-less path, an unexpanded
+`%LOCALAPPDATA%` and a bare name with its "must be an absolute path" reason
+without spawning anything. A matter then ran init → status → stop →
+resume-matter with its page, document and active-time budget preserved.
+
+Retrieval on the same machine is recorded in
+[the Aside verification note](ASIDE-ROBUSTNESS.md#windows-run): nine judgments
+and ten scoped searches returned, one PDF linked with its body still pending,
+and the publisher's own challenge on the search endpoint reported as a
+bot-verification page rather than as an absent record.
+
 That is evidence about this installed build and this one completed call, not a
 promise that every exec response is terminal or that cancellation is available.
 The companion therefore stores a session id immediately, treats acknowledgements
@@ -485,14 +606,14 @@ ownership until the host resumes and rechecks the same session. No private
 account, unrelated tab, form, download, access challenge, or website mutation
 was used in the smoke.
 
-Current source-preview limits remain explicit: the macOS lawyer pilot and client
-restart/reconnection matrix are not complete; external authenticity and legal
-validity are never certified; treatment, commencement and legal interpretation
-remain host-owned semantic assessments; and typed successful-response body gaps
-currently cover the key HCA, NSW, Queensland, FWC, OAIC, NACC and State-register
-paths. Other full-text adapters retain their existing honest text/error output,
-but have not all been migrated to emit a structured truncation gap on every
-successful shortened response.
+Current source-preview limits remain explicit: the macOS and Windows lawyer
+pilots and client restart/reconnection matrix are not complete; external
+authenticity and legal validity are never certified; treatment, commencement and
+legal interpretation remain host-owned semantic assessments; and typed
+successful-response body gaps currently cover the key HCA, NSW, Queensland, FWC,
+OAIC, NACC and State-register paths. Other full-text adapters retain their
+existing honest text/error output, but have not all been migrated to emit a
+structured truncation gap on every successful shortened response.
 
 ## Previously listed release and operation work
 

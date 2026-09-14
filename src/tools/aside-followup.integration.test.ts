@@ -9,11 +9,17 @@ const client = {} as never
 const citation = "[2020] FCAFC 130"
 const html = readFileSync(new URL("../lib/sources/__fixtures__/aside/fedcourt-tpg.html", import.meta.url), "utf8")
 const policy = { mode: "missing_sources" as const, browser: "aside" as const, maxPages: 3, maxDocuments: 2, maxElapsedSeconds: 120, useAuthorizedAccounts: false }
-const eligibility = { probe: "local_companion" as const, execution: "local" as const, platform: "darwin" as const, osVersion: "15.1", asideConnected: true, asideTools: ["repl" as const] }
+// The same chain on both hosts Aside ships on. The probe is data the companion
+// supplies, so this runs on any CI box; what it proves is that a Windows probe
+// gets the same plan, from the same recorded pages, as a Mac one.
+const hosts = {
+  macOS: { probe: "local_companion" as const, execution: "local" as const, platform: "darwin" as const, osVersion: "15.1", asideConnected: true, asideTools: ["repl" as const] },
+  Windows: { probe: "local_companion" as const, execution: "local" as const, platform: "win32" as const, osVersion: "10.0.26200", asideConnected: true, asideTools: ["repl" as const] },
+}
 const scope = { matter: "offline public judgment check", jurisdictions: ["Cth"] }
 afterEach(() => setAsideBridge(null))
 
-describe("law tool → follow-up plan → supplied original passage", () => {
+describe.each(Object.entries(hosts))("law tool → follow-up plan → supplied original passage on %s", (_name, eligibility) => {
   async function prepare() {
     setAsideBridge({ asideStatus: () => ({ enabled: true }), fetchViaAside: async () => html })
     const response = boundToolResponse(await getCaseText(client, { citation, full: true }), "get_case_text", 50_000)

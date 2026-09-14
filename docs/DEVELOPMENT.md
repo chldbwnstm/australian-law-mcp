@@ -231,8 +231,10 @@ will produce two plausible answers.
 npm run build          # clean + tsc
 npm run watch          # tsc --watch
 npm run typecheck      # tsc --noEmit
-npm test               # vitest run — 2,498 passed, 18 live-gated; 106 files (2026-09-09)
+npm test               # vitest run — 2,961 passed, 21 skipped; 122 files (2026-09-14)
 npm run verify:stdio   # after build: real process handshake + advertised schemas, no upstream calls
+npm run verify:mcpb    # after build:mcpb: unpacks the .mcpb, handshakes, proves the Aside switch reaches the server. No browser; needs npm for the mcpb CLI
+npm run verify:aside   # LIVE: drives a local Aside browser at real pages (macOS or Windows x64). Never in CI
 npm run test:watch     # vitest
 npm start              # stdio server
 npm run start:http     # HTTP server
@@ -274,6 +276,28 @@ per assertion with the client's own per-host interval between them.
 
 Run them before a release and whenever an upstream parser changes. A failure here is
 usually the site, not the code — check the site in a browser before rewriting a parser.
+
+### The second exception: the Aside live check
+
+`npm run verify:aside` drives a real Aside browser at real publisher pages, so it is
+gated the same way and never runs in CI — the Ubuntu and Windows runners run the
+offline suite only. It needs a local macOS 15+ or Windows 10/11 (x64) machine with
+Aside installed and running:
+
+```sh
+LIVE_ASIDE=1 AU_LAW_ASIDE=true npm run verify:aside
+```
+
+```powershell
+$env:LIVE_ASIDE='1'; $env:AU_LAW_ASIDE='true'; npm run verify:aside
+```
+
+Which pages it opens, what it asserts and the recorded runs are in
+[ASIDE-ROBUSTNESS.md](ASIDE-ROBUSTNESS.md). Like the decision-domain suite it asserts
+on shape; an upstream outage can fail a run without a code regression.
+
+The offline proof that the extension switch reaches the server is `npm run verify:mcpb`
+(see [MCP Bundle](#mcp-bundle)): it needs no browser and runs on both platforms.
 
 ### Fixture provenance
 
@@ -331,6 +355,23 @@ Do not pin a shipped constant from a test that is really about a mechanism. When
 `response-body.limits.test.ts` needed a 2 MiB cap to exercise the over-limit path, it got
 its own `LIMITS` object rather than reading `DEFAULT_EXECUTION_LIMITS` — so retuning the
 default for a bigger upstream volume does not break a test about hang-versus-error.
+
+### Simulated hosts
+
+A test that describes a Mac or a Windows PC injects the host — `platform`, `home`,
+`env`, `exists`, and for the companion probe `osVersion` — and never reads
+`process.platform`, `os.homedir()` or `os.release()`, so the same test passes on the
+Ubuntu and Windows CI runners. Path arithmetic for a simulated host uses `path.posix` or
+`path.win32` explicitly, chosen by the simulated platform, never the runner's `path`.
+Use real-shaped values: a macOS `osVersion` of `"15.1"`; a Windows one of
+`"10.0.26200"` — Windows 11 reports NT major 10, so the Windows floor is 10, and a test
+that passes `"11"` describes no real machine; a Windows `PATH` separated by `;` with
+`aside.exe` in a directory (only `aside.exe` is found on Windows — `PATHEXT` is not
+consulted and a `.cmd` shim is not accepted); a Windows `AU_LAW_ASIDE_COMMAND` with a
+drive letter, single backslashes in the string the server sees. Nothing in the offline
+suite spawns the real Aside CLI; the child-process tests spawn `process.execPath`. A
+developer machine or a CI runner may have the real CLI at the standard location, so a
+probe test that does not pin the command would find it — pin it.
 
 ---
 
@@ -448,6 +489,15 @@ cd /tmp/packtest && npm init -y && npm install ./au-law-mcp-*.tgz
 ./node_modules/.bin/australian-law list --category treaties
 ```
 
+The same check from PowerShell, where `/tmp`, `&&` and the `.bin` shims do not apply:
+
+```powershell
+npm pack --pack-destination $env:TEMP\packtest
+Set-Location $env:TEMP\packtest; npm init -y; npm install (Get-Item .\au-law-mcp-*.tgz).FullName
+npx au-law-mcp --version
+npx australian-law list --category treaties
+```
+
 `files` in `package.json` is an allowlist. Anything not listed there does not ship, which
 is why no fixture, test or source map is in the tarball — and also why a new runtime data
 file would silently be missing until someone installs the package.
@@ -470,14 +520,28 @@ advertised tools from `build/tool-registry.js` filtered by `V3_EXPOSED` — the 
 `ListTools` answers with. A hand-written manifest drifts, and the only symptom is a store
 listing that disagrees with the server it installs.
 
+The manifest's one user setting is the switch “Finish blocked legal sources using the
+Aside browser”, with an optional Aside CLI path beside it; Claude Desktop substitutes
+them into `AU_LAW_ASIDE` and `AU_LAW_ASIDE_COMMAND` on every launch. The switch's
+description names macOS 15+ and Windows 10/11 (x64), and the path field shows both
+example paths — the macOS `.app` one and `C:\Users\you\AppData\Local\Aside\CLI\current\aside.exe`.
+One manifest serves both platforms; there is no per-platform wording.
+
 `scripts/verify-mcpb.mjs` then runs against the **packed file**, not the staging directory:
 it unpacks the `.mcpb` into a temp directory, starts `node build/index.js` there exactly as
 the manifest's `mcp_config` would, and speaks MCP stdio at it. That proves the entry point
 resolves its dependencies from the bundled `node_modules`, that `serverInfo.version` still
 matches `package.json` (so the staged `package.json` is where `version.ts` looks), that
 `tools/list` returns exactly the tools the manifest advertises, and that nothing but
-JSON-RPC reaches stdout — one stray `console.log` corrupts the framing. It exits non-zero
-on any failure, which fails the build.
+JSON-RPC reaches stdout — one stray `console.log` corrupts the framing. It then starts the
+unpacked bundle again with `AU_LAW_ASIDE=true` and an `AU_LAW_ASIDE_COMMAND` that
+deliberately does not exist, calls a blocked-source tool, and asserts the answer is the
+`[UPSTREAM_BLOCKED]` note naming that path — proof that the extension switch reaches the
+server on both platforms, with no browser involved. It exits non-zero on any failure,
+which fails the build. `npm run verify:mcpb` runs the same script on its own against an
+already-built bundle (`release/au-law-mcp-<version>.mcpb` by default, or a path
+argument), which is how a downloaded release file is checked on the platform that will
+install it.
 
 Attach `release/au-law-mcp-<version>.mcpb` to the GitHub release. Signing is optional and
 not done here: `npx -y @anthropic-ai/mcpb sign --self-signed release/au-law-mcp-<version>.mcpb`

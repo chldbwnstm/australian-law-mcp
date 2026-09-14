@@ -20,9 +20,10 @@ cd /tmp && zip -r australian-law-pilot.zip australian-law-pilot
 `build:mcpb` starts the server inside the bundle and checks its tool list before
 it finishes, so the installer you send has been proved to run on your machine.
 
-`START-HERE.html` names the file `au-law-mcp-1.0.0.mcpb` in its install button.
-After a version bump, update that filename there and in `docs/TRY-IT.md`, or the
-button in the pack points at a file that is not in it.
+`START-HERE.html` hard-codes the bundle filename in its install button, and
+`docs/TRY-IT.md` hard-codes it in its download steps. After a version bump,
+update the filename in both, or the button in the pack points at a file that is
+not in it.
 
 Suggested invitation:
 

@@ -20,13 +20,23 @@ or a completed lawyer pilot.
   `execute_tool`, HTTP, CLI and STDIO boundaries. Omitted gaps, tasks or evidence
   force `pending: true`, carry counts, and direct callers to narrower source reruns.
 - A project-local Claude Code/Codex companion skill and helper with fresh local
-  macOS 15+ gates, actual Aside capability checks, persistent matter policy,
-  budgets, evidence and host-assessment manifests, serial task dispatch, immediate
-  session persistence, honest disconnect/stop behavior, explicit matter resume,
-  and same-session continuation.
+  macOS 15+ / Windows 10/11 (x64) gates (local execution, platform, OS version,
+  Aside connection and `repl`), actual Aside capability checks, persistent matter
+  policy, budgets, evidence and host-assessment manifests, serial task dispatch,
+  immediate session persistence, honest disconnect/stop behavior, explicit matter
+  resume, and same-session continuation.
 - A preserving `setup-followup` installer for project MCP settings and skills. It
-  records an absolute Aside command for desktop PATH differences and refuses
-  unsupported/ambiguous config shapes rather than rewriting them. The installed
+  records an absolute Aside command for desktop PATH differences, resolved in the
+  server's own order — the installer's location first
+  (`~/.aside/cli/Aside CLI.app/Contents/MacOS/aside` on macOS;
+  `%ASIDE_CLI_INSTALL_DIR%\current\aside.exe` if that variable is set, else
+  `%LOCALAPPDATA%\Aside\CLI\current\aside.exe`, on Windows), then `aside`
+  (`aside.exe` on Windows) on PATH — reads the Windows OS
+  version from `os.release()`, writes `.mcp.json` through `JSON.stringify` and
+  `.codex/config.toml` as an escaped TOML basic string so a drive-letter path is
+  correct on disk, and refuses unsupported/ambiguous config shapes rather than
+  rewriting them. The 0600 mode it sets on `.au-law-followup-host.json` has no
+  effect on Windows, where NTFS inherits the folder's permissions. The installed
   helper also recognises direct execution when macOS canonicalises `/var` to
   `/private/var` (or another directory symlink) without running on module import.
 
@@ -74,8 +84,9 @@ global config hashes were unchanged, and the installed helper returned
 `init -> status -> stop -> resume-matter -> status` JSON sequence completed with
 the remaining budget unchanged at 10 pages, 3 documents, and 300 active seconds.
 
-Regression cases include Windows/Linux/remote/old-mac gates; malformed OS versions;
-stable and case-sensitive gap identity; oversized single gaps; evidence-only
+Regression cases include the Windows x64 eligibility gate and the Linux, WSL,
+remote, old-macOS and old-Windows refusal gates; malformed OS versions; stable
+and case-sensitive gap identity; oversized single gaps; evidence-only
 overflow; combined escaped text/structured omission bounds; direct and
 `execute_tool` HTTP paths; chain omission propagation; STDIO propagation; wrong
 citation/register/provision/jurisdiction/date/task association; missing body and
@@ -111,11 +122,28 @@ does not establish a general completion or cancellation guarantee. The companion
 therefore retains serial ownership for progress-only/session-only responses and
 for disconnects until the saved session is explicitly resumed and rechecked.
 
+### Windows, 14 September 2026
+
+On local Windows 11 24H2 (`os.release()` `10.0.26200`, x64) with Aside browser
+`1.0.914.1` and CLI `1.26.906.1630`, `setup-followup` resolved the CLI at
+`%LOCALAPPDATA%\Aside\CLI\current\aside.exe` with no `--aside-command` given and
+recorded that absolute path; the installed helper's probe completed Aside's
+`initialize` and `tools/list` and returned `eligible: true`, `platform: "win32"`,
+`execution: "local"` with `repl` and `exec`. It accepted the path with Explorer's
+"Copy as path" quotes and refused a drive-less path, an unexpanded
+`%LOCALAPPDATA%` and a bare name before spawning anything. A matter ran
+init → status → stop → resume-matter with its budget preserved. Retrieval on the
+same machine, including the publisher's own challenge on AustLII's search
+endpoint being reported as a bot-verification page rather than as absence, is
+recorded in [the Aside verification note](ASIDE-ROBUSTNESS.md#windows-run).
+Document downloads, permission handling and client resume/cancellation on
+Windows remain on the pilot list, not recorded here.
+
 ## Remaining limitations
 
-- The macOS lawyer pilot, client restart/reconnection matrix, and broad legal-source
-  acceptance set remain outstanding; README and installation docs label the feature
-  an unreleased source preview.
+- The macOS and Windows lawyer pilots, client restart/reconnection matrix, and
+  broad legal-source acceptance set remain outstanding; README and installation
+  docs label the feature an unreleased source preview.
 - The checker assesses only supplied text and metadata. It does not certify source
   authenticity, publisher provenance, legal validity or the correctness of an AI
   interpretation; treatment, commencement and interpretation remain host-owned
@@ -123,6 +151,11 @@ for disconnects until the saved session is explicitly resumed and rechecked.
 - Typed successful-response body/truncation gaps cover the key sources named above,
   but not every legacy full-text adapter has been migrated. Those adapters retain
   existing honest text/error output and links.
-- Windows, WSL, Linux, remote/unknown hosts and macOS before 15 remain ineligible
-  for every companion route, including host-model tasks. Existing law tools remain
-  available and no alternate browser or remote-Mac workaround is provided.
+- WSL, Linux, remote/unknown hosts, macOS before 15 and Windows before 10 remain
+  ineligible for every companion route, including host-model tasks; Windows 10/11
+  (x64) with Aside 1.0.914.1 or later is eligible on the same terms as macOS 15+.
+  Aside ships no Linux browser build, so the fallback is a no-op on Linux and WSL,
+  and its Windows installer refuses on ARM64, so there the CLI is not found and
+  the probe reports Aside MCP as not connected. Existing law tools remain
+  available everywhere and no alternate browser or remote-machine workaround is
+  provided.

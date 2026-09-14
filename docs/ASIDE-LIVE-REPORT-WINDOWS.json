@@ -1,0 +1,935 @@
+{
+  "startedAt": "2026-09-14T10:02:32.823Z",
+  "platform": "win32",
+  "arch": "x64",
+  "osRelease": "10.0.26200",
+  "asideCommand": "C:\\Users\\User\\AppData\\Local\\Aside\\CLI\\current\\aside.exe",
+  "asideCliVersion": "1.26.906.1630",
+  "browserRunningAtStart": true,
+  "commit": "29d216faaf002239b6633de04325340058cfedef",
+  "dirty": true,
+  "version": "1.0.4",
+  "note": "Point-in-time live observations from built source, not an installer certification or guarantee of publisher availability.",
+  "cases": [
+    {
+      "id": "tpg-full",
+      "name": "get_case_text",
+      "args": {
+        "citation": "[2020] FCAFC 130",
+        "full": true
+      },
+      "status": "retrieved",
+      "citation": "[2020] FCAFC 130",
+      "source": "https://www.judgments.fedcourt.gov.au/judgments/Judgments/fca/full/2020/2020fcafc0130",
+      "hits": [],
+      "browser": true,
+      "pending": true,
+      "chars": 49198,
+      "serializedChars": 50000,
+      "gaps": [
+        {
+          "kind": "truncated",
+          "originTool": "get_case_text",
+          "target": {
+            "citation": "[2020] FCAFC 130",
+            "documentId": "[2020] FCAFC 130"
+          },
+          "reason": "The document exceeds the response size limit; omitted text must be read at the original source.",
+          "sourceUrls": [
+            "https://www.judgments.fedcourt.gov.au/judgments/Judgments/fca/full/2020/2020fcafc0130"
+          ],
+          "sourceAccess": "permitted",
+          "evidenceNeeded": [
+            "The omitted paragraphs from the original decision body"
+          ],
+          "id": "gap_8c525d160fc14e6ee607513d"
+        }
+      ],
+      "seconds": 9.16
+    },
+    {
+      "id": "tpg-compact",
+      "name": "get_case_text",
+      "args": {
+        "citation": "[2020] FCAFC 130",
+        "full": false
+      },
+      "status": "retrieved",
+      "citation": "[2020] FCAFC 130",
+      "source": "https://www.judgments.fedcourt.gov.au/judgments/Judgments/fca/full/2020/2020fcafc0130",
+      "hits": [],
+      "browser": true,
+      "pending": true,
+      "chars": 3212,
+      "serializedChars": 3830,
+      "gaps": [
+        {
+          "kind": "truncated",
+          "originTool": "get_case_text",
+          "target": {
+            "citation": "[2020] FCAFC 130",
+            "documentId": "[2020] FCAFC 130"
+          },
+          "reason": "The returned body was shortened from the middle by the decision renderer.",
+          "sourceUrls": [
+            "https://www.judgments.fedcourt.gov.au/judgments/Judgments/fca/full/2020/2020fcafc0130"
+          ],
+          "sourceAccess": "permitted",
+          "evidenceNeeded": [
+            "The omitted paragraphs from the original decision body"
+          ],
+          "id": "gap_8c525d160fc14e6ee607513d"
+        }
+      ],
+      "seconds": 6.4
+    },
+    {
+      "id": "tpg-pinpoint",
+      "name": "get_case_text",
+      "args": {
+        "citation": "[2020] F.C.A.F.C. 130 at [38]",
+        "full": false
+      },
+      "status": "retrieved",
+      "citation": "[2020] FCAFC 130",
+      "source": "https://www.judgments.fedcourt.gov.au/judgments/Judgments/fca/full/2020/2020fcafc0130",
+      "hits": [],
+      "browser": true,
+      "pending": true,
+      "chars": 3212,
+      "serializedChars": 3843,
+      "gaps": [
+        {
+          "kind": "truncated",
+          "originTool": "get_case_text",
+          "target": {
+            "citation": "[2020] FCAFC 130",
+            "documentId": "[2020] F.C.A.F.C. 130 at [38]"
+          },
+          "reason": "The returned body was shortened from the middle by the decision renderer.",
+          "sourceUrls": [
+            "https://www.judgments.fedcourt.gov.au/judgments/Judgments/fca/full/2020/2020fcafc0130"
+          ],
+          "sourceAccess": "permitted",
+          "evidenceNeeded": [
+            "The omitted paragraphs from the original decision body"
+          ],
+          "id": "gap_67c160bdbf20c289dc1d0f71"
+        }
+      ],
+      "seconds": 6.4
+    },
+    {
+      "id": "tpg-first-instance",
+      "name": "get_case_text",
+      "args": {
+        "citation": "[2019] FCA 1677",
+        "full": false
+      },
+      "status": "retrieved",
+      "citation": "[2019] FCA 1677",
+      "source": "https://www.judgments.fedcourt.gov.au/judgments/Judgments/fca/single/2019/2019fca1677",
+      "hits": [],
+      "browser": true,
+      "pending": true,
+      "chars": 3213,
+      "serializedChars": 3850,
+      "gaps": [
+        {
+          "kind": "truncated",
+          "originTool": "get_case_text",
+          "target": {
+            "citation": "[2019] FCA 1677",
+            "documentId": "[2019] FCA 1677"
+          },
+          "reason": "The returned body was shortened from the middle by the decision renderer.",
+          "sourceUrls": [
+            "https://www.judgments.fedcourt.gov.au/judgments/Judgments/fca/single/2019/2019fca1677"
+          ],
+          "sourceAccess": "permitted",
+          "evidenceNeeded": [
+            "The omitted paragraphs from the original decision body"
+          ],
+          "id": "gap_121251ba20e7d09ec063a7af"
+        }
+      ],
+      "seconds": 6.49
+    },
+    {
+      "id": "mussalli",
+      "name": "get_case_text",
+      "args": {
+        "citation": "[2021] FCAFC 71",
+        "full": false
+      },
+      "status": "retrieved",
+      "citation": "[2021] FCAFC 71",
+      "source": "https://www.judgments.fedcourt.gov.au/judgments/Judgments/fca/full/2021/2021fcafc0071",
+      "hits": [],
+      "browser": true,
+      "pending": true,
+      "chars": 2543,
+      "serializedChars": 3157,
+      "gaps": [
+        {
+          "kind": "truncated",
+          "originTool": "get_case_text",
+          "target": {
+            "citation": "[2021] FCAFC 71",
+            "documentId": "[2021] FCAFC 71"
+          },
+          "reason": "The returned body was shortened from the middle by the decision renderer.",
+          "sourceUrls": [
+            "https://www.judgments.fedcourt.gov.au/judgments/Judgments/fca/full/2021/2021fcafc0071"
+          ],
+          "sourceAccess": "permitted",
+          "evidenceNeeded": [
+            "The omitted paragraphs from the original decision body"
+          ],
+          "id": "gap_eb2991d7e1d09500cf586343"
+        }
+      ],
+      "seconds": 6.44
+    },
+    {
+      "id": "gujarat",
+      "name": "get_case_text",
+      "args": {
+        "citation": "[2013] FCAFC 109",
+        "full": false
+      },
+      "status": "retrieved",
+      "citation": "[2013] FCAFC 109",
+      "source": "https://www.judgments.fedcourt.gov.au/judgments/Judgments/fca/full/2013/2013fcafc0109",
+      "hits": [],
+      "browser": true,
+      "pending": true,
+      "chars": 3211,
+      "serializedChars": 3829,
+      "gaps": [
+        {
+          "kind": "truncated",
+          "originTool": "get_case_text",
+          "target": {
+            "citation": "[2013] FCAFC 109",
+            "documentId": "[2013] FCAFC 109"
+          },
+          "reason": "The returned body was shortened from the middle by the decision renderer.",
+          "sourceUrls": [
+            "https://www.judgments.fedcourt.gov.au/judgments/Judgments/fca/full/2013/2013fcafc0109"
+          ],
+          "sourceAccess": "permitted",
+          "evidenceNeeded": [
+            "The omitted paragraphs from the original decision body"
+          ],
+          "id": "gap_36f2f0ebc7df568adc5ffec0"
+        }
+      ],
+      "seconds": 6.4
+    },
+    {
+      "id": "fcafc-page1",
+      "name": "search_cases",
+      "args": {
+        "query": "prepayment",
+        "court": "FCAFC",
+        "limit": 3
+      },
+      "status": "search_results",
+      "hits": [
+        {
+          "title": "Australian Competition and Consumer Commission v TPG Internet Pty Ltd [2020] FCAFC 130 (30 July 2020)",
+          "url": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/cth/FCAFC/2020/130.html?context=1;query=prepayment;mask_path=au/cases/cth/FCAFC",
+          "citation": "[2020] FCAFC 130"
+        },
+        {
+          "title": "Commissioner of Taxation v Star City Pty Limited (Corrigendum dated 6 March 2009) [2009] FCAFC 19 (27 February 2009)",
+          "url": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/cth/FCAFC/2009/19.html?context=1;query=prepayment;mask_path=au/cases/cth/FCAFC",
+          "citation": "[2009] FCAFC 19"
+        },
+        {
+          "title": "Mussalli v Commissioner of Taxation [2021] FCAFC 71 (14 May 2021)",
+          "url": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/cth/FCAFC/2021/71.html?context=1;query=prepayment;mask_path=au/cases/cth/FCAFC",
+          "citation": "[2021] FCAFC 71"
+        }
+      ],
+      "browser": true,
+      "pending": true,
+      "chars": 1614,
+      "serializedChars": 2208,
+      "gaps": [
+        {
+          "kind": "coverage",
+          "originTool": "search_cases",
+          "target": {
+            "query": "prepayment"
+          },
+          "reason": "Only this browser result page was inspected; the wider search has not been exhausted.",
+          "sourceUrls": [
+            "https://www.austlii.edu.au/cgi-bin/sinosrch.cgi?method=auto&query=prepayment&mask_path=au%2Fcases%2Fcth%2FFCAFC"
+          ],
+          "sourceAccess": "permitted",
+          "evidenceNeeded": [
+            "The publisher's matching judgment links and remaining result pages"
+          ],
+          "id": "gap_ffcac398a26da5f1b4d69ea3"
+        }
+      ],
+      "seconds": 7.35
+    },
+    {
+      "id": "fcafc-page2",
+      "name": "search_cases",
+      "args": {
+        "query": "prepayment",
+        "court": "FCAFC",
+        "limit": 3,
+        "page": 2
+      },
+      "status": "search_results",
+      "hits": [
+        {
+          "title": "Calder v Commissioner of Taxation [2005] FCAFC 254 (7 December 2005)",
+          "url": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/cth/FCAFC/2005/254.html?context=1;query=prepayment;mask_path=au/cases/cth/FCAFC",
+          "citation": "[2005] FCAFC 254"
+        },
+        {
+          "title": "Commissioner of Taxation v Lenzo [2008] FCAFC 50 (3 April 2008)",
+          "url": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/cth/FCAFC/2008/50.html?context=1;query=prepayment;mask_path=au/cases/cth/FCAFC",
+          "citation": "[2008] FCAFC 50"
+        },
+        {
+          "title": "Epov v The Commissioner of Taxation [2007] FCAFC 139 (27 August 2007)",
+          "url": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/cth/FCAFC/2007/139.html?context=1;query=prepayment;mask_path=au/cases/cth/FCAFC",
+          "citation": "[2007] FCAFC 139"
+        }
+      ],
+      "browser": true,
+      "pending": true,
+      "chars": 1543,
+      "serializedChars": 2147,
+      "gaps": [
+        {
+          "kind": "coverage",
+          "originTool": "search_cases",
+          "target": {
+            "query": "prepayment"
+          },
+          "reason": "Only this browser result page was inspected; the wider search has not been exhausted.",
+          "sourceUrls": [
+            "https://www.austlii.edu.au/cgi-bin/sinosrch.cgi?method=auto&query=prepayment&mask_path=au%2Fcases%2Fcth%2FFCAFC&offset=10"
+          ],
+          "sourceAccess": "permitted",
+          "evidenceNeeded": [
+            "The publisher's matching judgment links and remaining result pages"
+          ],
+          "id": "gap_7cfb6d6cc5c826993fd0b100"
+        }
+      ],
+      "seconds": 7.09
+    },
+    {
+      "id": "search-to-judgment",
+      "name": "get_case_text",
+      "args": {
+        "citation": "[2005] FCAFC 254"
+      },
+      "status": "retrieved",
+      "citation": "[2005] FCAFC 254",
+      "source": "https://www.judgments.fedcourt.gov.au/judgments/Judgments/fca/full/2005/2005fcafc0254",
+      "hits": [],
+      "browser": true,
+      "pending": true,
+      "chars": 3005,
+      "serializedChars": 3624,
+      "gaps": [
+        {
+          "kind": "truncated",
+          "originTool": "get_case_text",
+          "target": {
+            "citation": "[2005] FCAFC 254",
+            "documentId": "[2005] FCAFC 254"
+          },
+          "reason": "The returned body was shortened from the middle by the decision renderer.",
+          "sourceUrls": [
+            "https://www.judgments.fedcourt.gov.au/judgments/Judgments/fca/full/2005/2005fcafc0254"
+          ],
+          "sourceAccess": "permitted",
+          "evidenceNeeded": [
+            "The omitted paragraphs from the original decision body"
+          ],
+          "id": "gap_cd86f7560973b75d8dba19e1"
+        }
+      ],
+      "seconds": 6.94
+    },
+    {
+      "id": "fca-alias",
+      "name": "search_cases",
+      "args": {
+        "query": "prepayment",
+        "court": "Federal Court of Australia",
+        "limit": 3
+      },
+      "status": "search_results",
+      "hits": [
+        {
+          "title": "Star City Pty Limited v Commissioner of Taxation [2007] FCA 1701 (9 November 2007)",
+          "url": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/cth/FCA/2007/1701.html?context=1;query=prepayment;mask_path=au/cases/cth/FCA",
+          "citation": "[2007] FCA 1701"
+        },
+        {
+          "title": "Australian Competition and Consumer Commission v TPG Internet Pty Ltd [2019] FCA 1677 (11 October 2019)",
+          "url": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/cth/FCA/2019/1677.html?context=1;query=prepayment;mask_path=au/cases/cth/FCA",
+          "citation": "[2019] FCA 1677"
+        },
+        {
+          "title": "Our Jim & Felicja Superfund Pty Ltd as trustee for the Jim & Felicja Superannuation Fund v Lindenfels Pte Ltd [2026] FCA 307 (20 March 2026)",
+          "url": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/cth/FCA/2026/307.html?context=1;query=prepayment;mask_path=au/cases/cth/FCA",
+          "citation": "[2026] FCA 307"
+        }
+      ],
+      "browser": true,
+      "pending": true,
+      "chars": 1635,
+      "serializedChars": 2227,
+      "gaps": [
+        {
+          "kind": "coverage",
+          "originTool": "search_cases",
+          "target": {
+            "query": "prepayment"
+          },
+          "reason": "Only this browser result page was inspected; the wider search has not been exhausted.",
+          "sourceUrls": [
+            "https://www.austlii.edu.au/cgi-bin/sinosrch.cgi?method=auto&query=prepayment&mask_path=au%2Fcases%2Fcth%2FFCA"
+          ],
+          "sourceAccess": "permitted",
+          "evidenceNeeded": [
+            "The publisher's matching judgment links and remaining result pages"
+          ],
+          "id": "gap_19c9ad58244e342fa7c0441c"
+        }
+      ],
+      "seconds": 7.25
+    },
+    {
+      "id": "victoria",
+      "name": "search_cases",
+      "args": {
+        "query": "contract",
+        "jurisdiction": "Victoria",
+        "limit": 3
+      },
+      "status": "search_results",
+      "hits": [
+        {
+          "title": "Alphington Developments Pty Ltd v Amcor Pty Ltd (No 5) [2023] VSC 637 (1 November 2023)",
+          "url": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/vic/VSC/2023/637.html?context=1;query=contract;mask_path=au/cases/vic",
+          "citation": "[2023] VSC 637"
+        },
+        {
+          "title": "Powercor Australia Ltd v Pacific Power [1999] VSC 110 (18 November 1999)",
+          "url": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/vic/VSC/1999/110.html?context=1;query=contract;mask_path=au/cases/vic",
+          "citation": "[1999] VSC 110"
+        },
+        {
+          "title": "ASIC v Flugge & Geary [2016] VSC 779 (15 December 2016)",
+          "url": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/vic/VSC/2016/779.html?context=1;query=contract;mask_path=au/cases/vic",
+          "citation": "[2016] VSC 779"
+        }
+      ],
+      "browser": true,
+      "pending": true,
+      "chars": 1485,
+      "serializedChars": 2088,
+      "gaps": [
+        {
+          "kind": "coverage",
+          "originTool": "search_cases",
+          "target": {
+            "query": "contract"
+          },
+          "jurisdiction": "Vic",
+          "reason": "Only this browser result page was inspected; the wider search has not been exhausted.",
+          "sourceUrls": [
+            "https://www.austlii.edu.au/cgi-bin/sinosrch.cgi?method=auto&query=contract&mask_path=au%2Fcases%2Fvic"
+          ],
+          "sourceAccess": "permitted",
+          "evidenceNeeded": [
+            "The publisher's matching judgment links and remaining result pages"
+          ],
+          "id": "gap_f4d2341dc31c6f387721d185"
+        }
+      ],
+      "seconds": 7.32
+    },
+    {
+      "id": "victoria-judgment",
+      "name": "get_case_text",
+      "args": {
+        "citation": "[2023] VSC 637"
+      },
+      "status": "document_link",
+      "citation": "[2023] VSC 637",
+      "source": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/vic/VSC/2023/637.html",
+      "hits": [],
+      "browser": true,
+      "pending": true,
+      "chars": 825,
+      "serializedChars": 1451,
+      "gaps": [
+        {
+          "kind": "document_body",
+          "originTool": "get_case_text",
+          "target": {
+            "citation": "[2023] VSC 637",
+            "documentId": "[2023] VSC 637"
+          },
+          "reason": "The source adapter classified this response as binary_link_only; it is not the complete original body.",
+          "sourceUrls": [
+            "https://www.austlii.edu.au/au/cases/vic/VSC/2023/637.pdf"
+          ],
+          "sourceAccess": "requires_access",
+          "evidenceNeeded": [
+            "The original document body",
+            "An exact relevant passage with paragraph or printed-page locator"
+          ],
+          "id": "gap_0eafd9af5e70229117f4a703"
+        }
+      ],
+      "seconds": 8.12
+    },
+    {
+      "id": "western-australia",
+      "name": "search_cases",
+      "args": {
+        "query": "negligence",
+        "jurisdiction": "WA",
+        "limit": 3
+      },
+      "status": "search_results",
+      "hits": [
+        {
+          "title": "TOWN OF PORT HEDLAND -v- REECE WILLIAM HODDER BY NEXT FRIEND ELAINE GEORGINA HODDER [No 2] [2012] WASCA 212 (19 December 2012)",
+          "url": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/wa/WASCA/2012/212.html?context=1;query=negligence;mask_path=au/cases/wa",
+          "citation": "[2012] WASCA 212"
+        },
+        {
+          "title": "AVWEST AIRCRAFT PTY LTD as trustee for AVWEST AIRCRAFT TRUST -v- CLAYTON UTZ (A FIRM) [No 2] [2019] WASC 306 (28 August 2019)",
+          "url": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/wa/WASC/2019/306.html?context=1;query=negligence;mask_path=au/cases/wa",
+          "citation": "[2019] WASC 306"
+        },
+        {
+          "title": "SWICK NOMINEES PTY LTD -v- LEROI INTERNATIONAL INC [No 2] [2015] WASCA 35 (27 February 2015)",
+          "url": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/wa/WASCA/2015/35.html?context=1;query=negligence;mask_path=au/cases/wa",
+          "citation": "[2015] WASCA 35"
+        }
+      ],
+      "browser": true,
+      "pending": true,
+      "chars": 1614,
+      "serializedChars": 2219,
+      "gaps": [
+        {
+          "kind": "coverage",
+          "originTool": "search_cases",
+          "target": {
+            "query": "negligence"
+          },
+          "jurisdiction": "WA",
+          "reason": "Only this browser result page was inspected; the wider search has not been exhausted.",
+          "sourceUrls": [
+            "https://www.austlii.edu.au/cgi-bin/sinosrch.cgi?method=auto&query=negligence&mask_path=au%2Fcases%2Fwa"
+          ],
+          "sourceAccess": "permitted",
+          "evidenceNeeded": [
+            "The publisher's matching judgment links and remaining result pages"
+          ],
+          "id": "gap_d97486df89e9e3207e4147f1"
+        }
+      ],
+      "seconds": 7.17
+    },
+    {
+      "id": "wa-judgment",
+      "name": "get_case_text",
+      "args": {
+        "citation": "[2012] WASCA 212"
+      },
+      "status": "retrieved",
+      "citation": "[2012] WASCA 212",
+      "source": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/wa/WASCA/2012/212.html",
+      "hits": [],
+      "browser": true,
+      "pending": true,
+      "chars": 3271,
+      "serializedChars": 3910,
+      "gaps": [
+        {
+          "kind": "truncated",
+          "originTool": "get_case_text",
+          "target": {
+            "citation": "[2012] WASCA 212",
+            "documentId": "[2012] WASCA 212"
+          },
+          "reason": "The returned body was shortened from the middle by the decision renderer.",
+          "sourceUrls": [
+            "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/wa/WASCA/2012/212.html"
+          ],
+          "sourceAccess": "permitted",
+          "evidenceNeeded": [
+            "The omitted paragraphs from the original decision body"
+          ],
+          "id": "gap_ff8a2031607196cb97b6e774"
+        }
+      ],
+      "seconds": 6.87
+    },
+    {
+      "id": "family-court",
+      "name": "search_cases",
+      "args": {
+        "query": "property",
+        "court": "family court",
+        "limit": 3
+      },
+      "status": "search_results",
+      "hits": [
+        {
+          "title": "Morris & Morris (No 7) [2024] FedCFamC1F 12 (23 January 2024)",
+          "url": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/cth/FedCFamC1F/2024/12.html?context=1;query=property;mask_path=au/cases/cth/FedCFamC1F",
+          "citation": "[2024] FedCFamC1F 12"
+        },
+        {
+          "title": "Gormley & Gormley (No 4) [2023] FedCFamC1F 673 (15 August 2023)",
+          "url": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/cth/FedCFamC1F/2023/673.html?context=1;query=property;mask_path=au/cases/cth/FedCFamC1F",
+          "citation": "[2023] FedCFamC1F 673"
+        },
+        {
+          "title": "Peterson & Davis (No 3) [2022] FedCFamC1F 650 (31 August 2022)",
+          "url": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/cth/FedCFamC1F/2022/650.html?context=1;query=property;mask_path=au/cases/cth/FedCFamC1F",
+          "citation": "[2022] FedCFamC1F 650"
+        }
+      ],
+      "browser": true,
+      "pending": true,
+      "chars": 1581,
+      "serializedChars": 2176,
+      "gaps": [
+        {
+          "kind": "coverage",
+          "originTool": "search_cases",
+          "target": {
+            "query": "property"
+          },
+          "reason": "Only this browser result page was inspected; the wider search has not been exhausted.",
+          "sourceUrls": [
+            "https://www.austlii.edu.au/cgi-bin/sinosrch.cgi?method=auto&query=property&mask_path=au%2Fcases%2Fcth%2FFedCFamC1F"
+          ],
+          "sourceAccess": "permitted",
+          "evidenceNeeded": [
+            "The publisher's matching judgment links and remaining result pages"
+          ],
+          "id": "gap_93dc91a5fde7352cfd220077"
+        }
+      ],
+      "seconds": 7.32
+    },
+    {
+      "id": "family-judgment",
+      "name": "get_case_text",
+      "args": {
+        "citation": "[2024] FedCFamC1F 12"
+      },
+      "status": "retrieved",
+      "citation": "[2024] FedCFamC1F 12",
+      "source": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/cth/FedCFamC1F/2024/12.html",
+      "hits": [],
+      "browser": true,
+      "pending": true,
+      "chars": 2887,
+      "serializedChars": 3532,
+      "gaps": [
+        {
+          "kind": "truncated",
+          "originTool": "get_case_text",
+          "target": {
+            "citation": "[2024] FedCFamC1F 12",
+            "documentId": "[2024] FedCFamC1F 12"
+          },
+          "reason": "The returned body was shortened from the middle by the decision renderer.",
+          "sourceUrls": [
+            "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/cth/FedCFamC1F/2024/12.html"
+          ],
+          "sourceAccess": "permitted",
+          "evidenceNeeded": [
+            "The omitted paragraphs from the original decision body"
+          ],
+          "id": "gap_cc281ffd44a06528c170598d"
+        }
+      ],
+      "seconds": 6.95
+    },
+    {
+      "id": "jurisdiction-sa",
+      "name": "search_cases",
+      "args": {
+        "query": "contract",
+        "jurisdiction": "SA",
+        "limit": 3
+      },
+      "status": "search_results",
+      "hits": [
+        {
+          "title": "ALSTOM LTD v YOKOGAWA AUSTRALIA PTY LTD & ANOR (No 7) [2012] SASC 49 (2 April 2012)",
+          "url": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/sa/SASC/2012/49.html?context=1;query=contract;mask_path=au/cases/sa",
+          "citation": "[2012] SASC 49"
+        },
+        {
+          "title": "ACQUISTA INVESTMENTS PTY LTD & ANOR v THE URBAN RENEWAL AUTHORITY & ORS [2014] SASC 206 (24 December 2014)",
+          "url": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/sa/SASC/2014/206.html?context=1;query=contract;mask_path=au/cases/sa",
+          "citation": "[2014] SASC 206"
+        },
+        {
+          "title": "CIROCCO CONSTRUCTIONS PTY LTD v CLARKE & ORS (No 4) [2024] SADC 150 (13 November 2024)",
+          "url": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/sa/SADC/2024/150.html?context=1;query=contract;mask_path=au/cases/sa",
+          "citation": "[2024] SADC 150"
+        }
+      ],
+      "browser": true,
+      "pending": true,
+      "chars": 1535,
+      "serializedChars": 2136,
+      "gaps": [
+        {
+          "kind": "coverage",
+          "originTool": "search_cases",
+          "target": {
+            "query": "contract"
+          },
+          "jurisdiction": "SA",
+          "reason": "Only this browser result page was inspected; the wider search has not been exhausted.",
+          "sourceUrls": [
+            "https://www.austlii.edu.au/cgi-bin/sinosrch.cgi?method=auto&query=contract&mask_path=au%2Fcases%2Fsa"
+          ],
+          "sourceAccess": "permitted",
+          "evidenceNeeded": [
+            "The publisher's matching judgment links and remaining result pages"
+          ],
+          "id": "gap_5c1817b5e73268b47d808416"
+        }
+      ],
+      "seconds": 7.28
+    },
+    {
+      "id": "jurisdiction-tas",
+      "name": "search_cases",
+      "args": {
+        "query": "contract",
+        "jurisdiction": "Tas",
+        "limit": 3
+      },
+      "status": "search_results",
+      "hits": [
+        {
+          "title": "Tas Investco Pty Ltd as trustee for Tasmania Property Trust v Sultan & Anor [2026] TASSC 21 (22 May 2026)",
+          "url": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/tas/TASSC/2026/21.html?context=1;query=contract;mask_path=au/cases/tas",
+          "citation": "[2026] TASSC 21"
+        },
+        {
+          "title": "Kronenberg v Bridge [2014] TASFC 10 (20 October 2014)",
+          "url": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/tas/TASFC/2014/10.html?context=1;query=contract;mask_path=au/cases/tas",
+          "citation": "[2014] TASFC 10"
+        },
+        {
+          "title": "Kronenberg v Bridge [2013] TASSC 57 (4 October 2013)",
+          "url": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/tas/TASSC/2013/57.html?context=1;query=contract;mask_path=au/cases/tas",
+          "citation": "[2013] TASSC 57"
+        }
+      ],
+      "browser": true,
+      "pending": true,
+      "chars": 1478,
+      "serializedChars": 2081,
+      "gaps": [
+        {
+          "kind": "coverage",
+          "originTool": "search_cases",
+          "target": {
+            "query": "contract"
+          },
+          "jurisdiction": "Tas",
+          "reason": "Only this browser result page was inspected; the wider search has not been exhausted.",
+          "sourceUrls": [
+            "https://www.austlii.edu.au/cgi-bin/sinosrch.cgi?method=auto&query=contract&mask_path=au%2Fcases%2Ftas"
+          ],
+          "sourceAccess": "permitted",
+          "evidenceNeeded": [
+            "The publisher's matching judgment links and remaining result pages"
+          ],
+          "id": "gap_3c5391f5b59f5b46b998039c"
+        }
+      ],
+      "seconds": 7.29
+    },
+    {
+      "id": "jurisdiction-act",
+      "name": "search_cases",
+      "args": {
+        "query": "contract",
+        "jurisdiction": "ACT",
+        "limit": 3
+      },
+      "status": "search_results",
+      "hits": [
+        {
+          "title": "Stepping Stones Child Care Centre (ACT) Pty Limited v Early Learning Services Limited [2013] ACTSC 173 (9 September 2013)",
+          "url": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/act/ACTSC/2013/173.html?context=1;query=contract;mask_path=au/cases/act",
+          "citation": "[2013] ACTSC 173"
+        },
+        {
+          "title": "R Developments Pty Ltd v Forth & Anor [2016] ACTSC 8 (4 February 2016)",
+          "url": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/act/ACTSC/2016/8.html?context=1;query=contract;mask_path=au/cases/act",
+          "citation": "[2016] ACTSC 8"
+        },
+        {
+          "title": "SKYWEST AVIATION PTY LIMITED v. THE COMMONWEALTH OF AUSTRALIA No. SC838 of 1991 Number of pages - 59 Contract - Estoppel [1995] ACTSC 189 (14 March 1995)",
+          "url": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/act/ACTSC/1995/189.html?context=1;query=contract;mask_path=au/cases/act",
+          "citation": "[1995] ACTSC 189"
+        }
+      ],
+      "browser": true,
+      "pending": true,
+      "chars": 1613,
+      "serializedChars": 2216,
+      "gaps": [
+        {
+          "kind": "coverage",
+          "originTool": "search_cases",
+          "target": {
+            "query": "contract"
+          },
+          "jurisdiction": "ACT",
+          "reason": "Only this browser result page was inspected; the wider search has not been exhausted.",
+          "sourceUrls": [
+            "https://www.austlii.edu.au/cgi-bin/sinosrch.cgi?method=auto&query=contract&mask_path=au%2Fcases%2Fact"
+          ],
+          "sourceAccess": "permitted",
+          "evidenceNeeded": [
+            "The publisher's matching judgment links and remaining result pages"
+          ],
+          "id": "gap_3dc3cb1c8dee82bb410aff5b"
+        }
+      ],
+      "seconds": 7.21
+    },
+    {
+      "id": "jurisdiction-nt",
+      "name": "search_cases",
+      "args": {
+        "query": "contract",
+        "jurisdiction": "NT",
+        "limit": 3
+      },
+      "status": "search_results",
+      "hits": [
+        {
+          "title": "Castronova v Tjung & Ors [2024] NTSC 55 (28 June 2024)",
+          "url": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/nt/NTSC/2024/55.html?context=1;query=contract;mask_path=au/cases/nt",
+          "citation": "[2024] NTSC 55"
+        },
+        {
+          "title": "K & J burns Electrical Pty Ltd v GRD Group (NT) Pty Ltd & Anor [2011] NTCA 1 (21 January 2011)",
+          "url": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/nt/NTCA/2011/1.html?context=1;query=contract;mask_path=au/cases/nt",
+          "citation": "[2011] NTCA 1"
+        },
+        {
+          "title": "FE Accommodation Pty Ltd & Anor v Gold Valley Iron Ore Pty Ltd [2025] NTCA 8 (14 August 2025)",
+          "url": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/nt/NTCA/2025/8.html?context=1;query=contract;mask_path=au/cases/nt",
+          "citation": "[2025] NTCA 8"
+        }
+      ],
+      "browser": true,
+      "pending": true,
+      "chars": 1496,
+      "serializedChars": 2097,
+      "gaps": [
+        {
+          "kind": "coverage",
+          "originTool": "search_cases",
+          "target": {
+            "query": "contract"
+          },
+          "jurisdiction": "NT",
+          "reason": "Only this browser result page was inspected; the wider search has not been exhausted.",
+          "sourceUrls": [
+            "https://www.austlii.edu.au/cgi-bin/sinosrch.cgi?method=auto&query=contract&mask_path=au%2Fcases%2Fnt"
+          ],
+          "sourceAccess": "permitted",
+          "evidenceNeeded": [
+            "The publisher's matching judgment links and remaining result pages"
+          ],
+          "id": "gap_4ee06aa8294aeacb4d0b082b"
+        }
+      ],
+      "seconds": 7.19
+    },
+    {
+      "id": "empty-query",
+      "name": "search_cases",
+      "args": {
+        "query": "zzzx_au_law_robustness_20260913",
+        "court": "FCAFC"
+      },
+      "status": "query_empty",
+      "hits": [],
+      "browser": true,
+      "pending": false,
+      "chars": 959,
+      "serializedChars": 1006,
+      "gaps": [],
+      "seconds": 7.14
+    },
+    {
+      "id": "missing-citation",
+      "name": "get_case_text",
+      "args": {
+        "citation": "[2020] FCAFC 99999"
+      },
+      "status": "unresolved",
+      "hits": [],
+      "browser": false,
+      "pending": true,
+      "chars": 1886,
+      "serializedChars": 3977,
+      "gaps": [
+        {
+          "kind": "source_access",
+          "originTool": "get_case_text",
+          "originalErrorCode": "UPSTREAM_BLOCKED",
+          "target": {
+            "citation": "[2020] FCAFC 99999"
+          },
+          "reason": "Federal Court of Australia (Full Court) judgments is not fetched by this server (its publisher (AustLII / judgments.fedcourt.gov.au) blocks non-browser clients, so this server does not request them; the Aside browser fallback is on and was tried, but the page did not come back (https://www.judgments.fedcourt.gov.au/judgments/Judgments/fca/full/2020/2020fcafc99999 → the browser fallback is not fetched by this server (the publisher served a publisher error page instead of the requested document at https://www.judgments.fedcourt.gov.au/judgments/Judgments/fca/full/2020/2020fcafc99999; the requested source was not retrieved). The browser attempt did not retrieve the requested material — nothing here says the material is absent.; https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/cth/FCAFC/2020/99999.html → the browser fallback is not fetched by this server (the publisher served a publisher error page instead of the requested document at https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/cth/FCAFC/2020/99999.html; the requested source was not retrieved). The browser attempt did not retrieve the requested material — nothing here says the material is absent.)). The browser attempt did not retrieve the requested material — nothing here says the material is absent.",
+          "sourceUrls": [
+            "https://www.judgments.fedcourt.gov.au/judgments/Judgments/fca/full/2020/2020fcafc99999",
+            "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/cth/FCAFC/2020/99999.html",
+            "https://lawcite.austlii.edu.au/cgi-bin/LawCite?cit=%5B2020%5D%20FCAFC%2099999",
+            "https://www.austlii.edu.au/cgi-bin/sinosrch.cgi?method=auto&query=%5B2020%5D+FCAFC+99999"
+          ],
+          "sourceAccess": "requires_access",
+          "evidenceNeeded": [
+            "The requested original source record",
+            "Observed identity and relevant passage"
+          ],
+          "id": "gap_14ea6b3cd8ae17e1641767aa"
+        }
+      ],
+      "seconds": 12.98
+    }
+  ],
+  "requiredMissing": [],
+  "finishedAt": "2026-09-14T10:05:15.820Z",
+  "passed": true
+}

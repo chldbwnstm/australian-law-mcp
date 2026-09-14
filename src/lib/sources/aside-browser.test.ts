@@ -22,6 +22,7 @@ import {
   defaultAsideCommandPath,
   fetchViaAside,
   extractAsidePayload,
+  isAbsoluteCommandPath,
   looksLikeBotChallenge,
   type AsideRunOptions,
   type AsideRunResult,
@@ -43,6 +44,14 @@ const enabledHost = {
 
 /** The fixtures describe a Mac regardless of the machine running the suite. */
 const asideStatus = (options: AsideEnvironment) => probeAsideStatus({ platform: "darwin", ...options })
+
+const WIN_ASIDE_PATH = "C:\\Users\\tester\\AppData\\Local\\Aside\\CLI\\current\\aside.exe"
+/** The same host as a Windows PC: the fallback on, the CLI where install.ps1 puts it. */
+const windowsHost = {
+  platform: "win32" as const,
+  env: env({ [ASIDE_ENABLED_ENV]: "true", [ASIDE_COMMAND_ENV]: WIN_ASIDE_PATH }),
+  exists: (path: string) => path === WIN_ASIDE_PATH,
+}
 
 interface RunnerCall {
   command: string
@@ -86,12 +95,22 @@ function stubRunner(result: Partial<AsideRunResult> = {}): { runner: AsideRunner
 }
 
 describe("asideStatus", () => {
-  it.each(["win32", "linux"] as const)("never launches the fallback on %s, even with an explicit CLI path", async platform => {
+  // Linux stays out — WSL reports `linux` too — because Aside ships no browser
+  // there: a CLI can be installed, but there is nothing local for it to drive.
+  it.each(["linux", "freebsd"] as const)("never launches the fallback on %s, even with an explicit CLI path", async platform => {
     const { runner, calls } = stubRunner()
     const options = { ...enabledHost, platform, exists: () => { throw new Error("must not probe") }, runner }
-    expect(asideStatus(options)).toMatchObject({ enabled: false, reason: expect.stringContaining("requires macOS") })
-    await expect(fetchViaAside(FED_COURT, options)).rejects.toThrow("requires macOS")
+    expect(asideStatus(options)).toMatchObject({ enabled: false, reason: expect.stringContaining("macOS and Windows only") })
+    await expect(fetchViaAside(FED_COURT, options)).rejects.toThrow(/macOS and Windows only/)
     expect(calls).toHaveLength(0)
+  })
+
+  it("launches on Windows with the host's own CLI path", async () => {
+    const { runner, calls } = stubRunner()
+    expect(probeAsideStatus(windowsHost)).toEqual({ enabled: true, command: WIN_ASIDE_PATH })
+    await expect(fetchViaAside(FED_COURT, { ...windowsHost, runner })).resolves.toContain("judgment")
+    expect(calls[0].command).toBe(WIN_ASIDE_PATH)
+    expect(calls[0].args).toEqual(["repl", "--host", "local", asideReplScript(FED_COURT)])
   })
 
   it("is off, with a reason, when the opt-in variable is unset", () => {
@@ -137,8 +156,28 @@ describe("asideStatus", () => {
     expect(status.reason).toContain("absolute")
   })
 
+  it("unwraps a quoted configured path on a Mac too", () => {
+    const status = asideStatus({
+      env: env({ [ASIDE_ENABLED_ENV]: "1", [ASIDE_COMMAND_ENV]: `"${ASIDE_PATH}"` }),
+      exists: (path) => path === ASIDE_PATH,
+    })
+    expect(status).toEqual({ enabled: true, command: ASIDE_PATH })
+  })
+
+  it("decides absoluteness in the described host's own form", () => {
+    expect(isAbsoluteCommandPath("/Applications/Aside.app/Contents/MacOS/aside", "darwin")).toBe(true)
+    expect(isAbsoluteCommandPath("aside", "darwin")).toBe(false)
+    expect(isAbsoluteCommandPath("C:\\Users\\tester\\aside.exe", "darwin")).toBe(false)
+    expect(isAbsoluteCommandPath("C:\\Users\\tester\\aside.exe", "win32")).toBe(true)
+    expect(isAbsoluteCommandPath("C:/Users/tester/aside.exe", "win32")).toBe(true)
+    expect(isAbsoluteCommandPath("\\\\fileserver\\tools\\aside.exe", "win32")).toBe(true)
+    expect(isAbsoluteCommandPath("\\Aside\\CLI\\current\\aside.exe", "win32")).toBe(false)
+    expect(isAbsoluteCommandPath("/Users/tester/aside", "win32")).toBe(false)
+    expect(isAbsoluteCommandPath("%LOCALAPPDATA%\\Aside\\CLI\\current\\aside.exe", "win32")).toBe(false)
+  })
+
   it("probes the standard install path before PATH", () => {
-    const standard = defaultAsideCommandPath("/Users/tester")
+    const standard = defaultAsideCommandPath("/Users/tester", "darwin")
     expect(standard).toBe("/Users/tester/.aside/cli/Aside CLI.app/Contents/MacOS/aside")
     const status = asideStatus({
       env: env({ [ASIDE_ENABLED_ENV]: "1", PATH: "/usr/local/bin" }),
@@ -166,6 +205,115 @@ describe("asideStatus", () => {
     expect(status.enabled).toBe(false)
     expect(status.reason).toContain("/Users/tester/.aside/cli/Aside CLI.app/Contents/MacOS/aside")
     expect(status.reason).toContain(ASIDE_COMMAND_ENV)
+  })
+
+  it("skips a relative PATH entry rather than resolve it against the working directory", () => {
+    const probed: string[] = []
+    const status = asideStatus({
+      env: env({ [ASIDE_ENABLED_ENV]: "1", PATH: ".:bin:/usr/local/bin" }),
+      home: "/Users/tester",
+      exists: (path) => { probed.push(path); return path === "/usr/local/bin/aside" || path === "aside" || path === "bin/aside" },
+    })
+    expect(status).toEqual({ enabled: true, command: "/usr/local/bin/aside" })
+    expect(probed).not.toContain("aside")
+    expect(probed).not.toContain("bin/aside")
+    expect(asideStatus({ env: env({ [ASIDE_ENABLED_ENV]: "1", PATH: "." }), home: "/Users/tester", exists: (path) => path === "aside" }).enabled).toBe(false)
+  })
+})
+
+describe("asideStatus on a Windows host", () => {
+  const LOCAL = "C:\\Users\\tester\\AppData\\Local"
+  const on = (values: Record<string, string>) => env({ [ASIDE_ENABLED_ENV]: "true", ...values })
+  const windows = (options: Omit<AsideEnvironment, "platform">) => probeAsideStatus({ platform: "win32", home: "C:\\Users\\tester", ...options })
+
+  it("looks where install.ps1 puts the CLI: current\\aside.exe under %LOCALAPPDATA%\\Aside\\CLI", () => {
+    expect(defaultAsideCommandPath("C:\\Users\\tester", "win32", on({ LOCALAPPDATA: LOCAL }))).toBe(WIN_ASIDE_PATH)
+    const status = windows({ env: on({ LOCALAPPDATA: LOCAL, PATH: "C:\\Windows\\System32" }), exists: (path) => path === WIN_ASIDE_PATH })
+    expect(status).toEqual({ enabled: true, command: WIN_ASIDE_PATH })
+  })
+
+  it("honours ASIDE_CLI_INSTALL_DIR, which replaces the whole install base", () => {
+    const custom = "D:\\Tools\\AsideCLI"
+    expect(defaultAsideCommandPath("C:\\Users\\tester", "win32", on({ LOCALAPPDATA: LOCAL, ASIDE_CLI_INSTALL_DIR: custom }))).toBe("D:\\Tools\\AsideCLI\\current\\aside.exe")
+    const status = windows({ env: on({ LOCALAPPDATA: LOCAL, ASIDE_CLI_INSTALL_DIR: custom }), exists: (path) => path === "D:\\Tools\\AsideCLI\\current\\aside.exe" })
+    expect(status.command).toBe("D:\\Tools\\AsideCLI\\current\\aside.exe")
+  })
+
+  it("falls back to <home>\\AppData\\Local only when LOCALAPPDATA is missing from a stripped environment", () => {
+    expect(defaultAsideCommandPath("C:\\Users\\tester", "win32", on({}))).toBe(WIN_ASIDE_PATH)
+  })
+
+  it("treats a relative ASIDE_CLI_INSTALL_DIR or LOCALAPPDATA as unset rather than probe a working-directory path", () => {
+    expect(defaultAsideCommandPath("C:\\Users\\tester", "win32", on({ ASIDE_CLI_INSTALL_DIR: "tools\\aside", LOCALAPPDATA: LOCAL }))).toBe(WIN_ASIDE_PATH)
+    expect(defaultAsideCommandPath("C:\\Users\\tester", "win32", on({ LOCALAPPDATA: "AppData\\Local" }))).toBe(WIN_ASIDE_PATH)
+    expect(defaultAsideCommandPath("C:\\Users\\tester", "win32", on({ LOCALAPPDATA: "\\Users\\other\\AppData\\Local" }))).toBe(WIN_ASIDE_PATH)
+  })
+
+  it("refuses a .cmd, .bat or .ps1 wrapper up front, naming aside.exe as the thing to point at", () => {
+    for (const wrapper of ["C:\\Tools\\aside.cmd", "C:\\Tools\\Aside.BAT", "C:\\Tools\\aside.ps1"]) {
+      const status = windows({ env: on({ [ASIDE_COMMAND_ENV]: wrapper }), exists: () => true })
+      expect(status.enabled).toBe(false)
+      expect(status.reason).toContain(wrapper)
+      expect(status.reason).toContain("aside.exe itself")
+    }
+  })
+
+  it("splits PATH on ';', strips quotes, probes aside.exe only, and skips relative entries", () => {
+    const probed: string[] = []
+    const status = windows({
+      env: on({ PATH: `.;"C:\\Program Files\\Tools";C:\\Tools;` }),
+      exists: (path) => { probed.push(path); return path === "C:\\Tools\\aside.exe" },
+    })
+    expect(status).toEqual({ enabled: true, command: "C:\\Tools\\aside.exe" })
+    expect(probed).toContain("C:\\Program Files\\Tools\\aside.exe")
+    expect(probed.every((path) => /^[A-Za-z]:\\/.test(path))).toBe(true)
+    expect(probed.some((path) => /\.(?:cmd|bat)$/i.test(path))).toBe(false)
+  })
+
+  it("never splits a drive letter as a PATH delimiter", () => {
+    const status = windows({ env: on({ PATH: "C:\\Users\\tester\\AppData\\Local\\Aside\\CLI\\current" }), exists: (path) => path === WIN_ASIDE_PATH })
+    expect(status.command).toBe(WIN_ASIDE_PATH)
+  })
+
+  it("accepts a configured drive-letter path — with or without the quotes Explorer adds — and a UNC path", () => {
+    for (const configured of [WIN_ASIDE_PATH, `"${WIN_ASIDE_PATH}"`, "C:/Users/tester/aside.exe", "\\\\fileserver\\tools\\aside.exe"]) {
+      const expected = configured.replace(/^"(.*)"$/, "$1")
+      expect(windows({ env: on({ [ASIDE_COMMAND_ENV]: configured }), exists: (path) => path === expected })).toEqual({ enabled: true, command: expected })
+    }
+  })
+
+  it("refuses an unexpanded %LOCALAPPDATA%, a ~, a bare name and a drive-less path, and says how to write it", () => {
+    for (const configured of ["%LOCALAPPDATA%\\Aside\\CLI\\current\\aside.exe", "~\\aside.exe", "aside", "aside.exe", "\\Aside\\CLI\\current\\aside.exe"]) {
+      const status = windows({ env: on({ [ASIDE_COMMAND_ENV]: configured }), exists: () => true })
+      expect(status.enabled).toBe(false)
+      expect(status.reason).toContain("absolute path")
+      expect(status.reason).toContain("not expanded")
+    }
+  })
+
+  it("names a missing configured path and where the Windows installer puts the CLI, never 'not installed'", () => {
+    const status = windows({ env: on({ [ASIDE_COMMAND_ENV]: "D:\\nope\\aside.exe", LOCALAPPDATA: LOCAL }), exists: () => false })
+    expect(status.enabled).toBe(false)
+    expect(status.reason).toContain("D:\\nope\\aside.exe")
+    expect(status.reason).toContain(WIN_ASIDE_PATH)
+    expect(status.reason).not.toMatch(/not installed/i)
+  })
+
+  it("explains an opted-in Windows host with no CLI found: where it looked, the installer, and the PATH restart", () => {
+    const status = windows({ env: on({ LOCALAPPDATA: LOCAL, PATH: "C:\\Windows\\System32" }), exists: () => false })
+    expect(status.enabled).toBe(false)
+    expect(status.reason).toContain(WIN_ASIDE_PATH)
+    expect(status.reason).toContain("install.ps1")
+    expect(status.reason).toContain("PATH")
+    expect(status.reason).toContain(ASIDE_COMMAND_ENV)
+  })
+
+  it("tells a Windows user what a CLI that will not start usually is", async () => {
+    const runner: AsideRunner = async () => ({ stdout: "", exitCode: null, failedToStart: true })
+    let thrown: unknown
+    try { await fetchViaAside(FED_COURT, { ...windowsHost, runner }) } catch (error) { thrown = error }
+    expect(thrown).toBeInstanceOf(LawApiError)
+    expect((thrown as LawApiError).suggestions.join("\n")).toMatch(/aside\.exe itself.*junction/s)
   })
 })
 
@@ -453,8 +601,27 @@ describe("the child's environment", () => {
         LAW_API_KEY: "secret",
         AWS_SECRET_ACCESS_KEY: "secret",
       }),
+      "darwin",
     )
     expect(child).toEqual({ HOME: "/Users/tester", PATH: "/usr/bin", LANG: "en_AU.UTF-8" })
+  })
+
+  it("on Windows passes the system and profile roots a Windows child needs, under the parent's own spelling, and nothing of ours", () => {
+    const child = asideChildEnv(
+      env({
+        SystemRoot: "C:\\WINDOWS", windir: "C:\\WINDOWS", SystemDrive: "C:", Path: "C:\\WINDOWS\\System32",
+        LOCALAPPDATA: "C:\\Users\\tester\\AppData\\Local", APPDATA: "C:\\Users\\tester\\AppData\\Roaming",
+        USERPROFILE: "C:\\Users\\tester", TEMP: "C:\\Temp", PATHEXT: ".COM;.EXE", ComSpec: "C:\\WINDOWS\\system32\\cmd.exe",
+        HOME: "/should-not-leak-into-a-windows-child",
+        [ASIDE_ENABLED_ENV]: "true", [ASIDE_COMMAND_ENV]: WIN_ASIDE_PATH, LAW_API_KEY: "secret", MCP_HTTP_API_KEY: "secret",
+      }),
+      "win32",
+    )
+    expect(child).toEqual({
+      SystemRoot: "C:\\WINDOWS", windir: "C:\\WINDOWS", SystemDrive: "C:", Path: "C:\\WINDOWS\\System32",
+      LOCALAPPDATA: "C:\\Users\\tester\\AppData\\Local", APPDATA: "C:\\Users\\tester\\AppData\\Roaming",
+      USERPROFILE: "C:\\Users\\tester", TEMP: "C:\\Temp", PATHEXT: ".COM;.EXE", ComSpec: "C:\\WINDOWS\\system32\\cmd.exe",
+    })
   })
 })
 

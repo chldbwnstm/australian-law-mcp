@@ -98,6 +98,23 @@ The server builds deep links to them and never requests them:
 A blocked source is reported as `[UPSTREAM_BLOCKED]` with a link. It is never
 reported as an absence of the material.
 
+With the optional browser fallback turned on (`AU_LAW_ASIDE`, off by default),
+the user's own Aside browser — on macOS 15+ or Windows 10/11 (x64) — may open
+these hosts under the user's own session at the server's request. The server
+still sends them no request of its own, and what the browser returns is
+labelled browser-retrieved.
+
+================================================================================
+
+OPTIONAL EXTERNAL SOFTWARE
+
+  Aside browser and CLI — https://aside.com (AT YOUR SIDE INC; the Windows
+    installer is Authenticode-signed under that name)
+    Not bundled, not required, and not covered by this project's licence. The
+    browser fallback and the follow-up companion use it on macOS 15+ and
+    Windows 10/11 (x64). Aside ships no Linux browser build, so on Linux and
+    WSL both are a no-op.
+
 ================================================================================
 
 DEPENDENCIES

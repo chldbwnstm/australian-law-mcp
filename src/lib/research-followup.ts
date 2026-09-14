@@ -297,13 +297,47 @@ export function followupEnvelope(gaps: readonly ResearchGap[], extra: Omit<Follo
   return { schemaVersion: FOLLOWUP_SCHEMA_VERSION, gaps: [...merged.slice(0, maximum - 1), overflow], ...extra, omittedGapCount, pending: true }
 }
 
+/**
+ * Where Aside ships a browser, and the OS floor on each. SINGLE SOURCE: the
+ * companion installer derives from this table, and the copy in the installed
+ * helper (`companion/au-law-followup/scripts/followup.mjs`, which cannot import
+ * this package) is held in lock-step by a test.
+ *
+ * macOS: Aside documents 15.0 or later. Windows: Aside publishes no floor
+ * (docs.aside.com, 2026-09-14); the browser is Chromium-based and `install.ps1`
+ * gates only on Windows_NT + AMD64, so NT 10.0 — Windows 10 and 11 — is the
+ * floor. Windows 11 reports major 10 (`os.release()` is `10.0.<build>`), so a
+ * rule written "Windows 11 or later" would refuse every Windows 11 machine.
+ * Linux is absent because Aside has no Linux browser build: a CLI installs
+ * there, but there is nothing for it to drive.
+ */
+export const ASIDE_HOST_FLOORS = {
+  darwin: { name: "macOS", minMajor: 15, requirement: "macOS 15.0 or later" },
+  win32: { name: "Windows", minMajor: 10, requirement: "Windows 10 or later" },
+} as const
+
+export type AsideHostFloor = (typeof ASIDE_HOST_FLOORS)[keyof typeof ASIDE_HOST_FLOORS]
+
+/** The floor for a platform Aside ships on, or undefined for one it does not. */
+export function asideHostFloor(platform: string): AsideHostFloor | undefined {
+  return platform === "darwin" || platform === "win32" ? ASIDE_HOST_FLOORS[platform] : undefined
+}
+
+/** The OS major from a probe's version string ("15.1", "10.0.26200"), or NaN when it is not a dotted number. */
+export function osMajor(osVersion: string): number {
+  const match = /^(\d+)(?:\.\d+){0,3}$/.exec(osVersion.trim())
+  return match ? Number(match[1]) : NaN
+}
+
 export function isEligibleLocalAside(input: z.infer<typeof LocalEligibilitySchema>): { eligible: boolean; reason: string } {
+  // Local first: a remote Windows or Mac host is refused for the actionable
+  // reason, not for a platform or version it may well satisfy.
   if (input.execution !== "local") return { eligible: false, reason: "Browser follow-up requires local client execution." }
-  if (input.platform !== "darwin") return { eligible: false, reason: "Aside browser follow-up is available only on macOS." }
-  const match = /^(\d+)(?:\.\d+){0,2}$/.exec(input.osVersion)
-  const major = match ? Number(match[1]) : NaN
-  if (!Number.isFinite(major) || major < 15) return { eligible: false, reason: "Aside browser follow-up requires macOS 15.0 or later." }
+  const floor = asideHostFloor(input.platform)
+  if (!floor) return { eligible: false, reason: `Aside browser follow-up is available only on macOS and Windows; this host reported ${input.platform}.` }
+  const major = osMajor(input.osVersion)
+  if (!Number.isFinite(major) || major < floor.minMajor) return { eligible: false, reason: `Aside browser follow-up requires ${floor.requirement}.` }
   if (!input.asideConnected) return { eligible: false, reason: "Aside MCP is not connected in this local host session." }
   if (!input.asideTools.includes("repl")) return { eligible: false, reason: "The connected Aside MCP does not expose its required repl tool." }
-  return { eligible: true, reason: "Local macOS 15+ and Aside repl capability confirmed by the companion probe." }
+  return { eligible: true, reason: `Local ${floor.name} ${floor.minMajor}+ and Aside repl capability confirmed by the companion probe.` }
 }

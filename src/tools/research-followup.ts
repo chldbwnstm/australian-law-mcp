@@ -26,7 +26,7 @@ export const PlanResearchFollowupSchema = z.object({
 
 export const planResearchFollowupDescription =
   "Plan bounded follow-up for structured research gaps. The host companion must supply its fresh local eligibility " +
-  "probe; only local macOS 15+ with Aside repl produces browser tasks. Planning never launches a browser, and " +
+  "probe; only a local macOS 15+ or Windows 10/11 (x64) host with Aside repl produces browser tasks. Planning never launches a browser, and " +
   "ineligible environments retain every gap and source link for standard research."
 
 function taskId(gap: ResearchGap, action: FollowupTask["action"]): string {
