@@ -44,3 +44,10 @@ body:
       description: Optionally paste the prompt you gave the AI when the problem occurred.
     validations:
       required: false
+  - type: textarea
+    id: expected-answer
+    attributes:
+      label: Expected answer (briefly)
+      description: Briefly describe the answer you expected from the AI.
+    validations:
+      required: false
