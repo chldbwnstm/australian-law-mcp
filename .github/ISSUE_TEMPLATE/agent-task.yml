@@ -2,6 +2,34 @@ name: Agent task
 description: A bounded change with explicit acceptance criteria and risk areas
 title: "[Task] "
 body:
+  - type: dropdown
+    id: operating-system
+    attributes:
+      label: Operating system
+      description: Select the environment where Australian Law MCP runs. If you use WSL on Windows, choose WSL.
+      options:
+        - macOS
+        - Windows
+        - Linux
+        - WSL
+        - Other (describe in the problem below)
+    validations:
+      required: true
+  - type: dropdown
+    id: aside-enabled
+    attributes:
+      label: Aside browser research
+      description: >
+        Is Aside browser research enabled for this MCP setup? In Claude Desktop,
+        check "Finish blocked legal sources using the Aside browser" under
+        Settings > Extensions > Australian Law. For other clients, check your
+        Aside integration settings.
+      options:
+        - Enabled
+        - Disabled
+        - Not sure
+    validations:
+      required: true
   - type: textarea
     id: problem
     attributes:
