@@ -90,9 +90,25 @@ describe("companion host eligibility — the installed copy of the server's rule
     ["a bare name", "aside"],
     ["a relative path", "./aside"],
   ])("refuses %s as --aside-command without spawning anything", (_name, configured) => {
-    const output = execFileSync(process.execPath, [script, "probe", "--aside-command", configured], { encoding: "utf8", env: { ...process.env, AU_LAW_ASIDE_COMMAND: undefined } })
+    // Run the real CLI on a simulated supported Windows host. On Linux the
+    // host refusal correctly takes precedence over the path error; inheriting
+    // the runner's platform would therefore test a different branch in CI.
+    const bootstrap = `
+      import os from "node:os";
+      import { syncBuiltinESMExports } from "node:module";
+      Object.defineProperty(process, "platform", { value: "win32" });
+      os.release = () => "10.0.26200";
+      syncBuiltinESMExports();
+      process.argv = [process.execPath, ${JSON.stringify(script)}, "probe", "--aside-command", ${JSON.stringify(configured)}];
+      await import(${JSON.stringify(pathToFileURL(script).href)});
+    `
+    const output = execFileSync(process.execPath, ["--input-type=module", "--eval", bootstrap], {
+      encoding: "utf8",
+      env: { ...process.env, AU_LAW_ASIDE_COMMAND: undefined, SSH_CONNECTION: undefined, SSH_TTY: undefined,
+        WSL_DISTRO_NAME: undefined, CODESPACES: undefined, REMOTE_CONTAINERS: undefined },
+    })
     const probe = JSON.parse(output)
-    expect(probe).toMatchObject({ eligible: false, asideConnected: false })
+    expect(probe).toMatchObject({ platform: "win32", osVersion: "10.0.26200", execution: "local", eligible: false, asideConnected: false })
     expect(probe.reason).toContain("absolute path")
     expect(probe.asideCommand).toBeUndefined()
   })

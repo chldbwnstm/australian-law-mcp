@@ -193,7 +193,10 @@ function fixture() {
   return { root, config, store, server, github, worker, workspaces, tick, run, restart, toDesign, toChecks }
 }
 
-describe("issue-to-PR pipeline with a mock REST API, real Git worktrees and fake CLI executable", () => {
+// A repair scenario runs up to five CLI workers (each bounded at 5 seconds),
+// plus Git setup and commits. The default 5-second whole-test limit is shorter
+// than that work on Windows CI; allow the worker budgets plus Git overhead.
+describe("issue-to-PR pipeline with a mock REST API, real Git worktrees and fake CLI executable", { timeout: 30_000 }, () => {
   it("waits for maintainer approval, creates a draft, passes gates and revokes ready after an external push", async () => {
     const f = fixture()
     try {

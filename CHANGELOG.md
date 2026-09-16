@@ -4,7 +4,7 @@ All notable changes to this project are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.6] - 2026-09-16
 
 ### Fixed
 
@@ -17,6 +17,14 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   place; navigation is excluded inside document containers too. Recorded
   original pages cover both retrieval routes, and the live Aside check now
   requires these two judgments to return reasons.
+- CI path-rejection tests explicitly simulate a supported Windows host, and
+  the Git/CLI pipeline integration suite allows its bounded worker budgets
+  plus Git overhead on Windows runners.
+
+### Changed
+
+- New issue reports require the operating system and Aside activation status.
+  Blank issue reports are disabled so these diagnostic fields are included.
 
 ## [1.0.5] - 2026-09-14
 

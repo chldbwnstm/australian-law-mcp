@@ -145,9 +145,9 @@ MCP calls** on Windows x64 (`10.0.26200`, Aside CLI `1.26.906.1630`):
 | `get_case_text`, `[2023] VSC 637` | Original PDF linked; body remains pending |
 | `get_case_text`, `[2020] FCAFC 130` | Federal Court control returned reasons |
 
-This run used the unreleased fix, before committing it; the record identifies
-the base commit, dirty state and tested parser-build hash. The version remains
-1.0.5 until the next release. It is a Windows verification of this parser change,
+This run used the fix before committing it; the record identifies the base
+commit, dirty state and tested parser-build hash. The run reported version
+1.0.5; the fix ships in 1.0.6. It is a Windows verification of this parser change,
 not a new macOS live run or a guarantee of publisher availability.
 
 `verify:aside` now also requires the two repaired Victorian judgment lookups to
