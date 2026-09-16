@@ -1,17 +1,19 @@
 # Aside research verification
 
-Two live records, each dated and each from the built source at the time. The
+The original two live records are dated and identify the built source. The
 macOS matrix below was tested on **13 September 2026** and shipped in v1.0.4;
 the [Windows run](#windows-run) was tested on **14 September 2026** and ships in
 v1.0.5. Both used the built server through MCP stdio with `AU_LAW_ASIDE=true`,
 and the harness did not supply manually corrected publisher URLs to the server.
+The [September 16 follow-up](#victorian-body-parsing-16-september-2026) verifies
+the subsequent Victorian body-parsing fix.
 
 ## Automated regression checks
 
-The local suite passes **2,961 tests**, with 21 skipped: **103 additional tests**
-over the preceding 2,858-test baseline. Type checking, the build and the stdio
-handshake/tool-call check also pass. Normal tests never launch Aside or request
-a public website.
+The September 16 suite passes **2,976 tests**, with 21 skipped, including 15
+new Victorian body-parsing and retrieval regressions over the 1.0.5 baseline.
+Type checking, the build and the stdio handshake/tool-call check also pass.
+Normal tests never launch Aside or request a public website.
 
 | Area | What is checked |
 | --- | --- |
@@ -26,11 +28,11 @@ a public website.
 
 Recorded HTML and capture metadata are in
 [`src/lib/sources/__fixtures__/aside`](../src/lib/sources/__fixtures__/aside).
-In the judgment and search pages, scripts and styles were removed and document
-structure and visible text retained; the recorded challenge page is verbatim,
-because its markup is what the detector reads. `provenance.json` records each
-file's publisher URL, capture date, the hash of the original HTML, and which of
-the two it is.
+The September 13 judgment and search captures have scripts and styles removed,
+with document structure and visible text retained. The challenge page and the
+September 16 Victorian judgment captures are verbatim browser DOM snapshots.
+`provenance.json` records each file's publisher URL, capture date, original HTML
+hash and any transformation.
 
 ## Live MCP matrix
 
@@ -112,6 +114,45 @@ pages on `judgments.fedcourt.gov.au` and AustLII's `viewdoc` were not challenged
 in either run. The recorded challenge page is
 [`austlii-challenge-ko.html`](../src/lib/sources/__fixtures__/aside/austlii-challenge-ko.html).
 Nothing in this server attempts to satisfy such a check.
+
+## Victorian body parsing (16 September 2026)
+
+Investigation of [issue #1](https://github.com/chldbwnstm/australian-law-mcp/issues/1)
+found two independent outcomes. Keyword searches initially encountered a
+bot-verification page, then succeeded on a later attempt in the same Windows
+session. Separately, Aside retrieved genuine Victorian HTML judgments that the
+server rejected because their reasons began with `REASONS` or `HIS HONOUR:`.
+The reporter did not supply their exact calls or settings, so these observations
+do not establish which outcome they encountered.
+
+The parser now accepts these short headings within a publisher document
+container, while retaining exact citation identity and numbered-body checks.
+It also removes navigation from inside that container before inspecting reasons.
+Original DOM captures for `[2024] VCAT 199` and `[1999] VSC 110` are recorded
+verbatim with hashes in the fixture provenance. Offline tests preserve the first
+and final paragraph locators, reject coversheets and navigation, and check the
+source-linked truncation gaps through both retrieval routes.
+
+The [focused live record](ASIDE-VICTORIA-FIX-REPORT.json) contains **six passing
+MCP calls** on Windows x64 (`10.0.26200`, Aside CLI `1.26.906.1630`):
+
+| Call | Observed outcome |
+| --- | --- |
+| `get_case_text`, `[2024] VCAT 199`, `full: true` | Reasons returned; no missing-text gap |
+| `get_case_text`, `[1999] VSC 110`, `full: true` | Reasons returned; response limit retains a truncation gap |
+| `search_decisions`, exact citation `[2024] VCAT 199` | Reasons returned; compact response retains a truncation gap |
+| `search_decisions`, exact citation `[1999] VSC 110` | Reasons returned; compact response retains a truncation gap |
+| `get_case_text`, `[2023] VSC 637` | Original PDF linked; body remains pending |
+| `get_case_text`, `[2020] FCAFC 130` | Federal Court control returned reasons |
+
+This run used the unreleased fix, before committing it; the record identifies
+the base commit, dirty state and tested parser-build hash. The version remains
+1.0.5 until the next release. It is a Windows verification of this parser change,
+not a new macOS live run or a guarantee of publisher availability.
+
+`verify:aside` now also requires the two repaired Victorian judgment lookups to
+return reasons, so the earlier PDF-viewer-only Victorian coverage cannot hide
+a regression in HTML body extraction.
 
 ## Repeat the checks
 

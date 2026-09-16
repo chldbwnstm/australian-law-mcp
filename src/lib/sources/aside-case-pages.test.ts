@@ -6,6 +6,53 @@ const fixture = (name: string) => readFileSync(new URL(`./__fixtures__/aside/${n
 const citation = "[2020] FCAFC 130"
 const searchUrl = "https://www.austlii.edu.au/cgi-bin/sinosrch.cgi?method=auto&query=prepayment&mask_path=au%2Fcases%2Fcth%2FFCAFC"
 
+// Original Aside DOM captures from 2026-09-16; URLs and hashes in provenance.json.
+const victorianPages = [
+  { name: "austlii-vcat-199", citation: "[2024] VCAT 199", heading: "<p class=\"h1\"><b>REASONS</b></p>", lastParagraph: 43 },
+  { name: "austlii-vsc-110", citation: "[1999] VSC 110", heading: "HIS HONOUR:<!--/normal--></p>", lastParagraph: 1918 },
+]
+
+describe.each(victorianPages)("recorded Victorian reasons: $citation", ({ name, citation, heading, lastParagraph }) => {
+  it("reads the original reasons and preserves the first and final paragraph locators", () => {
+    const result = readAsideJudgment(fixture(name), citation)
+    expect(result).not.toHaveProperty("failure")
+    if ("failure" in result) throw new Error(result.failure)
+    expect(result.citation).toBe(citation)
+    expect(result.text).toMatch(/(?:^|\n)1\. /)
+    expect(result.text).toMatch(new RegExp(`(?:^|\\n)${lastParagraph}\\. `))
+    expect(result.text).not.toContain("Search AustLII")
+    expect(result.text).not.toContain("All Databases")
+  })
+
+  it("does not mistake the coversheet and numbered orders for missing reasons", () => {
+    const html = fixture(name)
+    const start = html.indexOf(heading)
+    expect(start).toBeGreaterThan(0)
+    expect(readAsideJudgment(html.slice(0, start + heading.length), citation)).toHaveProperty("failure")
+  })
+
+  it("does not use a short heading outside the publisher's document container", () => {
+    const html = fixture(name).replace(/<article\b[^>]*class="the-document"[^>]*>/, "<main>").replace("</article>", "</main>")
+    expect(readAsideJudgment(html, citation)).toHaveProperty("failure")
+  })
+
+  it("does not count a copy of the reasons inside navigation as the document body", () => {
+    const html = fixture(name)
+      .replace('<article class="the-document">', '<article class="the-document"><nav>')
+      .replace("</article>", "</nav></article>")
+    expect(readAsideJudgment(html, citation)).toHaveProperty("failure")
+  })
+
+  it("still refuses a different requested judgment", () => {
+    expect(readAsideJudgment(fixture(name), citation.replace(/\d+$/, "99999"))).toHaveProperty("failure")
+  })
+})
+
+it("recognises the corresponding HER HONOUR: speaker marker in the same document template", () => {
+  const html = fixture("austlii-vsc-110").replace("HIS HONOUR:", "HER HONOUR:")
+  expect(readAsideJudgment(html, "[1999] VSC 110")).not.toHaveProperty("failure")
+})
+
 describe("search redirect identity", () => {
   it("accepts the publisher's semicolon syntax and legal mirror host", () => {
     expect(asideSearchPageMatches(searchUrl, searchUrl.replaceAll("&", ";").replace("www.austlii", "classic.austlii"))).toBe(true)

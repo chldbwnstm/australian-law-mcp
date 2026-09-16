@@ -4,6 +4,7 @@ import { boundToolResponse, type EvidenceItem } from "../lib/research-followup.j
 import { getCaseText, setAsideBridge } from "./precedents.js"
 import { planResearchFollowup, checkResearchEvidence } from "./research-followup.js"
 import { readAsideJudgment } from "../lib/sources/aside-case-pages.js"
+import { searchDecisions } from "./unified-decisions.js"
 
 const client = {} as never
 const citation = "[2020] FCAFC 130"
@@ -18,6 +19,31 @@ const hosts = {
 }
 const scope = { matter: "offline public judgment check", jurisdictions: ["Cth"] }
 afterEach(() => setAsideBridge(null))
+
+describe.each([
+  { name: "austlii-vcat-199", citation: "[2024] VCAT 199", url: "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/vic/VCAT/2024/199.html" },
+  { name: "austlii-vsc-110", citation: "[1999] VSC 110", url: "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/vic/VSC/1999/110.html" },
+])("Victorian body retrieval for $citation (issue #1)", ({ name, citation, url }) => {
+  it.each(["get_case_text", "search_decisions"])("returns reasons and keeps omitted text pending through %s", async tool => {
+    const html = readFileSync(new URL(`../lib/sources/__fixtures__/aside/${name}.html`, import.meta.url), "utf8")
+    setAsideBridge({ asideStatus: () => ({ enabled: true }), fetchViaAside: async requested => {
+      expect(requested).toBe(url)
+      return html
+    } })
+    const response = boundToolResponse(tool === "get_case_text"
+      ? await getCaseText(client, { citation })
+      : await searchDecisions(client, { domain: "cases", query: citation }), tool, 50_000)
+    expect(response.isError).not.toBe(true)
+    expect(response.content[0].text).toContain(`Citation: ${citation}`)
+    expect(response.content[0].text).toContain(`Source: ${url}`)
+    expect(response.content[0].text).toContain("Retrieved via: Aside")
+    expect(response.content[0].text).toContain("Reasons:\n")
+    expect(response.structuredContent?.followup).toMatchObject({
+      pending: true,
+      gaps: [expect.objectContaining({ kind: "truncated", target: expect.objectContaining({ citation }), sourceUrls: [url] })],
+    })
+  })
+})
 
 describe.each(Object.entries(hosts))("law tool → follow-up plan → supplied original passage on %s", (_name, eligibility) => {
   async function prepare() {

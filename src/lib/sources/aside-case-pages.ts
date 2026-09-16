@@ -51,12 +51,16 @@ export function readAsideJudgment(html: string, requested: string, sourceUrl?: s
   const container = elementsByClass(html, "article", "the-document", 1)[0]
     ?? elementsByClass(html, "div", "judgment_content", 1)[0]
     ?? elementsByClass(html, "div", "docx_judgment_content", 1)[0]
-  const body = container?.inner ?? html
+  const body = (container?.inner ?? html)
     .replace(/<(nav|header|footer|aside|form)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, " ")
     .replace(/<head\b[^>]*>[\s\S]*?<\/head\s*>/gi, " ")
   const text = judgmentText(body)
   const documentTitle = title ?? headings[0] ?? expected
   const reasons = /(?:^|\n)\s*(?:REASONS\s+FOR\s+(?:JUDGMENT|DECISION)|JUDGMENT|JUDGEMENT|RULING)\s*(?=\n|$)/i.exec(text)
+    // Recorded Victorian templates use bare REASONS (VCAT) or HIS HONOUR:
+    // (older VSC). These shorter markers require a publisher document container;
+    // exact citation identity and numbered text after the heading still apply.
+    ?? (container ? /(?:^|\n)\s*(?:REASONS|(?:HIS|HER)\s+HONOUR:)\s*(?=\n|$)/i.exec(text) : null)
   // Older WA pages mark the start with <a name="Judgment"> and numbered
   // paragraph anchors instead of a visible "REASONS FOR JUDGMENT" heading.
   const judgmentAnchor = /<a\b[^>]*(?:name|id)\s*=\s*["']Judgment["'][^>]*>/i.exec(body)

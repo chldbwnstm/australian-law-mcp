@@ -46,5 +46,21 @@
     "title": "잠시만 기다리십시오…",
     "originalHtmlSha256": "d525c1bb401b2f629e5ae706e7ae9cef0340c1cbb0c99fec4f13537b675931bf",
     "transformation": "None: the Cloudflare Turnstile challenge page as served to the Windows Aside browser (1.0.914.1, CLI 1.26.906.1630) on a Korean-locale PC, via `aside repl --host local` page.content(). Recorded so the challenge detector is tested against a localised page, not an English one."
+  },
+  {
+    "file": "austlii-vcat-199.html",
+    "sourceUrl": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/vic/VCAT/2024/199.html",
+    "capturedAt": "2026-09-16T06:54:57.001Z",
+    "title": "Owners Corporation 1 PS No. 834726V v Melbourne Owners Corporation Services Pty Ltd (Owners Corporations) [2024] VCAT 199 (5 March 2024)",
+    "originalHtmlSha256": "74bfae6baa669a429daeab621ab54c9c8111bcb3a984325dd4e635ec1556f2c2",
+    "transformation": "None: original browser DOM captured with aside repl --host local on Windows. Recorded for issue #1; includes the original reasons heading and all numbered paragraphs."
+  },
+  {
+    "file": "austlii-vsc-110.html",
+    "sourceUrl": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/vic/VSC/1999/110.html",
+    "capturedAt": "2026-09-16T06:55:03.705Z",
+    "title": "Powercor Australia Ltd v Pacific Power [1999] VSC 110 (18 November 1999)",
+    "originalHtmlSha256": "0a26144624a4adbe968a6d2badaa3463195ce489f9175fe58649b2838c2aeaa2",
+    "transformation": "None: original browser DOM captured with aside repl --host local on Windows. Recorded for issue #1; includes the original reasons heading and all numbered paragraphs."
   }
 ]

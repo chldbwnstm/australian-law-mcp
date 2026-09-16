@@ -116,6 +116,8 @@ export async function main() {
     ["tpg-first-instance", "[2019] FCA 1677", false],
     ["mussalli", "[2021] FCAFC 71", false],
     ["gujarat", "[2013] FCAFC 109", false],
+    ["vcat-reasons", "[2024] VCAT 199", false],
+    ["vsc-older-reasons", "[1999] VSC 110", false],
   ]) await run(id, "get_case_text", { citation, full }, { citation: canonical ?? citation })
   const first = await run("fcafc-page1", "search_cases", { query: "prepayment", court: "FCAFC", limit: 3 }, { court: "FCAFC", page: 1 })
   const second = await run("fcafc-page2", "search_cases", { query: "prepayment", court: "FCAFC", limit: 3, page: 2 }, { court: "FCAFC", page: 2 })
@@ -135,7 +137,7 @@ export async function main() {
   }
   await run("empty-query", "search_cases", { query: "zzzx_au_law_robustness_20260913", court: "FCAFC" }, { court: "FCAFC", noReasons: true })
   await run("missing-citation", "get_case_text", { citation: "[2020] FCAFC 99999" }, { noReasons: true })
-  const required = ["tpg-full", "tpg-compact", "tpg-pinpoint", "tpg-first-instance", "mussalli", "gujarat", "fcafc-page1", "fcafc-page2", "search-to-judgment"]
+  const required = ["tpg-full", "tpg-compact", "tpg-pinpoint", "tpg-first-instance", "mussalli", "gujarat", "vcat-reasons", "vsc-older-reasons", "fcafc-page1", "fcafc-page2", "search-to-judgment"]
   report.requiredMissing = required.filter(id => !report.cases.some(item => item.id === id && ["retrieved", "search_results"].includes(item.status)))
   report.finishedAt = new Date().toISOString()
   report.passed = !report.requiredMissing.length && report.cases.every(item => item.status !== "failed")

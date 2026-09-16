@@ -4,6 +4,20 @@ All notable changes to this project are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Aside now recognises Victorian judgment bodies headed `REASONS` or
+  `HIS HONOUR:` / `HER HONOUR:` inside a publisher document container. In
+  [issue #1](https://github.com/chldbwnstm/australian-law-mcp/issues/1), the
+  browser could retrieve `[2024] VCAT 199` and `[1999] VSC 110`, but the parser
+  rejected their genuine numbered reasons as an unavailable source. Exact
+  citation checks, numbered-body checks and missing-text follow-up remain in
+  place; navigation is excluded inside document containers too. Recorded
+  original pages cover both retrieval routes, and the live Aside check now
+  requires these two judgments to return reasons.
+
 ## [1.0.5] - 2026-09-14
 
 Aside shipped its Windows build on 14 September 2026 (browser 1.0.914.1, CLI

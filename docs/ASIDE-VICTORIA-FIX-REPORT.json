@@ -1,0 +1,220 @@
+{
+  "startedAt": "2026-09-16T07:30:19.820Z",
+  "platform": "win32",
+  "arch": "x64",
+  "osRelease": "10.0.26200",
+  "node": "v22.14.0",
+  "version": "1.0.5",
+  "commit": "1aa86b77c18b6c9c453e5b9ba45623c46b885fe7",
+  "dirty": true,
+  "asideCliVersion": "1.26.906.1630",
+  "note": "Unreleased issue #1 parser fix, tested via actual MCP stdio and local Aside. Full response files remain in the local evidence directory; response hashes identify them. Returned text may be truncated and retains a follow-up gap.",
+  "parserBuildSha256": "a9fdf7f33ee5c586e6c5df783c04a07f2a794d2bd459690c358faef2bb21408a",
+  "cases": [
+    {
+      "id": "vcat-full",
+      "name": "get_case_text",
+      "args": {
+        "citation": "[2024] VCAT 199",
+        "full": true
+      },
+      "responseSha256": "bf88f4c842fdb5442eb6dca38ab04123e2c11ef8022d3a5c6cb1a1cb0643a563",
+      "status": "retrieved",
+      "citation": "[2024] VCAT 199",
+      "source": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/vic/VCAT/2024/199.html",
+      "hits": [],
+      "browser": true,
+      "pending": false,
+      "chars": 32026,
+      "serializedChars": 32814,
+      "gaps": [],
+      "seconds": 7.6
+    },
+    {
+      "id": "vsc-full",
+      "name": "get_case_text",
+      "args": {
+        "citation": "[1999] VSC 110",
+        "full": true
+      },
+      "responseSha256": "cfd0061ad5f444343d1de9335ad41fd67bc3f43d84c2aad2ca7759d6aa7181eb",
+      "status": "retrieved",
+      "citation": "[1999] VSC 110",
+      "source": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/vic/VSC/1999/110.html",
+      "hits": [],
+      "browser": true,
+      "pending": true,
+      "chars": 48204,
+      "serializedChars": 50000,
+      "gaps": [
+        {
+          "kind": "truncated",
+          "originTool": "get_case_text",
+          "target": {
+            "citation": "[1999] VSC 110",
+            "documentId": "[1999] VSC 110"
+          },
+          "reason": "The document exceeds the response size limit; omitted text must be read at the original source.",
+          "sourceUrls": [
+            "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/vic/VSC/1999/110.html"
+          ],
+          "sourceAccess": "permitted",
+          "evidenceNeeded": [
+            "The omitted paragraphs from the original decision body"
+          ],
+          "id": "gap_c5b30ada3731e19c816889a2"
+        }
+      ],
+      "seconds": 7.1
+    },
+    {
+      "id": "vcat-public-search",
+      "name": "search_decisions",
+      "args": {
+        "domain": "cases",
+        "query": "[2024] VCAT 199"
+      },
+      "responseSha256": "8af07282da17b586f166388998dc3089ba90cf6568589d84c9af85e17c8bf6c7",
+      "status": "retrieved",
+      "citation": "[2024] VCAT 199",
+      "source": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/vic/VCAT/2024/199.html",
+      "hits": [],
+      "browser": true,
+      "pending": true,
+      "chars": 2884,
+      "serializedChars": 3525,
+      "gaps": [
+        {
+          "kind": "truncated",
+          "originTool": "get_case_text",
+          "target": {
+            "citation": "[2024] VCAT 199",
+            "documentId": "[2024] VCAT 199"
+          },
+          "reason": "The returned body was shortened from the middle by the decision renderer.",
+          "sourceUrls": [
+            "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/vic/VCAT/2024/199.html"
+          ],
+          "sourceAccess": "permitted",
+          "evidenceNeeded": [
+            "The omitted paragraphs from the original decision body"
+          ],
+          "id": "gap_058c5dacdac888ea13567368"
+        }
+      ],
+      "seconds": 6.55
+    },
+    {
+      "id": "vsc-public-search",
+      "name": "search_decisions",
+      "args": {
+        "domain": "cases",
+        "query": "[1999] VSC 110"
+      },
+      "responseSha256": "976977b905a580bc050e6bad3f203355b288557b1b8ae475ea49a9b63cbe07b6",
+      "status": "retrieved",
+      "citation": "[1999] VSC 110",
+      "source": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/vic/VSC/1999/110.html",
+      "hits": [],
+      "browser": true,
+      "pending": true,
+      "chars": 3119,
+      "serializedChars": 3750,
+      "gaps": [
+        {
+          "kind": "truncated",
+          "originTool": "get_case_text",
+          "target": {
+            "citation": "[1999] VSC 110",
+            "documentId": "[1999] VSC 110"
+          },
+          "reason": "The returned body was shortened from the middle by the decision renderer.",
+          "sourceUrls": [
+            "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/vic/VSC/1999/110.html"
+          ],
+          "sourceAccess": "permitted",
+          "evidenceNeeded": [
+            "The omitted paragraphs from the original decision body"
+          ],
+          "id": "gap_c5b30ada3731e19c816889a2"
+        }
+      ],
+      "seconds": 7.17
+    },
+    {
+      "id": "vsc-pdf",
+      "name": "get_case_text",
+      "args": {
+        "citation": "[2023] VSC 637"
+      },
+      "responseSha256": "6ed808716f4824393db09aaa9957395a2f926658e4e201215a10b6c2555c6f6e",
+      "status": "document_link",
+      "citation": "[2023] VSC 637",
+      "source": "https://www.austlii.edu.au/cgi-bin/viewdoc/au/cases/vic/VSC/2023/637.html",
+      "hits": [],
+      "browser": true,
+      "pending": true,
+      "chars": 825,
+      "serializedChars": 1451,
+      "gaps": [
+        {
+          "kind": "document_body",
+          "originTool": "get_case_text",
+          "target": {
+            "citation": "[2023] VSC 637",
+            "documentId": "[2023] VSC 637"
+          },
+          "reason": "The source adapter classified this response as binary_link_only; it is not the complete original body.",
+          "sourceUrls": [
+            "https://www.austlii.edu.au/au/cases/vic/VSC/2023/637.pdf"
+          ],
+          "sourceAccess": "requires_access",
+          "evidenceNeeded": [
+            "The original document body",
+            "An exact relevant passage with paragraph or printed-page locator"
+          ],
+          "id": "gap_0eafd9af5e70229117f4a703"
+        }
+      ],
+      "seconds": 6.54
+    },
+    {
+      "id": "federal-control",
+      "name": "get_case_text",
+      "args": {
+        "citation": "[2020] FCAFC 130"
+      },
+      "responseSha256": "04f3332af9c7d21936c545192a5e633b81d15608fd86965b82d4a7e98c7bc222",
+      "status": "retrieved",
+      "citation": "[2020] FCAFC 130",
+      "source": "https://www.judgments.fedcourt.gov.au/judgments/Judgments/fca/full/2020/2020fcafc0130",
+      "hits": [],
+      "browser": true,
+      "pending": true,
+      "chars": 3212,
+      "serializedChars": 3830,
+      "gaps": [
+        {
+          "kind": "truncated",
+          "originTool": "get_case_text",
+          "target": {
+            "citation": "[2020] FCAFC 130",
+            "documentId": "[2020] FCAFC 130"
+          },
+          "reason": "The returned body was shortened from the middle by the decision renderer.",
+          "sourceUrls": [
+            "https://www.judgments.fedcourt.gov.au/judgments/Judgments/fca/full/2020/2020fcafc0130"
+          ],
+          "sourceAccess": "permitted",
+          "evidenceNeeded": [
+            "The omitted paragraphs from the original decision body"
+          ],
+          "id": "gap_8c525d160fc14e6ee607513d"
+        }
+      ],
+      "seconds": 8.13
+    }
+  ],
+  "finishedAt": "2026-09-16T07:31:03.038Z",
+  "passed": true
+}
