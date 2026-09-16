@@ -1,6 +1,6 @@
-name: Agent task
-description: A bounded change with explicit acceptance criteria and risk areas
-title: "[Task] "
+name: Bug report
+description: Report a problem with Australian Law MCP
+title: "[Bug] "
 body:
   - type: dropdown
     id: operating-system
@@ -33,37 +33,14 @@ body:
   - type: textarea
     id: problem
     attributes:
-      label: Problem and expected behavior
-      description: Include a concrete before/after example and reproduction steps.
+      label: Problem
+      description: Describe the problem you encountered.
     validations:
       required: true
   - type: textarea
-    id: acceptance
+    id: ai-prompt
     attributes:
-      label: Acceptance criteria
-      description: List observable outcomes and relevant tests.
+      label: Prompt sent to AI
+      description: Optionally paste the prompt you gave the AI when the problem occurred.
     validations:
-      required: true
-  - type: textarea
-    id: scope
-    attributes:
-      label: Scope and files
-      description: Suggest affected files and explain what is outside scope.
-    validations:
-      required: true
-  - type: checkboxes
-    id: risks
-    attributes:
-      label: Risk areas
-      description: Select every area affected; these may require human implementation.
-      options:
-        - label: Authentication, credentials, or permissions
-        - label: CI, automation policy, or deployment
-        - label: Dependencies or package publishing
-        - label: Public API, data integrity, or legal source interpretation
-  - type: markdown
-    attributes:
-      value: >
-        A maintainer can add agent-candidate for triage. After reviewing the
-        bot's snapshot, a human with repository write access must add
-        agent-approved. Editing the issue afterwards invalidates that approval.
+      required: false
