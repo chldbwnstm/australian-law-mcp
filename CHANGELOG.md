@@ -4,6 +4,20 @@ All notable changes to this project are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Optional Jev relevance ordering for case-law keyword searches, including
+  Aside result links. The desktop extension has a **Use Jev** switch and a
+  sensitive **TypeSafe API key** field; other clients use `AU_LAW_JEV` and
+  `TYPESAFE_API_KEY`. Disabled by default. The user's query and bounded result
+  metadata go directly to TypeSafe under their own account. All returned
+  results and source identifiers are retained; exact-citation retrieval and
+  source checks are unchanged. Missing credentials, errors and timeouts retain
+  the original order. Provider requests share the normal upstream budget,
+  refuse redirects and are not retried.
+
 ## [1.0.6] - 2026-09-16
 
 ### Fixed

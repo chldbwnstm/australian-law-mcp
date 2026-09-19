@@ -153,8 +153,8 @@ Interpretation Act 1901* — evidence, not commentary.
   22 because it is the current LTS.
 - **npm 10+.** Regenerate `package-lock.json` with the same major version you install
   with — a lockfile written by a newer npm can break `npm ci` on an older one.
-- **No API key.** Every upstream is a keyless public endpoint. There is nothing to
-  configure before the server will run.
+- **No API key for legal sources.** The server runs without credentials. Optional
+  Jev ranking requires a user's TypeSafe API key and an explicit `AU_LAW_JEV` opt-in.
 
 ### Setup
 
@@ -520,12 +520,19 @@ advertised tools from `build/tool-registry.js` filtered by `V3_EXPOSED` — the 
 `ListTools` answers with. A hand-written manifest drifts, and the only symptom is a store
 listing that disagrees with the server it installs.
 
-The manifest's one user setting is the switch “Finish blocked legal sources using the
+The manifest includes the switch “Finish blocked legal sources using the
 Aside browser”, with an optional Aside CLI path beside it; Claude Desktop substitutes
 them into `AU_LAW_ASIDE` and `AU_LAW_ASIDE_COMMAND` on every launch. The switch's
 description names macOS 15+ and Windows 10/11 (x64), and the path field shows both
 example paths — the macOS `.app` one and `C:\Users\you\AppData\Local\Aside\CLI\current\aside.exe`.
 One manifest serves both platforms; there is no per-platform wording.
+
+It also includes **Use Jev** (off by default) and a sensitive, optional **TypeSafe
+API key** field, passed as `AU_LAW_JEV` and `TYPESAFE_API_KEY`. `src/lib/jev.ts`
+evaluates case-result metadata through `AuApiClient` and the `typesafe` host row.
+The shared request budget and cancellation still apply. Evaluations have no
+retries, refuse redirects and fall back to original order on failure. Tests
+mock the evaluator; the offline suite disables inherited Jev credentials.
 
 `scripts/verify-mcpb.mjs` then runs against the **packed file**, not the staging directory:
 it unpacks the `.mcpb` into a temp directory, starts `node build/index.js` there exactly as

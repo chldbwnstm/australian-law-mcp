@@ -18,6 +18,7 @@ import {
 describe("host table", () => {
   it("covers every host named in ARCHITECTURE.md", () => {
     const expected: HostKey[] = [
+      "typesafe",
       "frlApi", "frlDocs", "nswCaselaw", "hcourt", "qldJudgments", "qldLegislation",
       "tasLegislation", "waLegislation", "vicLegislation", "ntLegislation",
       "actLegislation", "ato", "fwc", "oaic", "dfat", "glossary",

@@ -2,6 +2,11 @@
 
 # Australian Law MCP
 
+**Unreleased option:** [Jev relevance ranking](INSTALL.md#jev-settings-unreleased)
+adds a **Use Jev** switch and an optional **TypeSafe API key** field to the
+desktop extension. It orders case-law keyword search results using your own
+TypeSafe account. Off by default; the published 1.0.6 bundle does not include it.
+
 **Australian legal research inside your AI app — with browser research through Aside.**
 
 Retrieve Commonwealth legislation as it stood on a chosen date, search supported

@@ -36,6 +36,7 @@ import {
   lawCiteUrl,
 } from "../lib/external-links-map.js"
 import { lawCache, SEARCH_CACHE_TTL } from "../lib/cache.js"
+import { jevEnabled, rankCasesWithJev } from "../lib/jev.js"
 import type { LooseToolResponse } from "../lib/types.js"
 import * as nsw from "../lib/sources/nsw-caselaw.js"
 import * as hca from "../lib/sources/hcourt.js"
@@ -428,7 +429,7 @@ async function judgmentViaAside(p: {
  * parsed records: the rows are links, and they are labelled as links rather
  * than dressed up as `id:` values that `get_case_text` would then reject.
  */
-async function searchViaAside(p: {
+async function searchViaAside(client: AuApiClient, p: {
   url: string
   label: string
   query: string
@@ -447,7 +448,8 @@ async function searchViaAside(p: {
   if ("failures" in fetched) return fetched
   if (!asideSearchPageMatches(pageUrl.href, fetched.url)) return { failures: ["The browser redirected to a different search query, scope or result page; those results were not attributed to this request."] }
   const parsedHits = readAsideSearchHits(fetched.html, fetched.url, p)
-  const hits = parsedHits.slice(0, p.limit).map((hit, i) => `${i + 1}. ${hit.title}\n   ${hit.url}`)
+  const ranked = await rankCasesWithJev(client, p.query, parsedHits.slice(0, p.limit))
+  const hits = ranked.hits.map((hit, i) => `${i + 1}. ${hit.title}\n   ${hit.url}`)
   const total = asideSearchTotal(fetched.html)
   const complete = page === 1 && total !== undefined && total === parsedHits.length && hits.length === total
   const lines = [
@@ -460,6 +462,7 @@ async function searchViaAside(p: {
     ASIDE_PROVENANCE_NOTE,
     "",
   ]
+  if (ranked.note) lines.push(ranked.note, "")
   if (hits.length > 0) {
     lines.push(...hits)
     lines.push("")
@@ -576,8 +579,11 @@ export async function searchCases(
 ): Promise<LooseToolResponse> {
   try {
     const limit = input.limit ?? 10
+    // Cached rendered results predate optional ranking and may have been
+    // produced with another setting/key. Never cache or reuse Jev output.
+    const useCache = !jevEnabled()
     const cacheKey = `search_cases:${JSON.stringify(input)}`
-    const cached = lawCache.get<string>(cacheKey)
+    const cached = useCache ? lawCache.get<string>(cacheKey) : undefined
     if (cached) return { content: [{ type: "text", text: cached }] }
 
     const notes: string[] = []
@@ -607,7 +613,7 @@ export async function searchCases(
             followUp: `get_case_text(citation="${input.query}") or get_case_text(id="<id from above>")`,
           },
         )
-        lawCache.set(cacheKey, text, SEARCH_CACHE_TTL)
+        if (useCache) lawCache.set(cacheKey, text, SEARCH_CACHE_TTL)
         return { content: [{ type: "text", text }] }
       }
       notes.push(
@@ -632,7 +638,7 @@ export async function searchCases(
     }
     if (route?.kind === "blocked") {
       const links = blockedCourtSearchLinks(route.court, input.query)
-      const viaAside = await searchViaAside({
+      const viaAside = await searchViaAside(client, {
         url: links[0],
         label: `Case law — ${route.courtName}`,
         query: input.query,
@@ -655,7 +661,7 @@ export async function searchCases(
       const canonicalJurisdiction = normaliseJurisdiction(jurisdiction)
       const segment = canonicalJurisdiction?.toLowerCase()
       const links = [austliiSearchUrl(input.query, segment ? [`au/cases/${segment}`] : []), lawCiteUrl(input.query)]
-      const viaAside = await searchViaAside({
+      const viaAside = await searchViaAside(client, {
         url: links[0],
         label: `Case law — ${jurisdiction} courts`,
         query: input.query,
@@ -710,8 +716,10 @@ export async function searchCases(
     }
 
     const merged = interleave(results).slice(0, limit)
+    const ranked = citationShaped ? { hits: merged } : await rankCasesWithJev(client, input.query, merged)
+    if ("note" in ranked && ranked.note) notes.push(ranked.note)
     const combined: SourceSearchResult = {
-      hits: merged.map(withPrefixedId),
+      hits: ranked.hits.map(withPrefixedId),
       sourceUrl: results[0].sourceUrl,
       total: results.reduce((sum, result) => sum + (result.total ?? result.hits.length), 0),
       totalIsUnreliable: results.some((result) => result.totalIsUnreliable),
@@ -731,7 +739,7 @@ export async function searchCases(
       notes,
       followUp: 'get_case_text(citation="[2010] NSWCCA 333") or get_case_text(id="nsw:<id from above>")',
     })
-    lawCache.set(cacheKey, text, SEARCH_CACHE_TTL)
+    if (useCache) lawCache.set(cacheKey, text, SEARCH_CACHE_TTL)
     return { content: [{ type: "text", text }] }
   } catch (error) {
     return withAsideHint(enrichCaseGap(formatToolError(error, "search_cases"), input), error)

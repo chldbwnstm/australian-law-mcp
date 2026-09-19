@@ -57,6 +57,10 @@ export interface FetchOpts {
   headers?: Record<string, string>
   /** Override of the host's own timeout (rarely needed — the table is per-host already). */
   timeoutMs?: number
+  /** Paid optional evaluations disable retries to avoid duplicate charges. */
+  retries?: number
+  /** Credential-bearing evaluations refuse redirects. */
+  redirect?: RequestInit["redirect"]
   /**
    * Every current Australian source is keyless. Kept on the shared path so a
    * future keyed source cannot bypass the masking in error messages: the value
@@ -554,6 +558,8 @@ export class AuApiClient {
     const response = await fetchWithRetry(url, {
       beforeAttempt: (signal) => this.politeWait(host, config.minIntervalMs, signal),
       timeout: opts.timeoutMs ?? config.timeoutMs,
+      retries: opts.retries,
+      ...(opts.redirect ? { redirect: opts.redirect } : {}),
       method: opts.method ?? "GET",
       ...(opts.body !== undefined ? { body: opts.body } : {}),
       headers,

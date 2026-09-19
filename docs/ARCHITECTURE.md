@@ -61,6 +61,7 @@ whole-volume epub delivery, not rounded).
 
 | key | base | kind | notes |
 |-----|------|------|-------|
+| `typesafe` | api.typesafe.ai/v1 | JSON | optional Jev evaluation, not a legal source; user Bearer key, no retries or redirects, 5-second evaluation deadline |
 | `frlApi` | api.prod.legislation.gov.au/v1 | OData JSON | keyless; $top<=100; manual pagination ($filter lost on nextLink) |
 | `frlDocs` | www.legislation.gov.au | epub/pdf/docx + epub-member extraction | `{id}/{asat}/{viewedat}/text/{rect}/{format}`; NCX TOC slicing |
 | `nswCaselaw` | www.caselaw.nsw.gov.au | HTML | param `query` (NOT q); page 0-indexed; robots discourages bulk — on-demand only, cache hard |

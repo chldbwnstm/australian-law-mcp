@@ -140,6 +140,32 @@ const USER_SETTINGS = [
       default: "",
     },
   },
+  {
+    key: "jev_enabled",
+    env: "AU_LAW_JEV",
+    option: {
+      type: "boolean",
+      title: "Use Jev",
+      description:
+        "Off by default. Order case-law keyword search results by relevance using TypeSafe's Jev. " +
+        "Sends the search query and displayed result titles, citations and snippets to TypeSafe using your " +
+        "account's allowance. Existing search still works when this is off or Jev is unavailable.",
+      required: false,
+      default: false,
+    },
+  },
+  {
+    key: "typesafe_api_key",
+    env: "TYPESAFE_API_KEY",
+    option: {
+      type: "string",
+      title: "TypeSafe API key",
+      description: "Your API key from the TypeSafe dashboard. Used only while Use Jev is enabled.",
+      sensitive: true,
+      required: false,
+      default: "",
+    },
+  },
 ]
 
 /** `user_config` and the `env` placeholders, derived from one table so they cannot disagree. */

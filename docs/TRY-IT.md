@@ -51,7 +51,7 @@ legal-data API key are needed — the bundle carries its own runtime dependencie
 and Claude supplies Node. You need Claude Desktop, an account you can use there,
 and internet access; your usual Claude plan and usage limits still apply.
 
-## Optional: the one setting, and what it is for
+## Optional: Aside browser research
 
 Some publishers refuse this extension outright — the Federal Court's judgment
 site and AustLII among them — so questions that depend on them come back saying
@@ -61,7 +61,7 @@ If you have [Aside](https://docs.aside.com/help/get-started) installed — on a
 Mac (macOS 15 or later) or a Windows PC (Windows 10/11, x64) — you can let the
 extension finish those lookups in your own browser. Aside's command-line tool
 is a separate install; on Windows it is the `install.ps1` script, which you
-download and run as a file. [INSTALL.md](../INSTALL.md#the-one-setting-the-extension-has)
+download and run as a file. [INSTALL.md](../INSTALL.md#aside-browser-settings)
 has the steps. Open **Settings → Extensions → Australian Law** and turn on
 **“Finish blocked legal sources using the Aside browser”**. Leave the path field
 blank unless you moved Aside somewhere unusual; if you do fill it in on Windows,
@@ -83,6 +83,11 @@ Chat, which loads extensions only. See
 [INSTALL.md](../INSTALL.md#optional-aside-follow-up-preview).
 
 ## Ask your first question
+
+Current-checkout bundles also have optional **Use Jev** and **TypeSafe API key**
+settings for case-result ordering; these are not in the published 1.0.6 bundle.
+See [the Jev settings](../INSTALL.md#jev-settings-unreleased) for setup and what
+is sent to TypeSafe. They are not required for the examples below.
 
 Copy this into a new chat:
 

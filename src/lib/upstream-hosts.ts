@@ -32,6 +32,7 @@ export type HostKind =
 
 export type HostKey =
   // ── fetched ────────────────────────────────────────────────────────────
+  | "typesafe"
   | "frlApi"
   | "frlDocs"
   | "nswCaselaw"
@@ -102,6 +103,15 @@ export function resolveUserAgent(env: NodeJS.ProcessEnv = process.env): string {
 const SCRAPE_INTERVAL_MS = 1_000
 
 export const UPSTREAM_HOSTS: Readonly<Record<HostKey, HostConfig>> = {
+  typesafe: {
+    key: "typesafe",
+    base: "https://api.typesafe.ai/v1",
+    kind: "json",
+    // Optional ranking must not hold an otherwise successful search for long.
+    timeoutMs: 5_000,
+    minIntervalMs: 100,
+    notes: "Opt-in Jev evaluation, not a legal source. POST /systemone with the user's Bearer key; https://docs.typesafe.ai/api.",
+  },
   frlApi: {
     key: "frlApi",
     base: "https://api.prod.legislation.gov.au/v1",

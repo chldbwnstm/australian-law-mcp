@@ -57,7 +57,7 @@ local Code sessions. Do not also run `claude mcp add` on this machine.
 Handing the file to someone who is not going to build it is covered in
 [TRY-IT.md](docs/TRY-IT.md).
 
-### The one setting the extension has
+### Aside browser settings
 
 Open **Settings → Extensions → Australian Law**. There is a switch,
 **“Finish blocked legal sources using the Aside browser”**, and an optional
@@ -99,6 +99,35 @@ Aside being uninstalled.
 The CLI and Codex hosts (Routes 2 and 3) have no settings UI. There the same two
 settings are the environment variables `AU_LAW_ASIDE` and
 `AU_LAW_ASIDE_COMMAND` — see [`.env.example`](.env.example).
+
+### Jev settings (unreleased)
+
+These settings are available in a bundle built from the current checkout;
+the published **1.0.6** bundle does not include them yet.
+
+In **Settings → Extensions → Australian Law**:
+
+- **Use Jev** — off by default. Turn on to order case-law keyword search results
+  by estimated relevance, including result links retrieved through Aside.
+- **TypeSafe API key** — optional, masked input. Get your own key from the
+  [TypeSafe dashboard](https://console.typesafe.ai/). The key is used only while
+  **Use Jev** is on; the host handles it as a sensitive extension setting.
+
+The local MCP process sends the search query and displayed results' metadata
+(titles, citations, court/date, catchwords and snippets) directly to TypeSafe.
+This uses your TypeSafe account's allowance. It sends no judgment bodies or
+conversation history. Jev only reorders the displayed page: all its results,
+identifiers, source links and coverage limitations are retained. Exact-citation
+lookups and source verification are unchanged.
+
+If the key is missing or invalid, the service fails, or evaluation takes more
+than five seconds, the search returns its original order with a short note.
+Turning the switch off stops evaluations even when a key is saved.
+Save the settings and restart the extension if the host requests it.
+
+For a Claude Code CLI or other client registered from a checkout, pass
+`AU_LAW_JEV=true` and `TYPESAFE_API_KEY` in the MCP server's environment.
+These settings do not require Aside; Aside is needed only for browser retrieval.
 
 ## Route 2 — Claude Code CLI or IDE, no desktop app
 

@@ -69,6 +69,47 @@ async function main() {
     const switchTitle = manifest.user_config?.aside_followup?.title ?? ""
     check("the Aside switch is not labelled for one platform", !/\b(?:mac|windows|pc)[ -]only\b/i.test(switchTitle), switchTitle)
 
+    check("Jev is off by default and the optional API key is sensitive",
+      manifest.user_config?.jev_enabled?.default === false &&
+      manifest.user_config?.typesafe_api_key?.sensitive === true &&
+      manifest.user_config?.typesafe_api_key?.required === false &&
+      manifest.user_config?.typesafe_api_key?.default === "")
+    // Evaluate the unpacked implementation with the manifest's actual setting
+    // substitutions. No network: this fake client only checks credential wiring.
+    const jevProbe = execFileSync(process.execPath, ["--input-type=module", "--eval", `
+      import assert from "node:assert/strict";
+      import { readFileSync } from "node:fs";
+      import { rankCasesWithJev } from "./build/lib/jev.js";
+      const manifest = JSON.parse(readFileSync("manifest.json", "utf8"));
+      function settings(stored) {
+        const values = Object.fromEntries(Object.entries(manifest.user_config).map(([key, option]) => [key, option.default]));
+        Object.assign(values, stored);
+        for (const [key, template] of Object.entries(manifest.server.mcp_config.env)) {
+          process.env[key] = template.replace(/\\$\\{user_config\\.([^}]+)\\}/g, (_, name) => String(values[name]));
+        }
+      }
+      let calls = 0;
+      const client = { async fetchJson(host, path, opts) {
+        calls++;
+        assert.equal(host, "typesafe"); assert.equal(path, "systemone");
+        assert.equal(opts.headers.authorization, "Bearer bundle-test-key");
+        assert.equal(opts.redirect, "error"); assert.equal(opts.retries, 0);
+        return { model: "test", answers: { case_0: { type: "noul", noul: 0.1 }, case_1: { type: "noul", noul: 0.9 } } };
+      } };
+      const hits = [{ title: "First" }, { title: "Second" }];
+      settings({ typesafe_api_key: "bundle-test-key" });
+      assert.deepEqual(await rankCasesWithJev(client, "query", hits), { hits });
+      assert.equal(calls, 0);
+      settings({ jev_enabled: true });
+      assert.match((await rankCasesWithJev(client, "query", hits)).note, /TypeSafe API key/);
+      assert.equal(calls, 0);
+      settings({ jev_enabled: true, typesafe_api_key: "bundle-test-key" });
+      assert.deepEqual((await rankCasesWithJev(client, "query", hits)).hits, [hits[1], hits[0]]);
+      assert.equal(calls, 1);
+      process.stdout.write("ok");
+    `], { cwd: extracted, encoding: "utf8", windowsHide: true })
+    check("Jev switch and saved API key control evaluation in the unpacked bundle", jevProbe === "ok")
+
     const { stdout, stderr, responses } = await speakMcp(extracted)
 
     const init = responses.get(1)?.result

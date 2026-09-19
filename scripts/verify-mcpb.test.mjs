@@ -164,14 +164,16 @@ describe("generated manifest", () => {
     expect(setting.default).toBe("")
   })
 
-  it("exposes those two settings and nothing else", () => {
-    expect(Object.keys(buildManifest(PKG, TOOLS).user_config)).toEqual(["aside_followup", "aside_command"])
+  it("exposes the Aside and Jev settings", () => {
+    expect(Object.keys(buildManifest(PKG, TOOLS).user_config)).toEqual(["aside_followup", "aside_command", "jev_enabled", "typesafe_api_key"])
   })
 
   it("wires both settings through the server's environment", () => {
     expect(buildManifest(PKG, TOOLS).server.mcp_config.env).toEqual({
       AU_LAW_ASIDE: "${user_config.aside_followup}",
       AU_LAW_ASIDE_COMMAND: "${user_config.aside_command}",
+      AU_LAW_JEV: "${user_config.jev_enabled}",
+      TYPESAFE_API_KEY: "${user_config.typesafe_api_key}",
     })
   })
 
@@ -191,20 +193,38 @@ describe("generated manifest", () => {
     // Everything the server can ever see in these variables. `AU_LAW_ASIDE` is
     // therefore read as a value, not as presence: it is always set, and it is
     // never "1".
-    expect(substituteLikeDesktop(manifest, undefined)).toEqual({ AU_LAW_ASIDE: "false", AU_LAW_ASIDE_COMMAND: "" })
+    const jevOff = { AU_LAW_JEV: "false", TYPESAFE_API_KEY: "" }
+    expect(substituteLikeDesktop(manifest, undefined)).toEqual({ AU_LAW_ASIDE: "false", AU_LAW_ASIDE_COMMAND: "", ...jevOff })
     expect(substituteLikeDesktop(manifest, { aside_followup: true })).toEqual({
       AU_LAW_ASIDE: "true",
       AU_LAW_ASIDE_COMMAND: "",
+      ...jevOff,
     })
     expect(substituteLikeDesktop(manifest, { aside_followup: true, aside_command: "/opt/aside" })).toEqual({
       AU_LAW_ASIDE: "true",
       AU_LAW_ASIDE_COMMAND: "/opt/aside",
+      ...jevOff,
     })
     // A Windows path — spaces, backslashes, or a UNC share — passes through the
     // substitution verbatim: the server, not the app, decides what it accepts.
     for (const win of ["C:\\Users\\Jane Doe\\AppData\\Local\\Aside\\CLI\\current\\aside.exe", "\\\\fileserver\\tools\\aside.exe"]) {
-      expect(substituteLikeDesktop(manifest, { aside_followup: true, aside_command: win })).toEqual({ AU_LAW_ASIDE: "true", AU_LAW_ASIDE_COMMAND: win })
+      expect(substituteLikeDesktop(manifest, { aside_followup: true, aside_command: win })).toEqual({ AU_LAW_ASIDE: "true", AU_LAW_ASIDE_COMMAND: win, ...jevOff })
     }
+  })
+
+  it("keeps Jev opt-in and masks the optional key, including when the switch is off", () => {
+    const manifest = buildManifest(PKG, TOOLS)
+    expect(manifest.user_config.jev_enabled).toMatchObject({ type: "boolean", default: false, required: false })
+    expect(manifest.user_config.typesafe_api_key).toMatchObject({ type: "string", sensitive: true, default: "", required: false })
+    expect(manifest.user_config.jev_enabled.description).toMatch(/sent|sends/i)
+    expect(manifest.user_config.jev_enabled.description).toContain("TypeSafe")
+    expect(substituteLikeDesktop(manifest, { jev_enabled: true, typesafe_api_key: "test-key" })).toMatchObject({
+      AU_LAW_JEV: "true", TYPESAFE_API_KEY: "test-key", AU_LAW_ASIDE: "false",
+    })
+    expect(substituteLikeDesktop(manifest, { jev_enabled: false, typesafe_api_key: "test-key" })).toMatchObject({
+      AU_LAW_JEV: "false", TYPESAFE_API_KEY: "test-key",
+    })
+    expect(JSON.stringify(manifest.server.mcp_config.args)).not.toContain("typesafe_api_key")
   })
 
   it("refuses a setting with no default, which would send the placeholder text to the server", () => {
